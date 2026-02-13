@@ -144,7 +144,27 @@ class LibraryViewModel(
 
     fun navigateUp() {
         val currentPath = _state.value.currentPath
-        val parentPath = java.io.File(currentPath).parent ?: "/"
-        loadFiles(parentPath, _state.value.serverId)
+        if (currentPath == "/") return
+        
+        val parentPath = if (currentPath.trimEnd('/').contains("/")) {
+            currentPath.trimEnd('/').substringBeforeLast("/")
+            if (currentPath.startsWith("/") && !currentPath.startsWith("//")) {
+                // Ensure we don't lose the leading slash if it's there
+                val p = currentPath.trimEnd('/').substringBeforeLast("/")
+                if (p.isEmpty()) "/" else p
+            } else {
+                 currentPath.trimEnd('/').substringBeforeLast("/")
+            }
+        } else {
+            "/"
+        }
+        
+        // Simplified robust version:
+        val robustParent = currentPath.trimEnd('/').let {
+            val lastIdx = it.lastIndexOf('/')
+            if (lastIdx <= 0) "/" else it.substring(0, lastIdx)
+        }
+
+        loadFiles(robustParent, _state.value.serverId)
     }
 }

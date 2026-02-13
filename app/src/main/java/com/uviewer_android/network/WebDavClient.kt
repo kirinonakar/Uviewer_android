@@ -42,17 +42,24 @@ class WebDavClient(
         return try {
             val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
             val builder = baseHttpUrl.newBuilder()
-            path.split("/").filter { it.isNotEmpty() }.forEach {
-                builder.addPathSegment(it)
+            
+            // path is a decoded relative path like "/Folder/File.txt"
+            val segments = path.split("/").filter { it.isNotEmpty() }
+            segments.forEach { builder.addPathSegment(it) }
+            
+            if (path.endsWith("/") && segments.isNotEmpty()) {
+                builder.addPathSegment("") // Adds trailing slash if missing
+            } else if (path == "/" && !baseHttpUrl.toString().endsWith("/")) {
+                // builder.addPathSegment("") // Root case
             }
-            // If the original path ended with a slash, ensure the built URL does too
-            if (path.endsWith("/") && !builder.build().toString().endsWith("/")) {
-                // builder.addPathSegment("") results in a trailing slash if not already there
-            }
-            // Actually, WebDAV paths for files shouldn't end with slash, but for folders they should.
-            // PROPFIND on folder usually needs trailing slash.
-            val built = builder.build().toString()
-            if (path.endsWith("/") && !built.endsWith("/")) built + "/" else built
+            
+            var result = builder.build().toString()
+            // If the original input path was just "/", ensure result ends with "/" if it's the base
+            if (path == "/" && !result.endsWith("/")) result += "/"
+            // If path ended with / but segments was empty (already /), handled by result check
+            if (path.endsWith("/") && !result.endsWith("/")) result += "/"
+            
+            result
         } catch (e: Exception) {
             server.url.trimEnd('/') + path
         }
@@ -117,8 +124,14 @@ class WebDavClient(
                         } else if (inResponse) {
                             if (name.equals("href", ignoreCase = true) || name.endsWith(":href")) {
                                 currentHref = parser.nextText()
-                                // Extract name from href
-                                currentName = java.net.URLDecoder.decode(currentHref.trimEnd('/').substringAfterLast('/'), "UTF-8")
+                                // Extract name from href using HttpUrl for robust decoding
+                                currentName = try {
+                                    val url = if (currentHref.startsWith("http", true)) currentHref.toHttpUrl()
+                                    else ("http://h" + (if (currentHref.startsWith("/")) "" else "/") + currentHref).toHttpUrl()
+                                    url.pathSegments.lastOrNull { it.isNotEmpty() } ?: currentHref.trimEnd('/').substringAfterLast('/')
+                                } catch (e: Exception) {
+                                    java.net.URLDecoder.decode(currentHref.trimEnd('/').substringAfterLast('/'), "UTF-8")
+                                }
                             } else if (name.equals("collection", ignoreCase = true) || name.endsWith(":collection")) {
                                 isDir = true
                             } else if (name.equals("getcontentlength", ignoreCase = true) || name.endsWith(":getcontentlength")) {
@@ -178,7 +191,7 @@ class WebDavClient(
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) throw IOException("Failed to download file: ${response.code}")
+            if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
             
             response.body?.string() ?: ""
         }
@@ -194,7 +207,7 @@ class WebDavClient(
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) throw IOException("Failed to download file: ${response.code}")
+            if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
             
             response.body?.byteStream()?.use { input ->
                 java.io.FileOutputStream(destinationFile).use { output ->

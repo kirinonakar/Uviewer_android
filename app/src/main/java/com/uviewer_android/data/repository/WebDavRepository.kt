@@ -5,6 +5,8 @@ import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.network.WebDavClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.File
 
 class WebDavRepository(
     private val webDavServerDao: WebDavServerDao, // For server info
@@ -28,7 +30,7 @@ class WebDavRepository(
             val decodedHref = java.net.URLDecoder.decode(file.href, "UTF-8")
             
             // Extract path part if it's a full URL
-            var cleanPath = if (decodedHref.startsWith("http://") || decodedHref.startsWith("https://")) {
+            var cleanPath = if (decodedHref.startsWith("http://", true) || decodedHref.startsWith("https://", true)) {
                 try {
                     java.net.URL(decodedHref).path
                 } catch (e: Exception) {
@@ -36,7 +38,7 @@ class WebDavRepository(
                 }
             } else {
                 decodedHref
-            }.trimEnd('/')
+            }
 
             if (!cleanPath.startsWith("/")) cleanPath = "/" + cleanPath
             
@@ -48,8 +50,10 @@ class WebDavRepository(
             if (!relativePath.startsWith("/")) relativePath = "/" + relativePath
 
             // Filter out the directory itself
-            // Be careful with root "/"
-            if (relativePath == requestedPath || (requestedPath.isEmpty() && relativePath == "/")) {
+            // Normalized comparison
+            val normRelative = relativePath.trimEnd('/')
+            val normRequested = requestedPath.trimEnd('/')
+            if (normRelative == normRequested || (normRequested.isEmpty() && normRelative == "/")) {
                 return@mapNotNull null
             }
 
