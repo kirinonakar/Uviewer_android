@@ -50,3 +50,18 @@ interface WebDavServerDao {
     @Delete
     suspend fun deleteServer(server: WebDavServer)
 }
+
+@Dao
+interface BookmarkDao {
+    @Query("SELECT * FROM bookmarks ORDER BY timestamp DESC")
+    fun getAllBookmarks(): Flow<List<Bookmark>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBookmark(bookmark: Bookmark)
+
+    @Delete
+    suspend fun deleteBookmark(bookmark: Bookmark)
+
+    @Query("DELETE FROM bookmarks WHERE path = :path AND position = :position")
+    suspend fun deleteBookmarkByPos(path: String, position: Int)
+}

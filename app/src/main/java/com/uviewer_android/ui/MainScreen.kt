@@ -82,7 +82,14 @@ fun MainScreen() {
                                             saveState = true
                                         }
                                         launchSingleTop = true
-                                        restoreState = true
+                                        
+                                        // Reset state for Favorites/Recent (User Request)
+                                        // "favorites 초기화면으로 복귀", "recent 초기화면으로 복귀"
+                                        if (screen is Screen.Favorites || screen is Screen.Recent) {
+                                            restoreState = false
+                                        } else {
+                                            restoreState = true
+                                        }
                                     }
                                 }
                             }
@@ -95,12 +102,12 @@ fun MainScreen() {
         NavHost(
             navController = navController,
             startDestination = Screen.Library("").route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = { androidx.compose.animation.EnterTransition.None },
+            exitTransition = { androidx.compose.animation.ExitTransition.None },
+            popEnterTransition = { androidx.compose.animation.EnterTransition.None },
+            popExitTransition = { androidx.compose.animation.ExitTransition.None }
         ) {
-            // ... (other composables unchanged, need to check if I can keep them same or if I need to copy-paste all)
-            // To be safe and concise, I will target the Viewer route specifically if I can, or replace the whole block.
-            // Since I added `isFullScreen` at top, I need to update ViewerScreen call.
-            
             composable(
                 route = "library?path={path}&serverId={serverId}",
                 arguments = listOf(
@@ -125,7 +132,6 @@ fun MainScreen() {
                 ) 
             }
             
-            // ... Favorites and Recent also need isFullScreen = false
             composable(Screen.Favorites("").route) {
                 androidx.compose.runtime.LaunchedEffect(Unit) { isFullScreen = false }
                 com.uviewer_android.ui.favorites.FavoritesScreen(

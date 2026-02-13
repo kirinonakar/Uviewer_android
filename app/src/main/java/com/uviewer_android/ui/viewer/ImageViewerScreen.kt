@@ -10,10 +10,13 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -41,6 +44,8 @@ fun ImageViewerScreen(
     onToggleFullScreen: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val invertImageControl by viewModel.invertImageControl.collectAsState()
+    val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
 
     // Load images on start
@@ -53,11 +58,17 @@ fun ImageViewerScreen(
             CircularProgressIndicator()
         }
         return
-    }
-
-    if (uiState.error != null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    } else if (uiState.error != null) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
             Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onBack) {
+                Text(stringResource(R.string.back))
+            }
         }
         return
     }
@@ -112,17 +123,23 @@ fun ImageViewerScreen(
                         onTap = { offset ->
                             scope.launch {
                                 val thirdOfScreen = size.width / 3
+                                val isLeftTap = offset.x < thirdOfScreen
+                                val isRightTap = offset.x > thirdOfScreen * 2
+                                
+                                val goPrev = if (invertImageControl) isRightTap else isLeftTap
+                                val goNext = if (invertImageControl) isLeftTap else isRightTap
+
                                 when {
-                                    offset.x < thirdOfScreen -> {
+                                    goPrev -> {
                                         val current = pagerState.currentPage
                                         if (current > 0) {
-                                            pagerState.animateScrollToPage(current - 1)
+                                            pagerState.scrollToPage(current - 1)
                                         }
                                     }
-                                    offset.x > thirdOfScreen * 2 -> {
+                                    goNext -> {
                                         val current = pagerState.currentPage
                                         if (current < pageCount - 1) {
-                                            pagerState.animateScrollToPage(current + 1)
+                                            pagerState.scrollToPage(current + 1)
                                         }
                                     }
                                     else -> {
@@ -148,23 +165,40 @@ fun ImageViewerScreen(
                 
                 userScrollEnabled = (scales[pagerState.currentPage] ?: 1f) == 1f
             ) { page ->
-                // Calculate indices
-                val firstIndex = if (isDualPage) page * 2 else page
-                val secondIndex = if (isDualPage) page * 2 + 1 else -1
+                // Calculate indices based on order
+                val p1 = page * 2
+                val p2 = page * 2 + 1
                 
-                if (firstIndex < uiState.images.size) {
-                    val firstImage = uiState.images[firstIndex]
-                    val secondImage = if (secondIndex < uiState.images.size && secondIndex != -1) uiState.images[secondIndex] else null
-                    
-                    ZoomableImage(
-                        imageUrl = firstImage.path,
-                        isWebDav = uiState.isContentLoadedFromWebDav,
-                        authHeader = uiState.authHeader,
-                        serverUrl = uiState.serverUrl,
-                        scale = scales.getOrPut(page) { 1f },
-                        onScaleChanged = { newScale -> scales[page] = newScale },
-                        secondImageUrl = secondImage?.path
-                    )
+                val (firstIdx, secondIdx) = if (dualPageOrder == 1) { // RTL: Second index on Left, First on Right
+                    p2 to p1
+                } else { // LTR: First on Left, Second on Right
+                    p1 to p2
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val firstImage = if (firstIdx < uiState.images.size) uiState.images[firstIdx] else null
+                    val secondImage = if (isDualPage && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
+
+                    if (isDualPage) {
+                        ZoomableDualImage(
+                            firstImageUrl = firstImage?.path,
+                            secondImageUrl = secondImage?.path,
+                            isWebDav = uiState.isContentLoadedFromWebDav,
+                            authHeader = uiState.authHeader,
+                            serverUrl = uiState.serverUrl,
+                            scale = scales.getOrPut(page) { 1f },
+                            onScaleChanged = { newScale -> scales[page] = newScale }
+                        )
+                    } else if (firstImage != null) {
+                         ZoomableImage(
+                            imageUrl = firstImage.path,
+                            isWebDav = uiState.isContentLoadedFromWebDav,
+                            authHeader = uiState.authHeader,
+                            serverUrl = uiState.serverUrl,
+                            scale = scales.getOrPut(page) { 1f },
+                            onScaleChanged = { newScale -> scales[page] = newScale }
+                        )
+                    }
                 }
             }
 
@@ -173,13 +207,15 @@ fun ImageViewerScreen(
                 // Determine title
                 val title = if (isDualPage) {
                      val p = pagerState.currentPage * 2
-                     if (p + 1 < uiState.images.size) {
-                         "${uiState.images[p].name} / ${uiState.images[p+1].name}"
-                     } else {
-                         uiState.images[p].name
-                     }
+                     val img1 = uiState.images[p].name
+                     val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
+                     val pageTitle = if (img2 != null) "$img1 / $img2" else img1
+                     if (uiState.containerName != null) "${uiState.containerName} - $pageTitle" else pageTitle
                 } else {
-                    if (pagerState.currentPage < uiState.images.size) uiState.images[pagerState.currentPage].name else ""
+                    if (pagerState.currentPage < uiState.images.size) {
+                        val imgName = uiState.images[pagerState.currentPage].name
+                        if (uiState.containerName != null) "${uiState.containerName} - $imgName" else imgName
+                    } else ""
                 }
                 
                 TopAppBar(
@@ -190,6 +226,12 @@ fun ImageViewerScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = {
+                            val type = if (filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }) "IMAGE_ZIP" else "IMAGE"
+                            viewModel.toggleBookmark(filePath, pagerState.currentPage, isWebDav, serverId, type)
+                        }) {
+                            Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
+                        }
                         IconButton(onClick = { isDualPage = !isDualPage }) {
                             Icon(
                                 if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
@@ -289,9 +331,97 @@ fun ZoomableImage(
                     .weight(1f)
                     .fillMaxHeight()
             )
+        }
+    }
+}
+
+@Composable
+fun ZoomableDualImage(
+    firstImageUrl: String?,
+    secondImageUrl: String?,
+    isWebDav: Boolean,
+    authHeader: String?,
+    serverUrl: String?,
+    scale: Float,
+    onScaleChanged: (Float) -> Unit
+) {
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(0f) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTransformGestures { _, pan, zoom, _ ->
+                    val newScale = (scale * zoom).coerceIn(1f, 5f)
+                    onScaleChanged(newScale)
+                    if (newScale > 1f) {
+                        val maxOffsetX = (size.width * (newScale - 1)) / 2
+                        val maxOffsetY = (size.height * (newScale - 1)) / 2
+                        offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
+                        offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                    } else {
+                        offsetX = 0f
+                        offsetY = 0f
+                    }
+                }
+            }
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+                translationX = offsetX,
+                translationY = offsetY
+            )
+        ) {
+            val context = LocalContext.current
+            
+            // Helper to build ImageRequest
+            fun buildRequest(url: String): ImageRequest {
+                return if (isWebDav && serverUrl != null) {
+                   val fullUrl = try {
+                        val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
+                        val builder = baseHttpUrl.newBuilder()
+                        url.split("/").filter { it.isNotEmpty() }.forEach {
+                            builder.addPathSegment(it)
+                        }
+                        builder.build().toString()
+                    } catch (e: Exception) {
+                        serverUrl.trimEnd('/') + url
+                    }
+
+                    ImageRequest.Builder(context)
+                        .data(fullUrl)
+                        .apply {
+                            if (authHeader != null) {
+                                addHeader("Authorization", authHeader)
+                            }
+                        }
+                        .crossfade(true)
+                        .build()
+                } else {
+                    ImageRequest.Builder(context)
+                        .data(java.io.File(url))
+                        .crossfade(true)
+                        .build()
+                }
+            }
+
+            if (firstImageUrl != null) {
+                AsyncImage(
+                    model = buildRequest(firstImageUrl),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
             
             if (secondImageUrl != null) {
-                Spacer(modifier = Modifier.width(4.dp))
                 AsyncImage(
                     model = buildRequest(secondImageUrl),
                     contentDescription = null,
@@ -300,6 +430,8 @@ fun ZoomableImage(
                         .weight(1f)
                         .fillMaxHeight()
                 )
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }

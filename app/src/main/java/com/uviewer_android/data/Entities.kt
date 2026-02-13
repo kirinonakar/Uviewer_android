@@ -32,3 +32,15 @@ data class WebDavServer(
     val name: String,
     val url: String // Base URL
 )
+
+@Entity(tableName = "bookmarks")
+data class Bookmark(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val title: String,
+    val path: String,
+    val isWebDav: Boolean = false,
+    val serverId: Int? = null,
+    val type: String, // "IMAGE", "DOCUMENT", "PDF", "VIDEO"
+    val position: Int = 0, // Line number or page index
+    val timestamp: Long = System.currentTimeMillis()
+)

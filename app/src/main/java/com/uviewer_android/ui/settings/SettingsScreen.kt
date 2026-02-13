@@ -33,12 +33,15 @@ fun SettingsScreen(
     val fontFamily by viewModel.fontFamily.collectAsState()
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
     val language by viewModel.language.collectAsState()
+    val invertImageControl by viewModel.invertImageControl.collectAsState()
+    val dualPageOrder by viewModel.dualPageOrder.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
     var showDocBgDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
+    var showDualPageOrderDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -135,6 +138,34 @@ fun SettingsScreen(
             item { HorizontalDivider() }
             item {
                 Text(
+                    text = "Image Viewer",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.invert_image_control)) },
+                    supportingContent = { Text(stringResource(R.string.invert_image_control_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = invertImageControl,
+                            onCheckedChange = { viewModel.setInvertImageControl(it) }
+                        )
+                    }
+                )
+            }
+            item {
+                val orderLabel = if (dualPageOrder == 0) stringResource(R.string.dual_page_ltr) else stringResource(R.string.dual_page_rtl)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.dual_page_order)) },
+                    supportingContent = { Text(orderLabel) },
+                    modifier = Modifier.clickable { showDualPageOrderDialog = true }
+                )
+            }
+            item { HorizontalDivider() }
+            item {
+                Text(
                     text = stringResource(R.string.section_webdav),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp)
@@ -201,7 +232,41 @@ fun SettingsScreen(
                 }
             )
         }
+
+        if (showDualPageOrderDialog) {
+            DualPageOrderSelectionDialog(
+                currentOrder = dualPageOrder,
+                onDismiss = { showDualPageOrderDialog = false },
+                onSelect = { order ->
+                    viewModel.setDualPageOrder(order)
+                    showDualPageOrderDialog = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun DualPageOrderSelectionDialog(
+    currentOrder: Int,
+    onDismiss: () -> Unit,
+    onSelect: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.select_dual_page_order)) },
+        text = {
+            Column {
+                ThemeOptionRow(stringResource(R.string.dual_page_ltr), "0", currentOrder.toString(), { onSelect(0) })
+                ThemeOptionRow(stringResource(R.string.dual_page_rtl), "1", currentOrder.toString(), { onSelect(1) })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable

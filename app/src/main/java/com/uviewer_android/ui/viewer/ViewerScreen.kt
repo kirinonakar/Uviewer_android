@@ -2,12 +2,18 @@ package com.uviewer_android.ui.viewer
 
 import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.uviewer_android.data.model.FileEntry
 
 @Composable
@@ -31,13 +37,26 @@ fun ViewerScreen(
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML -> DocumentViewerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.PDF -> {
-             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("PDF viewing is not yet supported in-app. Please use an external viewer.")
-            }
+             PdfViewerScreen(
+                 filePath = filePath, 
+                 isWebDav = isWebDav, 
+                 serverId = serverId, 
+                 onBack = onBack, 
+                 isFullScreen = isFullScreen, 
+                 onToggleFullScreen = onToggleFullScreen
+             )
         }
         else -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
                 Text(stringResource(R.string.unsupported_type_fmt, fileType ?: "", filePath))
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onBack) {
+                    Text(stringResource(R.string.back))
+                }
             }
         }
     }

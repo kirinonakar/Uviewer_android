@@ -1,17 +1,22 @@
 package com.uviewer_android.ui.viewer
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.MediaItem
@@ -38,15 +43,23 @@ fun MediaPlayerScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-
+    
     LaunchedEffect(filePath) {
         viewModel.prepareMedia(filePath, isWebDav, serverId, fileType)
     }
 
+    var playbackError by remember { mutableStateOf<String?>(null) }
+
     val exoPlayer = remember(uiState.mediaUrl, uiState.authHeader) {
         if (uiState.mediaUrl != null) {
             ExoPlayer.Builder(context).build().apply {
-                val mediaItem = MediaItem.fromUri(uiState.mediaUrl!!)
+                val uri = if (isWebDav) {
+                    android.net.Uri.parse(uiState.mediaUrl!!)
+                } else {
+                    android.net.Uri.fromFile(java.io.File(uiState.mediaUrl!!))
+                }
+                
+                val mediaItem = MediaItem.fromUri(uri)
                 if (isWebDav) {
                     val dataSourceFactory = DefaultHttpDataSource.Factory()
                     dataSourceFactory.setDefaultRequestProperties(uiState.authHeader)
@@ -56,13 +69,20 @@ fun MediaPlayerScreen(
                 } else {
                     setMediaItem(mediaItem)
                 }
+                
+                addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        playbackError = error.message
+                    }
+                })
+                
                 prepare()
                 playWhenReady = true
             }
         } else null
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(exoPlayer) {
         onDispose {
             exoPlayer?.release()
         }
@@ -91,8 +111,19 @@ fun MediaPlayerScreen(
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator()
-            } else if (uiState.error != null) {
-                Text(stringResource(R.string.error_fmt, uiState.error!!))
+            } else if (uiState.error != null || playbackError != null) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.error_fmt, uiState.error ?: playbackError ?: ""),
+                        color = Color.Red
+                    )
+                    Button(onClick = onBack) {
+                        Text(stringResource(R.string.back))
+                    }
+                }
             } else if (exoPlayer != null) {
                 AndroidView(
                     factory = { ctx ->
@@ -104,11 +135,13 @@ fun MediaPlayerScreen(
                             }
                         }
                     },
-                    update = {
+                    update = { playerView ->
+                        playerView.player = exoPlayer
                         if (fileType == FileEntry.FileType.AUDIO) {
-                            it.showController()
+                            playerView.showController()
                         }
-                    }
+                    },
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }

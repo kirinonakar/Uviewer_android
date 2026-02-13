@@ -25,7 +25,9 @@ object AppViewModelProvider {
                 application = app,
                 fileRepository = app.container.fileRepository,
                 webDavRepository = app.container.webDavRepository,
-                recentFileDao = app.container.database.recentFileDao()
+                recentFileDao = app.container.database.recentFileDao(),
+                bookmarkDao = app.container.database.bookmarkDao(),
+                userPreferencesRepository = app.container.userPreferencesRepository
             )
         }
         initializer {
@@ -35,6 +37,7 @@ object AppViewModelProvider {
                 fileRepository = app.container.fileRepository,
                 webDavRepository = app.container.webDavRepository,
                 recentFileDao = app.container.database.recentFileDao(),
+                bookmarkDao = app.container.database.bookmarkDao(),
                 userPreferencesRepository = app.container.userPreferencesRepository
             )
         }
@@ -64,6 +67,15 @@ object AppViewModelProvider {
                 webDavServerDao = app.container.database.webDavServerDao(),
                 credentialsManager = app.container.credentialsManager,
                 userPreferencesRepository = app.container.userPreferencesRepository
+            )
+        }
+        initializer {
+            val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as UviewerApplication)
+            com.uviewer_android.ui.viewer.PdfViewerViewModel(
+                application = app,
+                webDavRepository = app.container.webDavRepository,
+                recentFileDao = app.container.database.recentFileDao(),
+                bookmarkDao = app.container.database.bookmarkDao()
             )
         }
     }

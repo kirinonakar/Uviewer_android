@@ -34,6 +34,16 @@ class UserPreferencesRepository(context: Context) {
     )
     val language: StateFlow<String> = _language.asStateFlow()
 
+    private val _invertImageControl = MutableStateFlow(
+        sharedPreferences.getBoolean("invert_image_control", false)
+    )
+    val invertImageControl: StateFlow<Boolean> = _invertImageControl.asStateFlow()
+
+    private val _dualPageOrder = MutableStateFlow(
+        sharedPreferences.getInt("dual_page_order", 0)
+    )
+    val dualPageOrder: StateFlow<Int> = _dualPageOrder.asStateFlow()
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -67,6 +77,20 @@ class UserPreferencesRepository(context: Context) {
             putString("language", lang)
         }
         _language.value = lang
+    }
+
+    fun setInvertImageControl(invert: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("invert_image_control", invert)
+        }
+        _invertImageControl.value = invert
+    }
+
+    fun setDualPageOrder(order: Int) {
+        sharedPreferences.edit {
+            putInt("dual_page_order", order)
+        }
+        _dualPageOrder.value = order
     }
 
     companion object {

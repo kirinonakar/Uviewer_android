@@ -7,6 +7,7 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material3.*
@@ -46,6 +47,7 @@ fun DocumentViewerScreen(
     // showControls replaced by !isFullScreen
     var currentLine by remember { mutableIntStateOf(1) }
     var showGoToLineDialog by remember { mutableStateOf(false) }
+    var showFontSettingsDialog by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
     LaunchedEffect(filePath) {
@@ -89,26 +91,31 @@ fun DocumentViewerScreen(
             topBar = {
                 if (!isFullScreen) {
                     TopAppBar(
-                        title = { Text(stringResource(R.string.title_document_viewer)) },
+                        title = { Text(uiState.fileName ?: stringResource(R.string.title_document_viewer), maxLines = 1) },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                             }
                         },
                         actions = {
+                            IconButton(onClick = {
+                                viewModel.toggleBookmark(filePath, uiState.currentLine, isWebDav, serverId, type.name)
+                            }) {
+                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                            }
                             if (type == FileEntry.FileType.EPUB) {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents))
                                 }
                             } else if (uiState.totalLines > 0) {
                                 IconButton(onClick = { showGoToLineDialog = true }) {
-                                    Icon(Icons.Default.FormatSize, contentDescription = "Go to Line") // Reusing icon for now
+                                    Text("G", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
                             IconButton(onClick = { viewModel.toggleVerticalMode() }) {
                                 Icon(Icons.Default.RotateRight, contentDescription = stringResource(R.string.toggle_vertical))
                             }
-                            IconButton(onClick = { /* TODO: Font settings dialog */ }) {
+                            IconButton(onClick = { showFontSettingsDialog = true }) {
                                 Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
                             }
                         }
@@ -130,73 +137,133 @@ fun DocumentViewerScreen(
                                     Text("${(currentLine * 100 / uiState.totalLines)}%")
                                 }
                                 Slider(
-                                    value = currentLine.toFloat(),
-                                    onValueChange = { 
-                                        currentLine = it.toInt()
-                                        if (uiState.totalLines > 0 && webViewRef != null) {
-                                            val js = "window.scrollTo(0, document.body.scrollHeight * ${currentLine.toFloat() / uiState.totalLines});"
-                                            webViewRef?.evaluateJavascript(js, null)
-                                        }
-                                    },
-                                    valueRange = 1f..uiState.totalLines.toFloat(),
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                )
-                            }
-                            
-                            if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    TextButton(
-                                        onClick = { viewModel.prevChapter() },
-                                        enabled = uiState.currentChapterIndex > 0
-                                    ) {
-                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(stringResource(R.string.prev_chapter))
-                                    }
-                                    
-                                    Text(
-                                        "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
+                                     value = currentLine.toFloat(),
+                                     onValueChange = { 
+                                         currentLine = it.toInt()
+                                         if (uiState.totalLines > 0 && webViewRef != null) {
+                                             val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                             webViewRef?.evaluateJavascript(js, null)
+                                         }
+                                     },
+                                     valueRange = 1f..uiState.totalLines.toFloat(),
+                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                 )
+                             }
 
-                                    TextButton(
-                                        onClick = { viewModel.nextChapter() },
-                                        enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
-                                    ) {
-                                        Text(stringResource(R.string.next_chapter))
-                                        Spacer(Modifier.width(8.dp))
-                                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                             // Text Chunk Navigation
+                             if (type == FileEntry.FileType.TEXT && (uiState.currentChunkIndex > 0 || uiState.hasMoreContent)) {
+                                 Row(
+                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                     verticalAlignment = Alignment.CenterVertically
+                                 ) {
+                                     TextButton(
+                                         onClick = { viewModel.prevChunk() },
+                                         enabled = uiState.currentChunkIndex > 0
+                                     ) {
+                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                         Spacer(Modifier.width(8.dp))
+                                         Text("Prev Seg")
+                                     }
+
+                                     Text(
+                                         "Segment ${uiState.currentChunkIndex + 1}",
+                                         style = MaterialTheme.typography.bodyMedium
+                                     )
+
+                                     TextButton(
+                                         onClick = { viewModel.nextChunk() },
+                                         enabled = uiState.hasMoreContent
+                                     ) {
+                                         Text("Next Seg")
+                                         Spacer(Modifier.width(8.dp))
+                                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                                     }
+                                 }
+                             }
+                             if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
+                                 Row(
+                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                     verticalAlignment = Alignment.CenterVertically
+                                 ) {
+                                     TextButton(
+                                         onClick = { viewModel.prevChapter() },
+                                         enabled = uiState.currentChapterIndex > 0
+                                     ) {
+                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                         Spacer(Modifier.width(8.dp))
+                                         Text(stringResource(R.string.prev_chapter))
+                                     }
+                                     
+                                     Text(
+                                         "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
+                                         style = MaterialTheme.typography.bodyMedium
+                                     )
+ 
+                                     TextButton(
+                                         onClick = { viewModel.nextChapter() },
+                                         enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
+                                     ) {
+                                         Text(stringResource(R.string.next_chapter))
+                                         Spacer(Modifier.width(8.dp))
+                                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                                     }
+                                 }
+                             }
+                         }
+                     }
+                 }
+            }
+        ) { innerPadding ->
+             if (uiState.isLoading) {
+                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
+                     CircularProgressIndicator()
+                 }
+             } else if (uiState.error != null) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(innerPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Button(onClick = onBack) {
+                        Text(stringResource(R.string.back))
+                    }
+                }
+            } else {
+                 AndroidView(
+                     modifier = Modifier
+                         .fillMaxSize()
+                         .padding(innerPadding),
+                    factory = { context ->
+                        object : WebView(context) {
+                            var targetLine: Int = 1
+                            var lastContentHash: Int = 0
+                            
+                            fun getHorizontalScrollRangePublic(): Int {
+                                return computeHorizontalScrollRange()
+                            }
+                        }.apply {
+                            settings.allowFileAccess = true 
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    super.onPageFinished(view, url)
+                                    val customView = view as? Object
+                                    val line = try { customView?.javaClass?.getField("targetLine")?.getInt(customView) ?: 1 } catch(e:Exception) { 1 }
+                                    
+                                    // Restore Scroll
+                                    if (line > 1) {
+                                         // We need totalLines which is in uiState. But here we are in Factory/Client.
+                                         // We can't easily access uiState. 
+                                         // We will rely on the 'update' block to restore scroll after content load.
                                     }
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        ) { innerPadding ->
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            } else if (uiState.error != null) {
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
-                }
-            } else {
-                AndroidView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
-                    factory = { context ->
-                        WebView(context).apply {
-                            settings.allowFileAccess = true // Fix for EPUB webpage not available
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            webViewClient = WebViewClient()
                             webViewRef = this
                             
                             val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
@@ -220,92 +287,188 @@ fun DocumentViewerScreen(
                             
                             setOnTouchListener { _, event ->
                                 gestureDetector.onTouchEvent(event) 
-                                // Return false to let WebView handle scrolls and other events
-                                // But if it was a tap, we want to consume it? 
-                                // Actually calling pageUp/pageDown inside onSingleTapUp is enough.
-                                // If we return false, WebView might interpret tap as click (e.g. on link).
-                                // We are prioritizing navigation over links here.
-                                // Ideally verify hit test result.
                                 false
                             }
                             
-                            setOnScrollChangeListener { _, _, scrollY, _, _ ->
-                                if (uiState.totalLines > 0 && contentHeight > 0) {
-                                     val progress = scrollY.toFloat() / (contentHeight - height).coerceAtLeast(1)
-                                     val line = (progress * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
-                                     currentLine = line
-                                }
+                            setOnScrollChangeListener { _, scrollX, scrollY, _, _ ->
+                                 if (uiState.isVertical) {
+                                     val range = getHorizontalScrollRangePublic()
+                                     val maxScroll = (range - width).coerceAtLeast(1)
+                                     val rawProgress = 1.0f - (scrollX.toFloat() / maxScroll)
+                                     val p = rawProgress.coerceIn(0f, 1f)
+                                     val line = (p * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
+                                     if (kotlin.math.abs(line - currentLine) > 0) {
+                                         currentLine = line
+                                     }
+                                 } else {
+                                     if (uiState.totalLines > 0 && contentHeight > 0) {
+                                          val progress = scrollY.toFloat() / (contentHeight - height).coerceAtLeast(1)
+                                          val line = (progress * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
+                                          currentLine = line
+                                     }
+                                 }
                             }
                         }
                     },
                     update = { webView ->
+                        val customWebView = webView as? WebView // It's already a WebView
+                        val currentHash = uiState.content.hashCode()
+                        val previousHash = (webView.tag as? Int) ?: 0
+                        
                         val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-                            UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
-                            UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
-                            else -> "#ffffff" to "#000000"
+                             UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+                             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
+                             else -> "#ffffff" to "#000000"
                         }
 
-                        val style = """
-                            <style>
-                            body {
-                                background-color: $bgColor;
-                                color: $textColor;
-                                font-family: ${uiState.fontFamily};
-                                font-size: ${uiState.fontSize}px;
-                                line-height: 1.6;
-                                padding: 1em;
-                            }
-                            </style>
-                        """
-                        val contentWithStyle = "$style${uiState.content}"
-                        val js = "document.body.style.writingMode = '${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"}';"
-
-                        if (uiState.url != null) {
-                            if (webView.url != uiState.url) {
-                                webView.loadUrl(uiState.url!!)
-                            }
-                            webView.evaluateJavascript(js, null)
-                        } else {
-                             webView.loadDataWithBaseURL(null, contentWithStyle, "text/html", "UTF-8", null)
-                             webView.evaluateJavascript(js, null)
-                        }
-                    }
-                )
-            }
-        }
-        
-        if (showGoToLineDialog) {
-            var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
-            AlertDialog(
-                onDismissRequest = { showGoToLineDialog = false },
-                title = { Text("Go to Line") },
-                text = {
-                    Column {
-                        Text("Enter line number (1 - ${uiState.totalLines})")
-                        OutlinedTextField(
-                            value = targetLineStr, 
-                            onValueChange = { if (it.all { c -> c.isDigit() }) targetLineStr = it },
-                            singleLine = true
-                        )
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {  
-                         val line = targetLineStr.toIntOrNull()
-                         if (line != null) {
-                             currentLine = line.coerceIn(1, uiState.totalLines)
-                             if (uiState.totalLines > 0 && webViewRef != null) {
-                                 val js = "window.scrollTo(0, document.body.scrollHeight * ${currentLine.toFloat() / uiState.totalLines});"
-                                 webViewRef?.evaluateJavascript(js, null)
+                         val style = """
+                             <style>
+                             body {
+                                 background-color: $bgColor;
+                                 color: $textColor;
+                                 font-family: ${uiState.fontFamily};
+                                 font-size: ${uiState.fontSize}px;
+                                 line-height: 1.6;
+                                 padding: 1em;
                              }
-                             showGoToLineDialog = false 
+                             </style>
+                         """
+                         val contentWithStyle = "$style${uiState.content}"
+                         val jsWritingMode = "document.body.style.writingMode = '${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"}';"
+
+                         if (currentHash != previousHash) {
+                             webView.tag = currentHash
+                             if (uiState.url != null) {
+                                 webView.loadUrl(uiState.url!!)
+                             } else {
+                                 val baseUrl = if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null
+                                 webView.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
+                             }
+                             
+                             // Restore Scroll after load
+                             // Since load is async, we can't do it here directly for the *content check*.
+                             // But we can post a runnable?
+                             webView.postDelayed({
+                                 webView.evaluateJavascript(jsWritingMode, null)
+                                 // Restore position
+                                 if (currentLine > 1 && uiState.totalLines > 0) {
+                                     val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                     webView.evaluateJavascript(js, null)
+                                 }
+                             }, 500) // Delay to ensure render. 500ms is heuristic.
+                         } else {
+                             // Just update writing mode if needed (though hash check covers it usually)
+                             webView.evaluateJavascript(jsWritingMode, null)
                          }
-                    }) { Text("Go") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showGoToLineDialog = false }) { Text("Cancel") }
-                }
+                    }
+                 )
+             }
+         }
+         
+         if (showGoToLineDialog) {
+             var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
+             AlertDialog(
+                 onDismissRequest = { showGoToLineDialog = false },
+                 title = { Text("Go to Line") },
+                 text = {
+                     Column {
+                         Text("Enter line number (1 - ${uiState.totalLines})")
+                         OutlinedTextField(
+                             value = targetLineStr, 
+                             onValueChange = { if (it.all { c -> c.isDigit() }) targetLineStr = it },
+                             singleLine = true
+                         )
+                     }
+                 },
+                 confirmButton = {
+                     TextButton(onClick = {  
+                           val line = targetLineStr.toIntOrNull()
+                           if (line != null) {
+                               currentLine = line.coerceIn(1, uiState.totalLines)
+                               if (uiState.totalLines > 0 && webViewRef != null) {
+                                   val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                   webViewRef?.evaluateJavascript(js, null)
+                               }
+                               showGoToLineDialog = false 
+                           }
+                     }) { Text("Go") }
+                 },
+                 dismissButton = {
+                     TextButton(onClick = { showGoToLineDialog = false }) { Text("Cancel") }
+                 }
+             )
+         }
+         if (showFontSettingsDialog) {
+            FontSettingsDialog(
+                viewModel = viewModel,
+                onDismiss = { showFontSettingsDialog = false }
             )
         }
     }
+}
+
+@Composable
+fun FontSettingsDialog(
+    viewModel: DocumentViewerViewModel,
+    onDismiss: () -> Unit
+) {
+    val fontSize: Int by viewModel.fontSize.collectAsState()
+    val fontFamily: String by viewModel.fontFamily.collectAsState()
+    val docBackgroundColor: String by viewModel.docBackgroundColor.collectAsState()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.font_settings)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Font Size
+                Column {
+                    Text(stringResource(R.string.font_size_fmt, fontSize))
+                    Slider(
+                        value = fontSize.toFloat(),
+                        onValueChange = { viewModel.setFontSize(it.toInt()) },
+                        valueRange = 12f..36f,
+                        steps = 23 // Corrected steps for range 12-36
+                    )
+                }
+                
+                // Font Family
+                Column {
+                    Text(stringResource(R.string.font_family))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("serif", "sans-serif", "monospace").forEach { family ->
+                            FilterChip(
+                                selected = fontFamily == family,
+                                onClick = { viewModel.setFontFamily(family) },
+                                label = { Text(family.replaceFirstChar { it.uppercase() }) }
+                            )
+                        }
+                    }
+                }
+
+                // Background Color
+                Column {
+                    Text(stringResource(R.string.document_background))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        mapOf(
+                            UserPreferencesRepository.DOC_BG_WHITE to "White",
+                            UserPreferencesRepository.DOC_BG_SEPIA to "Sepia",
+                            UserPreferencesRepository.DOC_BG_DARK to "Dark"
+                        ).forEach { (bg, label) ->
+                            FilterChip(
+                                selected = docBackgroundColor == bg,
+                                onClick = { viewModel.setDocBackgroundColor(bg) },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }

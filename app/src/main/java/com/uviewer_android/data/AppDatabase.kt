@@ -3,11 +3,12 @@ package com.uviewer_android.data
 import android.content.Context
 import androidx.room.*
 
-@Database(entities = [FavoriteItem::class, RecentFile::class, WebDavServer::class], version = 1, exportSchema = false)
+@Database(entities = [FavoriteItem::class, RecentFile::class, WebDavServer::class, Bookmark::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun recentFileDao(): RecentFileDao
     abstract fun webDavServerDao(): WebDavServerDao
+    abstract fun bookmarkDao(): BookmarkDao
 
     companion object {
         @Volatile
@@ -19,7 +20,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "uviewer_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }

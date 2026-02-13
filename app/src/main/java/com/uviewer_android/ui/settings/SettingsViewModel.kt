@@ -43,6 +43,12 @@ class SettingsViewModel(
     val language: StateFlow<String> = userPreferencesRepository.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.LANG_SYSTEM)
 
+    val invertImageControl: StateFlow<Boolean> = userPreferencesRepository.invertImageControl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val dualPageOrder: StateFlow<Int> = userPreferencesRepository.dualPageOrder
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     fun setThemeMode(mode: String) {
         userPreferencesRepository.setThemeMode(mode)
     }
@@ -61,6 +67,14 @@ class SettingsViewModel(
 
     fun setLanguage(lang: String) {
         userPreferencesRepository.setLanguage(lang)
+    }
+
+    fun setInvertImageControl(invert: Boolean) {
+        userPreferencesRepository.setInvertImageControl(invert)
+    }
+
+    fun setDualPageOrder(order: Int) {
+        userPreferencesRepository.setDualPageOrder(order)
     }
 
     fun addServer(name: String, url: String, username: String, password: String?) {

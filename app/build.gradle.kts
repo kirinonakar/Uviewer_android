@@ -58,6 +58,7 @@ dependencies {
     
     // Image Loading
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
     
     // Media
     implementation(libs.androidx.media3.exoplayer)

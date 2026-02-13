@@ -10,39 +10,60 @@ object AozoraParser {
     // Standard Aozora: 《Ruby》 after Kanji.
     
     fun parse(text: String): String {
-        var html = text
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
+        val lines = text.split(Regex("\\r?\\n|\\r"))
+        val parsedLines = lines.mapIndexed { index, line ->
+            var l = line
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
 
-        // Ruby pattern: ｜Kanji《Ruby》
-        // Also handling simple Kanji《Ruby》 without separators if possible, but reliability varies.
-        // Let's implement robust one:
-        // 1. |Kanji《Ruby》 -> <ruby>Kanji<rt>Ruby</rt></ruby>
-        // 2. ｜Kanji《Ruby》 -> <ruby>Kanji<rt>Ruby</rt></ruby> (Fullwidth bar)
-        // 3. (Kanji)《Ruby》 -> <ruby>Kanji<rt>Ruby</rt></ruby> (Common implementation detail?)
-        // Standard is: specific kanji sequence followed by 《...》
-        
-        // Regex for |Kanji《Ruby》
-        html = html.replace(Regex("[｜|](.+?)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
-        
-        // Regex for Kanji《Ruby》 (simplified, might be greedy or wrong for non-kanji, but common Aozora heuristic)
-        // Actually Aozora specs say if no separator, it applies to previous Kanji block.
-        // Let's use a simpler approach for now:
-        // Match Kanji block followed by 《...》
-        html = html.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
+            // Ruby pattern: ｜Kanji《Ruby》
+            l = l.replace(Regex("[｜|](.+?)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
+            
+            // Regex for implicit Kanji《Ruby》
+            l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
 
-        // Image tags: ［＃Image file="foo.jpg"］
-        // Regex: ［＃.+?（(.+?)）］ or similar. Aozora image format varies.
-        // Typical: <img src="foo.jpg">
-        // Let's assume user wants to see images referenced.
-        // Format: ［＃插画（image.jpg）］
-        html = html.replace(Regex("［＃插画（(.+?)）］"), "<img src=\"$1\" />")
+            // Image tags
+            // Pattern 1: ［＃插画（image.jpg）］ or ［＃Image（image.jpg）］
+            l = l.replace(Regex("［＃.+?（(.+?)）］"), "<img src=\"$1\" />")
+            // Pattern 2: ［＃image.jpg］ (Simple format)
+            l = l.replace(Regex("［＃(.+?\\.(?:jpg|jpeg|png|gif|webp))］"), "<img src=\"$1\" />")
 
-        // Newlines to <br>
-        html = html.replace("\n", "<br/>")
+            // Headers
+            l = l.replace(Regex("［＃大見出し］(.+?)［＃大見出し終わり］"), "<h1>$1</h1>")
+            l = l.replace(Regex("［＃中見出し］(.+?)［＃中見出し終わり］"), "<h2>$1</h2>")
+            l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3>$1</h3>")
+            l = l.replace(Regex("［＃４段階見出し］(.+?)［＃４段階見出し終わり］"), "<h4>$1</h4>")
+            l = l.replace(Regex("［＃５段階見出し］(.+?)［＃５段階見出し終わり］"), "<h5>$1</h5>")
 
-        return html
+            // Center tag
+            var classes = mutableListOf<String>()
+            var styles = mutableListOf<String>()
+            
+            if (l.contains("［＃センター］")) {
+                l = l.replace("［＃センター］", "").replace("［＃センター終わり］", "")
+                classes.add("center")
+            }
+            
+            // 地からN字上げ
+            val indentMatch = Regex("［＃地から(\\d+)字上げ］").find(l)
+            if (indentMatch != null) {
+                val n = indentMatch.groupValues[1]
+                l = l.replace(Regex("［＃地から(\\d+)字上げ］"), "")
+                styles.add("padding-bottom: ${n}em")
+            }
+
+            val classAttr = if (classes.isNotEmpty()) " class=\"${classes.joinToString(" ")}\"" else ""
+            val styleAttr = if (styles.isNotEmpty()) " style=\"${styles.joinToString("; ")}\"" else ""
+            
+            if (l.isBlank()) {
+                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>&nbsp;</div>"
+            } else {
+                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>$l</div>"
+            }
+        }
+
+        return parsedLines.joinToString("\n")
     }
 
     fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff"): String {
@@ -61,12 +82,23 @@ object AozoraParser {
                         background-color: $backgroundColor;
                         writing-mode: $writingMode;
                         text-orientation: upright;
-                        margin: 20px;
+                        margin: 0;
+                        padding: 1em;
                         line-height: 1.8;
+                    }
+                    div {
+                        min-height: 1.2em;
+                    }
+                    .center {
+                        text-align: center;
                     }
                     img {
                         max-width: 100%;
                         height: auto;
+                    }
+                    h1, h2, h3, h4, h5 {
+                        text-align: center;
+                        margin: 1em 0;
                     }
                 </style>
             </head>
