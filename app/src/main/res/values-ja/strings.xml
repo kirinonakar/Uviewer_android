@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">Uviewer</string>
+
+    <!-- Navigation -->
+    <string name="nav_library">ライブラリ</string>
+    <string name="nav_favorites">お気に入り</string>
+    <string name="nav_recent">最近のファイル</string>
+    <string name="nav_settings">設定</string>
+
+    <!-- General -->
+    <string name="cancel">キャンセル</string>
+    <string name="add">追加</string>
+    <string name="delete">削除</string>
+    <string name="back">戻る</string>
+    
+    <!-- Library -->
+    <string name="add_to_favorites">お気に入りに追加</string>
+    <string name="remove_from_favorites">お気に入りから削除</string>
+
+    <!-- Favorites -->
+    <string name="title_favorites">お気に入り</string>
+    <string name="no_favorites">お気に入りはまだありません</string>
+
+    <!-- Recent -->
+    <string name="title_recent_files">最近のファイル</string>
+    <string name="no_recent_files">最近のファイルはありません</string>
+    <string name="last_accessed">最終アクセス: %s</string>
+
+    <!-- Settings -->
+    <string name="title_settings">設定</string>
+    
+    <!-- Settings: Appearance -->
+    <string name="section_appearance">表示</string>
+    <string name="theme">テーマ</string>
+    <string name="theme_light">ライト</string>
+    <string name="theme_dark">ダーク</string>
+    <string name="theme_system">システム設定</string>
+    <string name="select_theme">テーマを選択</string>
+
+    <!-- Settings: Reading -->
+    <string name="section_reading">読書設定</string>
+    <string name="font_size_fmt">文字サイズ: %d sp</string>
+    <string name="font_family">フォント</string>
+    <string name="select_font_family">フォントを選択</string>
+    <string name="font_serif">明朝体 (Serif)</string>
+    <string name="font_sans_serif">ゴシック体 (Sans-serif)</string>
+    <string name="font_monospace">等幅 (Monospace)</string>
+    <string name="font_default">デフォルト</string>
+
+    <!-- Settings: WebDAV -->
+    <string name="section_webdav">WebDAV サーバー</string>
+    <string name="add_webdav_server">WebDAV サーバーを追加</string>
+    <string name="server_name">名前</string>
+    <string name="server_url">URL</string>
+    <string name="username">ユーザー名</string>
+    <string name="password">パスワード</string>
+    <string name="add_server_desc">サーバーを追加</string>
+</resources>

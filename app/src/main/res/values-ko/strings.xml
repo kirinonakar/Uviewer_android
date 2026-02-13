@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">Uviewer</string>
+
+    <!-- Navigation -->
+    <string name="nav_library">라이브러리</string>
+    <string name="nav_favorites">즐겨찾기</string>
+    <string name="nav_recent">최근 파일</string>
+    <string name="nav_settings">설정</string>
+
+    <!-- General -->
+    <string name="cancel">취소</string>
+    <string name="add">추가</string>
+    <string name="delete">삭제</string>
+    <string name="back">뒤로</string>
+    
+    <!-- Library -->
+    <string name="add_to_favorites">즐겨찾기에 추가</string>
+    <string name="remove_from_favorites">즐겨찾기에서 제거</string>
+
+    <!-- Favorites -->
+    <string name="title_favorites">즐겨찾기</string>
+    <string name="no_favorites">즐겨찾기가 없습니다</string>
+
+    <!-- Recent -->
+    <string name="title_recent_files">최근 파일</string>
+    <string name="no_recent_files">최근 파일이 없습니다</string>
+    <string name="last_accessed">마지막 접근: %s</string>
+
+    <!-- Settings -->
+    <string name="title_settings">설정</string>
+    
+    <!-- Settings: Appearance -->
+    <string name="section_appearance">화면</string>
+    <string name="theme">테마</string>
+    <string name="theme_light">라이트</string>
+    <string name="theme_dark">다크</string>
+    <string name="theme_system">시스템 기본값</string>
+    <string name="select_theme">테마 선택</string>
+
+    <!-- Settings: Reading -->
+    <string name="section_reading">읽기</string>
+    <string name="font_size_fmt">글자 크기: %d sp</string>
+    <string name="font_family">글꼴</string>
+    <string name="select_font_family">글꼴 선택</string>
+    <string name="font_serif">바탕체 (Serif)</string>
+    <string name="font_sans_serif">고딕체 (Sans-serif)</string>
+    <string name="font_monospace">고정폭 (Monospace)</string>
+    <string name="font_default">기본값</string>
+
+    <!-- Settings: WebDAV -->
+    <string name="section_webdav">WebDAV 서버</string>
+    <string name="add_webdav_server">WebDAV 서버 추가</string>
+    <string name="server_name">이름</string>
+    <string name="server_url">URL</string>
+    <string name="username">사용자명</string>
+    <string name="password">비밀번호</string>
+    <string name="add_server_desc">서버 추가</string>
+</resources>

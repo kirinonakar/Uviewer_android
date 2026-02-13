@@ -1,0 +1,58 @@
+<resources>
+    <string name="app_name">Uviewer</string>
+
+    <!-- Navigation -->
+    <string name="nav_library">Library</string>
+    <string name="nav_favorites">Favorites</string>
+    <string name="nav_recent">Recent</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- General -->
+    <string name="cancel">Cancel</string>
+    <string name="add">Add</string>
+    <string name="delete">Delete</string>
+    <string name="back">Back</string>
+    
+    <!-- Library -->
+    <string name="add_to_favorites">Add to favorites</string>
+    <string name="remove_from_favorites">Remove from favorites</string>
+
+    <!-- Favorites -->
+    <string name="title_favorites">Favorites</string>
+    <string name="no_favorites">No favorites yet</string>
+
+    <!-- Recent -->
+    <string name="title_recent_files">Recent Files</string>
+    <string name="no_recent_files">No recent files</string>
+    <string name="last_accessed">Last accessed: %s</string>
+
+    <!-- Settings -->
+    <string name="title_settings">Settings</string>
+    
+    <!-- Settings: Appearance -->
+    <string name="section_appearance">Appearance</string>
+    <string name="theme">Theme</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="theme_system">System Default</string>
+    <string name="select_theme">Select Theme</string>
+
+    <!-- Settings: Reading -->
+    <string name="section_reading">Reading</string>
+    <string name="font_size_fmt">Font Size: %d sp</string>
+    <string name="font_family">Font Family</string>
+    <string name="select_font_family">Select Font Family</string>
+    <string name="font_serif">Serif</string>
+    <string name="font_sans_serif">Sans-serif</string>
+    <string name="font_monospace">Monospace</string>
+    <string name="font_default">Default</string>
+
+    <!-- Settings: WebDAV -->
+    <string name="section_webdav">WebDAV Servers</string>
+    <string name="add_webdav_server">Add WebDAV Server</string>
+    <string name="server_name">Name</string>
+    <string name="server_url">URL</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="add_server_desc">Add Server</string>
+</resources>
