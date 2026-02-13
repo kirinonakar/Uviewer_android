@@ -3,7 +3,7 @@ package com.uviewer_android.data
 import android.content.Context
 import androidx.room.*
 
-@Database(entities = [FavoriteItem::class, RecentFile::class, WebDavServer::class, Bookmark::class], version = 2, exportSchema = false)
+@Database(entities = [FavoriteItem::class, RecentFile::class, WebDavServer::class, Bookmark::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun recentFileDao(): RecentFileDao

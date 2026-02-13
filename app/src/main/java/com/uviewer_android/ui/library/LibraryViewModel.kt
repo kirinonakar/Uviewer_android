@@ -15,6 +15,7 @@ data class LibraryUiState(
     val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
     val fileList: List<FileEntry> = emptyList(),
     val favoritePaths: Set<String> = emptySet(),
+    val pinnedFiles: List<FileEntry> = emptyList(), // For Pin Tab
     val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
     val isLoading: Boolean = false,
     val isWebDavTab: Boolean = false,
@@ -80,9 +81,29 @@ class LibraryViewModel(
             SortOption.SIZE_DESC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { -it.size }))
         }
         
+        // Create FileEntry list from Favorites (including isPinned status)
+        val favoriteEntries = favorites.map { 
+            FileEntry(
+                name = it.title,
+                path = it.path,
+                isDirectory = it.type == "FOLDER",
+                type = if (it.type == "FOLDER") FileEntry.FileType.FOLDER else FileEntry.FileType.valueOf(it.type.uppercase()),
+                lastModified = 0L,
+                size = 0L,
+                isWebDav = it.isWebDav,
+                serverId = it.serverId,
+                isPinned = it.isPinned
+            ) 
+        }
+
         state.copy(
-            fileList = sortedList,
+            fileList = sortedList.map { file ->
+                // Update isPinned status for current file list
+                val favorite = favorites.find { it.path == file.path }
+                file.copy(isPinned = favorite?.isPinned == true)
+            },
             favoritePaths = favorites.map { it.path }.toSet(),
+            pinnedFiles = favoriteEntries.filter { it.isPinned }.sortedBy { it.name.lowercase() },
             sortOption = sort,
             mostRecentFile = mostRecent
         )
@@ -95,9 +116,13 @@ class LibraryViewModel(
     fun setSortOption(option: SortOption) {
         _sortOption.value = option
     }
-
+    
     fun loadInitialPath(isWebDav: Boolean) {
-        _state.value = _state.value.copy(isWebDavTab = isWebDav, serverId = null)
+        _state.value = _state.value.copy(
+            isWebDavTab = isWebDav, 
+            serverId = null,
+            currentPath = if (isWebDav) "WebDAV" else android.os.Environment.getExternalStorageDirectory().absolutePath
+        )
         if (isWebDav) {
             showServerList()
         } else {
@@ -141,8 +166,9 @@ class LibraryViewModel(
 
     fun toggleFavorite(entry: FileEntry) {
         viewModelScope.launch {
-            if (uiState.value.favoritePaths.contains(entry.path)) {
-                favoriteDao.deleteFavoriteByPath(entry.path)
+            val existing = favoriteDao.getAllFavorites().first().find { it.path == entry.path }
+            if (existing != null) {
+                favoriteDao.deleteFavorite(existing)
             } else {
                 favoriteDao.insertFavorite(
                     FavoriteItem(
@@ -150,7 +176,30 @@ class LibraryViewModel(
                         path = entry.path,
                         isWebDav = entry.isWebDav,
                         serverId = entry.serverId,
-                        type = entry.type.name
+                        type = entry.type.name,
+                        isPinned = false // Default to false when starring
+                    )
+                )
+            }
+        }
+    }
+
+    fun togglePin(entry: FileEntry) {
+        viewModelScope.launch {
+            val existing = favoriteDao.getAllFavorites().first().find { it.path == entry.path }
+            if (existing != null) {
+                // Update existing favorite
+                favoriteDao.updateFavorite(existing.copy(isPinned = !existing.isPinned))
+            } else {
+                // If pinning from file list and not yet favorited, insert as Favorite AND Pinned
+                favoriteDao.insertFavorite(
+                    FavoriteItem(
+                        title = entry.name,
+                        path = entry.path,
+                        isWebDav = entry.isWebDav,
+                        serverId = entry.serverId,
+                        type = entry.type.name,
+                        isPinned = true
                     )
                 )
             }

@@ -7,8 +7,9 @@ data class FileEntry(
     val type: FileType,
     val lastModified: Long,
     val size: Long,
-    val serverId: Int? = null, // ID of WebDavServer for remote files
-    val isWebDav: Boolean = false
+    val isWebDav: Boolean = false,
+    val serverId: Int? = null,
+    val isPinned: Boolean = false
 ) {
     enum class FileType {
         FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV

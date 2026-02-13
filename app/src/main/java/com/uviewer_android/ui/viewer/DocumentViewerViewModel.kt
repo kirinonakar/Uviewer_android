@@ -21,6 +21,7 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
     data class DocumentViewerUiState(
         val content: String = "",
         val url: String? = null,
+        val baseUrl: String? = null, // Added for EPUB image resolution
         val isLoading: Boolean = false,
         val error: String? = null,
         val isVertical: Boolean = false,
@@ -299,12 +300,47 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
             if (index in chapters.indices) {
                 val chapter = chapters[index]
                 val chapterFile = File(chapter.href)
-                _uiState.value = _uiState.value.copy(
-                    url = "file://${chapterFile.absolutePath}",
-                    content = "",
-                    currentChapterIndex = index,
-                    isLoading = false
-                )
+                
+                // Read content directly to inject styles and ensure visibility
+                viewModelScope.launch {
+                    val rawContent = try {
+                        chapterFile.readText()
+                    } catch (e: Exception) {
+                        "Error reading chapter: ${e.message}"
+                    }
+
+                    // We need to wrap it similar to Aozora to apply our styles (bg color, font, etc.)
+                    // But EPUB content is already HTML (usually body or html tag).
+                    // We can just inject our style block or wrap the body content.
+                    // A simple approach is to treat it as HTML content in processContent but we need to keep the baseUrl.
+                    
+                    val (bgColor, textColor) = getColors()
+                    
+                    // Simple injection of style at the beginning if head/body parsing is too complex here
+                    // Better: use AozoraParser.wrapInHtml if it was plain text, but it's HTML.
+                    // Let's manually construct the style block and prepend/inject it.
+                    // Or rely on DocumentViewerScreen's injection? 
+                    // DocumentViewerScreen injects style into `contentWithStyle`.
+                    // So we just need to provide the inner body content? 
+                    // No, EPUB chapter is a full HTML file usually.
+                    
+                    // If we pass it as 'content', DocumentViewerScreen wraps it with our style.
+                    // If the EPUB has its own styles, they might conflict.
+                    // But we want to enforce our settings.
+                    
+                    // Crucial: define baseUrl for images
+                    val baseUrl = "file://${chapterFile.parent}/"
+                    
+                    _uiState.value = _uiState.value.copy(
+                        url = null, // Disable URL loading to force data loading
+                        baseUrl = baseUrl,
+                        content = rawContent, // Screen will prepend styles
+                        currentChapterIndex = index,
+                        isLoading = false,
+                        currentLine = 1,
+                        totalLines = rawContent.lines().size
+                    )
+                }
             }
         }
 

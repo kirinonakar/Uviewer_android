@@ -48,11 +48,20 @@ fun ImageViewerScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Ensure status bar icons are visible (white) on dark background even in light theme
-    LaunchedEffect(isFullScreen) {
+    val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    DisposableEffect(isFullScreen) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = false
+        }
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                // Restore based on system theme
+                insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
+            }
         }
     }
 
@@ -253,6 +262,7 @@ fun ImageViewerScreen(
                         IconButton(onClick = {
                             val type = if (filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }) "IMAGE_ZIP" else "IMAGE"
                             viewModel.toggleBookmark(filePath, pagerState.currentPage, isWebDav, serverId, type)
+                            android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
                         }) {
                             Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
                         }

@@ -130,6 +130,10 @@ class MediaPlayerViewModel(
         _uiState.value = _uiState.value.copy(rotation = (_uiState.value.rotation + 90f) % 360f)
     }
 
+    fun setRotation(rotation: Float) {
+        _uiState.value = _uiState.value.copy(rotation = rotation)
+    }
+
     fun setVideoSize(width: Int, height: Int) {
         _uiState.value = _uiState.value.copy(videoWidth = width, videoHeight = height)
     }

@@ -26,6 +26,7 @@ object AozoraParser {
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]"), "<ruby>$1<rt>$2</rt></ruby>")
 
             // Image tags
+            l = l.replace(Regex("［＃挿絵（(.+?)）入る］"), "<img src=\"$1\" />") // Specific format with "入る"
             l = l.replace(Regex("［＃.+?（(.+?)）］"), "<img src=\"$1\" />")
             l = l.replace(Regex("［＃(.+?\\.(?:jpg|jpeg|png|gif|webp))］"), "<img src=\"$1\" />")
 
@@ -33,6 +34,18 @@ object AozoraParser {
             l = l.replace(Regex("［＃大見出し］(.+?)［＃大見出し終わり］"), "<h1 class=\"aozora-title\">$1</h1>")
             l = l.replace(Regex("［＃中見出し］(.+?)［＃中見出し終わり］"), "<h2 class=\"aozora-title\">$1</h2>")
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
+            
+            // Bold
+            l = l.replace("［＃ここから太字］", "<b>")
+            l = l.replace("［＃ここで太字終わり］", "</b>")
+
+            // Page Break
+            l = l.replace(Regex("［＃改ページ］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            l = l.replace(Regex("［＃改頁］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            
+            // Indent
+            l = l.replace(Regex("［＃ここから(\\d+)字下げ］"), "<div style=\"margin-inline-start: $1em;\">")
+            l = l.replace("［＃ここで字下げ終わり］", "</div>")
 
             // Center tag
             var classes = mutableListOf<String>()
@@ -105,6 +118,8 @@ object AozoraParser {
                         line-height: 1.8;
                         overflow-x: ${if (isVertical) "auto" else "hidden"};
                         overflow-y: ${if (isVertical) "hidden" else "auto"};
+                        height: 100vh;
+                        width: ${if (isVertical) "auto" else "100%"};
                     }
                     div {
                         min-height: 1.2em;

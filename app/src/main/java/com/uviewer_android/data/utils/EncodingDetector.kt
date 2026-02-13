@@ -28,13 +28,22 @@ object EncodingDetector {
         val sjisScore = getSjisScore(bytes)
         val eucKrScore = getEucKrScore(bytes)
         val johabScore = getJohabScore(bytes)
+        val utf8Score = getUtf8Score(bytes)
+        val utf8Percent = if (bytes.isNotEmpty()) utf8Score.toFloat() / bytes.size else 0f
+
+        // Strong UTF-8 Preference if mostly valid (handling loose/Metadata corruption)
+        if (utf8Percent > 0.98f) {
+            return StandardCharsets.UTF_8
+        }
 
         // Winner takes all
         if (sjisScore > eucKrScore && sjisScore > johabScore && sjisScore > 0) {
             return try { Charset.forName("Shift_JIS") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
         if (eucKrScore > sjisScore && eucKrScore > johabScore && eucKrScore > 0) {
-            return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
+             // If UTF-8 score is decent, prefers UTF-8 over EUC-KR if EUC-KR score is just noise
+             if (utf8Percent > 0.8f && eucKrScore < bytes.size * 0.1f) return StandardCharsets.UTF_8
+             return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
         if (johabScore > sjisScore && johabScore > eucKrScore && johabScore > 0) {
             return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
@@ -42,7 +51,8 @@ object EncodingDetector {
 
         // Default preference if scores match
         if (eucKrScore > 0 && eucKrScore >= sjisScore) {
-            return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
+             if (utf8Percent > 0.8f) return StandardCharsets.UTF_8
+             return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
         if (sjisScore > 0) {
             return try { Charset.forName("Shift_JIS") } catch (e: Exception) { StandardCharsets.UTF_8 }
@@ -55,6 +65,9 @@ object EncodingDetector {
         if (containsJohabPattern(bytes)) {
             return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
+        
+        // If everything failed but looks somewhat like UTF-8
+        if (utf8Percent > 0.7f) return StandardCharsets.UTF_8
 
         // Default Fallbacks
         return try { Charset.forName("EUC-KR") } catch (e: Exception) { 
@@ -173,6 +186,41 @@ object EncodingDetector {
                 }
             }
             i++
+        }
+        return score
+    }
+
+    private fun getUtf8Score(bytes: ByteArray): Int {
+        var score = 0
+        var i = 0
+        while (i < bytes.size) {
+            val b = bytes[i].toInt() and 0xFF
+            if (b < 0x80) { // ASCII
+                score += 1
+                i++
+                continue
+            }
+            // Multi-byte
+            var sequenceLength = 0
+            if (b and 0xE0 == 0xC0) sequenceLength = 1
+            else if (b and 0xF0 == 0xE0) sequenceLength = 2
+            else if (b and 0xF8 == 0xF0) sequenceLength = 3
+
+            if (sequenceLength > 0 && i + sequenceLength < bytes.size) {
+                var isValid = true
+                for (j in 1..sequenceLength) {
+                    if ((bytes[i + j].toInt() and 0xC0) != 0x80) {
+                        isValid = false
+                        break
+                    }
+                }
+                if (isValid) {
+                    score += sequenceLength + 1
+                    i += sequenceLength + 1
+                    continue
+                }
+            }
+            i++ // Invalid byte
         }
         return score
     }

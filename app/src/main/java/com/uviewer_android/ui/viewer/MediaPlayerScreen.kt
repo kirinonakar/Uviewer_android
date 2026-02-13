@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -49,11 +51,34 @@ fun MediaPlayerScreen(
     val context = LocalContext.current
     
     // Ensure status bar icons are visible (white) on dark background even in light theme
-    LaunchedEffect(isFullScreen) {
+    // For Video: Hide status bar when isFullScreen is true
+    // For Audio: Keep status bar visible
+    LaunchedEffect(isFullScreen, fileType) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = false
+            
+            if (fileType == FileEntry.FileType.VIDEO) {
+                 if (isFullScreen) {
+                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                     insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                 } else {
+                     insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                 }
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+    
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
         }
     }
 
@@ -155,7 +180,10 @@ fun MediaPlayerScreen(
                                 }
                             }
 
-                            IconButton(onClick = { viewModel.rotate() }) {
+                            IconButton(onClick = { 
+                                val newRotation = (uiState.rotation + 90f)
+                                viewModel.setRotation(newRotation)
+                            }) {
                                 Icon(Icons.Default.RotateRight, contentDescription = "Rotate", tint = Color.White)
                             }
                         }
@@ -253,15 +281,24 @@ fun MediaPlayerScreen(
                         )
                 )
                 
-                // Overlay for tap-to-toggle UI (below top bar area)
+                // Overlay for tap-to-toggle UI
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clickable(
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                            indication = null,
-                            onClick = onToggleFullScreen
-                        )
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = { offset ->
+                                    val screenHeight = size.height
+                                    if (offset.y < screenHeight / 2) {
+                                        // Top half -> Hide UI
+                                        if (!isFullScreen) onToggleFullScreen()
+                                    } else {
+                                        // Bottom half -> Show UI
+                                        if (isFullScreen) onToggleFullScreen()
+                                    }
+                                }
+                            )
+                        }
                 )
             }
         }

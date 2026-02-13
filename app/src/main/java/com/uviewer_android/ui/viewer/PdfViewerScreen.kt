@@ -173,6 +173,7 @@ fun PdfList(
     ) {
         LazyColumn(
             state = listState,
+            userScrollEnabled = scale == 1f,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(

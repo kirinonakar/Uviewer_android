@@ -11,6 +11,7 @@ data class FavoriteItem(
     val isWebDav: Boolean = false,
     val serverId: Int? = null, // Link to WebDavServer if applicable
     val type: String, // "image", "document", "folder"
+    val isPinned: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 )
 

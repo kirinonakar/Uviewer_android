@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -120,6 +122,14 @@ fun LibraryScreen(
                     },
                     text = { Text(stringResource(R.string.remote)) }
                 )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { 
+                        selectedTab = 2
+                        // No need to load path, just show favorites from state
+                    },
+                    text = { Text("Pin") } 
+                )
             }
 
             if (uiState.isLoading) {
@@ -127,13 +137,15 @@ fun LibraryScreen(
                     CircularProgressIndicator()
                 }
             } else {
+                val listToShow = if (selectedTab == 2) uiState.pinnedFiles else uiState.fileList
                 LazyColumn {
-                    items(uiState.fileList) { file ->
+                    items(listToShow) { file ->
                         val isFavorite = uiState.favoritePaths.contains(file.path)
                         FileItemRow(
                             file = file,
                             isFavorite = isFavorite,
                             onToggleFavorite = { viewModel.toggleFavorite(file) },
+                            onTogglePin = { viewModel.togglePin(file) },
                             onClick = {
                                 if (file.isDirectory) {
                                     viewModel.navigateTo(file)
@@ -154,8 +166,19 @@ fun FileItemRow(
     file: FileEntry,
     isFavorite: Boolean,
     onToggleFavorite: () -> Unit,
+    onTogglePin: () -> Unit,
     onClick: () -> Unit
 ) {
+    // Check if ThumbUp is available as "Pin" proxy or use text "Pin"
+    // Icons.Filled.PushPin is likely not in default material-icons-core.
+    // I will use Icons.Filled.ThumbUp as a visual distinction for now, or Icons.Filled.CheckCircle
+    // Actually, let's use Icons.Filled.Lock for "Fixed/Pinned" concept?
+    // Or better, just text "Pin" if icon is unsure.
+    // But I'll assume Icons.Filled.Star is Favorite.
+    // Let's use Icons.Filled.KeyboardDoubleArrowUp for "Pin to top"?
+    // I'll stick to a standard icon available. Icons.Filled.Info?
+    // Let's use Icons.Filled.LocationOn (Pin-like).
+
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
@@ -181,12 +204,21 @@ fun FileItemRow(
             }
         },
         trailingContent = {
-            IconButton(onClick = onToggleFavorite) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                    contentDescription = if (isFavorite) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
-                    tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row {
+                IconButton(onClick = onTogglePin) {
+                    Icon(
+                        imageVector = if (file.isPinned) androidx.compose.material.icons.Icons.Filled.LocationOn else androidx.compose.material.icons.Icons.Outlined.LocationOn,
+                        contentDescription = if (file.isPinned) "Unpin" else "Pin",
+                        tint = if (file.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onToggleFavorite) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                        contentDescription = if (isFavorite) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
+                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     )
