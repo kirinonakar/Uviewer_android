@@ -48,14 +48,14 @@ object EpubParser {
         val containerFile = File(epubRoot, "META-INF/container.xml")
         if (!containerFile.exists()) throw IOException("Invalid EPUB: META-INF/container.xml not found")
         
-        val containerDoc = Jsoup.parse(containerFile, "UTF-8", Parser.xmlParser())
+        val containerDoc = Jsoup.parse(containerFile.inputStream(), "UTF-8", containerFile.absolutePath, Parser.xmlParser())
         val opfPath = containerDoc.select("rootfile").attr("full-path")
         if (opfPath.isEmpty()) throw IOException("Invalid EPUB: OPF path not found in container.xml")
         
         val opfFile = File(epubRoot, opfPath)
         val opfDir = opfFile.parentFile ?: epubRoot // Directory containing OPF, relative paths base
         
-        val opfDoc = Jsoup.parse(opfFile, "UTF-8", Parser.xmlParser())
+        val opfDoc = Jsoup.parse(opfFile.inputStream(), "UTF-8", opfFile.absolutePath, Parser.xmlParser())
         
         // Metadata
         val title = opfDoc.select("metadata > dc|title").text() // Namespace handling tricky in Jsoup select without setup?
@@ -85,22 +85,44 @@ object EpubParser {
             val idref = itemref.attr("idref")
             val href = manifest[idref]
             if (href != null) {
-                // Resolve href relative to OPF directory, then make relative to epubRoot?
-                // Actually easier to keep relative to opfDir or resolve to absolute path.
-                // Let's resolve to absolute path or keep relative to opfDir?
-                // WebView with base URL needs consistency.
-                // Let's store full path relative to system root or epub root?
-                // Let's store absolute path for simplicity in loading.
                 val file = File(opfDir, href)
                 spine.add(EpubSpineItem(href = file.absolutePath, id = idref))
             }
         }
 
+        // TOC Parsing (NCX)
+        val ncxId = opfDoc.select("spine").attr("toc")
+        val ncxHref = manifest[ncxId]
+        val tocMap = mutableMapOf<String, String>() // href -> title
+        if (ncxHref != null) {
+            val ncxFile = File(opfDir, ncxHref)
+            if (ncxFile.exists()) {
+                val ncxDoc = Jsoup.parse(ncxFile.inputStream(), "UTF-8", ncxFile.absolutePath, Parser.xmlParser())
+                val navPoints = ncxDoc.select("navPoint")
+                for (point in navPoints) {
+                    val label = point.select("navLabel > text").first()?.text()
+                    val src = point.select("content").attr("src")
+                    // src might have fragments (#...), strip them for matching href
+                    val cleanSrc = src.substringBefore("#")
+                    if (label != null) {
+                        tocMap[cleanSrc] = label
+                    }
+                }
+            }
+        }
+
+        // Apply titles to spine items
+        val finalSpine = spine.map { item ->
+            // Try to match href (absolute) back to manifest relative href for TOC lookup
+            val relativeHref = File(item.href).relativeTo(opfDir).path.replace("\\", "/")
+            item.copy(title = tocMap[relativeHref])
+        }
+
         return EpubBook(
             title = titleText,
             author = authorText,
-            coverPath = null, // TODO: Parse cover logic (meta name="cover" -> item id -> href)
-            spine = spine,
+            coverPath = null, // TODO: Parse cover logic
+            spine = finalSpine,
             rootDir = epubRoot.absolutePath
         )
     }

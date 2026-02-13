@@ -1,5 +1,7 @@
 package com.uviewer_android.ui.viewer
 
+import androidx.compose.ui.res.stringResource
+import com.uviewer_android.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -50,7 +52,7 @@ fun ImageViewerScreen(
 
     if (uiState.error != null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Error: ${uiState.error}")
+            Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
         }
         return
     }
@@ -89,7 +91,7 @@ fun ImageViewerScreen(
                     title = { Text(uiState.images[pagerState.currentPage].name, color = Color.White) }, // Show current filename
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(

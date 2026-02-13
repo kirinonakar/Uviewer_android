@@ -1,3 +1,5 @@
+package com.uviewer_android.ui.viewer
+
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,12 +16,14 @@ import java.io.File
 
 data class DocumentViewerUiState(
     val content: String = "", // HTML or Text content
-    val url: String? = null, // URL to load (e.g. file:///...) taking precedence over content if non-null
+    val url: String? = null, // URL to load
     val isLoading: Boolean = false,
     val error: String? = null,
     val isVertical: Boolean = false,
     val fontSize: Int = 18,
-    val fontType: String = "serif"
+    val fontType: String = "serif",
+    val epubChapters: List<com.uviewer_android.data.model.EpubSpineItem> = emptyList(),
+    val currentChapterIndex: Int = -1
 )
 
 class DocumentViewerViewModel(
@@ -35,6 +39,7 @@ class DocumentViewerViewModel(
 
     private var rawContentCache: String? = null
     private var currentFileType: FileEntry.FileType? = null
+    private var currentBook: com.uviewer_android.data.model.EpubBook? = null
 
     init {
         viewModelScope.launch {
@@ -48,7 +53,6 @@ class DocumentViewerViewModel(
                     fontSize = size,
                     fontType = family
                 )
-                // Re-process content if available and is text/aozora
                 if (rawContentCache != null && currentFileType == FileEntry.FileType.TEXT) {
                     val htmlBody = AozoraParser.parse(rawContentCache!!)
                     val processedContent = AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, family, size)
@@ -63,8 +67,7 @@ class DocumentViewerViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             currentFileType = type
             
-            // Add to Recent
-             try {
+            try {
                 val title = File(filePath).name
                 val typeStr = if (type == FileEntry.FileType.EPUB) "EPUB" else "TEXT"
                 recentFileDao.insertRecent(
@@ -77,18 +80,14 @@ class DocumentViewerViewModel(
                         lastAccessed = System.currentTimeMillis()
                     )
                 )
-            } catch (e: Exception) {
-                // Ignore
-            }
+            } catch (e: Exception) {}
 
             try {
                 if (type == FileEntry.FileType.EPUB) {
-                    // EPUB Logic
                     val context = getApplication<Application>()
                     val cacheDir = context.cacheDir
                     
                     val epubFile = if (isWebDav && serverId != null) {
-                         // Download to temp file
                          val fileName = File(filePath).name
                          val tempFile = File(cacheDir, "temp_$fileName")
                          webDavRepository.downloadFile(serverId, filePath, tempFile)
@@ -97,30 +96,21 @@ class DocumentViewerViewModel(
                         File(filePath)
                     }
 
-                    // Unzip
                     val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
-                    if (unzipDir.exists()) unzipDir.deleteRecursively() // Clean start
+                    if (unzipDir.exists()) unzipDir.deleteRecursively()
                     EpubParser.unzip(epubFile, unzipDir)
 
-                    // Parse
                     val book = EpubParser.parse(unzipDir)
+                    currentBook = book
                     
-                    // Load first chapter
-                    // TODO: Persist book structure for navigation
-                    val firstChapterHref = book.spine.firstOrNull()?.href
-                    if (firstChapterHref != null) {
-                         val chapterFile = File(firstChapterHref) // Spine returned absolute path
-                         _uiState.value = _uiState.value.copy(
-                             url = "file://${chapterFile.absolutePath}",
-                             content = "", // Clear content as URL takes precedence
-                             isLoading = false
-                         )
-                    } else {
-                        throw Exception("No chapters found in EPUB")
-                    }
+                    _uiState.value = _uiState.value.copy(
+                        epubChapters = book.spine,
+                        currentChapterIndex = 0
+                    )
+                    
+                    loadChapter(0)
 
                 } else {
-                    // Text/Aozora Logic
                     val rawContent = if (isWebDav && serverId != null) {
                         webDavRepository.readFileContent(serverId, filePath)
                     } else {
@@ -147,6 +137,34 @@ class DocumentViewerViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
+        }
+    }
+
+    fun loadChapter(index: Int) {
+        val chapters = _uiState.value.epubChapters
+        if (index in chapters.indices) {
+            val chapter = chapters[index]
+            val chapterFile = File(chapter.href)
+            _uiState.value = _uiState.value.copy(
+                url = "file://${chapterFile.absolutePath}",
+                content = "",
+                currentChapterIndex = index,
+                isLoading = false
+            )
+        }
+    }
+
+    fun nextChapter() {
+        val next = _uiState.value.currentChapterIndex + 1
+        if (next < _uiState.value.epubChapters.size) {
+            loadChapter(next)
+        }
+    }
+
+    fun prevChapter() {
+        val prev = _uiState.value.currentChapterIndex - 1
+        if (prev >= 0) {
+            loadChapter(prev)
         }
     }
 

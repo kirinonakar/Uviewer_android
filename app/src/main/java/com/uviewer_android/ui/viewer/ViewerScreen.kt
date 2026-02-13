@@ -1,5 +1,7 @@
 package com.uviewer_android.ui.viewer
 
+import androidx.compose.ui.res.stringResource
+import com.uviewer_android.R
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Text
@@ -28,7 +30,7 @@ fun ViewerScreen(
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, isWebDav, serverId, onBack = onBack)
         else -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Unsupported file type: $fileType\nPath: $filePath")
+                Text(stringResource(R.string.unsupported_type_fmt, fileType ?: "", filePath))
             }
         }
     }

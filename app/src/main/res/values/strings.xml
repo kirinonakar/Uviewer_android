@@ -55,4 +55,14 @@
     <string name="username">Username</string>
     <string name="password">Password</string>
     <string name="add_server_desc">Add Server</string>
+
+    <!-- Viewers -->
+    <string name="unsupported_type_fmt">Unsupported file type: %1$s\nPath: %2$s</string>
+    <string name="error_fmt">Error: %s</string>
+    <string name="title_document_viewer">Document Viewer</string>
+    <string name="toggle_vertical">Toggle Vertical</string>
+    <string name="font_settings">Font Settings</string>
+    <string name="prev_chapter">Previous Chapter</string>
+    <string name="next_chapter">Next Chapter</string>
+    <string name="table_of_contents">Table of Contents</string>
 </resources>

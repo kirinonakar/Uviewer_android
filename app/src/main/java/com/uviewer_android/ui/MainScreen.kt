@@ -1,5 +1,8 @@
 package com.uviewer_android.ui
 
+import androidx.compose.ui.res.stringResource
+import com.uviewer_android.R
+
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home

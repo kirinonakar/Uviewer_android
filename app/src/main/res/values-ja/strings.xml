@@ -55,4 +55,14 @@
     <string name="username">ユーザー名</string>
     <string name="password">パスワード</string>
     <string name="add_server_desc">サーバーを追加</string>
+
+    <!-- Viewers -->
+    <string name="unsupported_type_fmt">サポートされていないファイル形式です: %1$s\nパス: %2$s</string>
+    <string name="error_fmt">エラー: %s</string>
+    <string name="title_document_viewer">ドキュメントビューア</string>
+    <string name="toggle_vertical">縦書き切り替え</string>
+    <string name="font_settings">フォント設定</string>
+    <string name="prev_chapter">前の章</string>
+    <string name="next_chapter">次の章</string>
+    <string name="table_of_contents">目次</string>
 </resources>

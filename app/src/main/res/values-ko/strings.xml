@@ -55,4 +55,14 @@
     <string name="username">사용자명</string>
     <string name="password">비밀번호</string>
     <string name="add_server_desc">서버 추가</string>
+
+    <!-- Viewers -->
+    <string name="unsupported_type_fmt">지원하지 않는 파일 형식입니다: %1$s\n경로: %2$s</string>
+    <string name="error_fmt">오류: %s</string>
+    <string name="title_document_viewer">문서 뷰어</string>
+    <string name="toggle_vertical">세로 쓰기 전환</string>
+    <string name="font_settings">글꼴 설정</string>
+    <string name="prev_chapter">이전 장</string>
+    <string name="next_chapter">다음 장</string>
+    <string name="table_of_contents">목차</string>
 </resources>
