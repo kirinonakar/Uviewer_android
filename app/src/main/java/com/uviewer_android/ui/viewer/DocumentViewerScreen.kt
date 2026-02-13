@@ -99,7 +99,7 @@ fun DocumentViewerScreen(
                 }
             }
         },
-        gesturesEnabled = type == FileEntry.FileType.EPUB
+        gesturesEnabled = type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())
     ) {
         Scaffold(
             topBar = {
@@ -115,7 +115,7 @@ fun DocumentViewerScreen(
                             IconButton(onClick = { showEncodingDialog = true }) {
                                 Icon(Icons.Default.Translate, contentDescription = "Encoding")
                             }
-                            if (type == FileEntry.FileType.EPUB) {
+                            if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents))
                                 }

@@ -77,13 +77,21 @@ class WebDavRepository(
             // Determine FileType
             val type = when {
                 file.isDirectory -> FileEntry.FileType.FOLDER
-                file.name.endsWith(".jpg", true) || file.name.endsWith(".png", true) || file.name.endsWith(".webp", true) || file.name.endsWith(".gif", true) -> FileEntry.FileType.IMAGE
-                file.name.endsWith(".txt", true) || file.name.endsWith(".md", true) -> FileEntry.FileType.TEXT
+                file.name.endsWith(".jpg", true) || file.name.endsWith(".jpeg", true) || 
+                file.name.endsWith(".png", true) || file.name.endsWith(".webp", true) || 
+                file.name.endsWith(".gif", true) || file.name.endsWith(".bmp", true) -> FileEntry.FileType.IMAGE
+                file.name.endsWith(".txt", true) || file.name.endsWith(".md", true) || 
+                file.name.endsWith(".log", true) || file.name.endsWith(".aozora", true) -> FileEntry.FileType.TEXT
+                file.name.endsWith(".csv", true) -> FileEntry.FileType.CSV
                 file.name.endsWith(".html", true) || file.name.endsWith(".htm", true) || file.name.endsWith(".xhtml", true) -> FileEntry.FileType.HTML
                 file.name.endsWith(".pdf", true) -> FileEntry.FileType.PDF
                 file.name.endsWith(".epub", true) -> FileEntry.FileType.EPUB
-                file.name.endsWith(".mp3", true) || file.name.endsWith(".wav", true) || file.name.endsWith(".ogg", true) || file.name.endsWith(".flac", true) -> FileEntry.FileType.AUDIO
-                file.name.endsWith(".mp4", true) || file.name.endsWith(".mkv", true) || file.name.endsWith(".webm", true) || file.name.endsWith(".avi", true) || file.name.endsWith(".mov", true) -> FileEntry.FileType.VIDEO
+                file.name.endsWith(".mp3", true) || file.name.endsWith(".wav", true) || 
+                file.name.endsWith(".ogg", true) || file.name.endsWith(".flac", true) ||
+                file.name.endsWith(".m4a", true) || file.name.endsWith(".aac", true) -> FileEntry.FileType.AUDIO
+                file.name.endsWith(".mp4", true) || file.name.endsWith(".mkv", true) || 
+                file.name.endsWith(".webm", true) || file.name.endsWith(".avi", true) || 
+                file.name.endsWith(".mov", true) || file.name.endsWith(".3gp", true) -> FileEntry.FileType.VIDEO
                 file.name.endsWith(".zip", true) || file.name.endsWith(".rar", true) || file.name.endsWith(".cbz", true) -> FileEntry.FileType.ZIP
                 else -> FileEntry.FileType.UNKNOWN
             }

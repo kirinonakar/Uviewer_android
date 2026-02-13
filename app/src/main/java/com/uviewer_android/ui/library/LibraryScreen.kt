@@ -53,7 +53,12 @@ fun LibraryScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(uiState.currentPath) },
+                title = { 
+                    Text(
+                        uiState.currentPath,
+                        style = MaterialTheme.typography.titleMedium
+                    ) 
+                },
                 navigationIcon = {
                     val rootPath = android.os.Environment.getExternalStorageDirectory().absolutePath
                     if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
@@ -164,7 +169,7 @@ fun FileItemRow(
                 file.name, 
                 maxLines = 2, 
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodySmall
+                style = MaterialTheme.typography.bodyLarge
             ) 
         },
         supportingContent = {

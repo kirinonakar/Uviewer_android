@@ -12,6 +12,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+data class SubtitleTrack(
+    val id: String,
+    val label: String,
+    val language: String?,
+    val isSelected: Boolean
+)
+
 data class MediaPlayerUiState(
     val mediaUrl: String? = null,
     val currentPath: String? = null,
@@ -20,7 +27,10 @@ data class MediaPlayerUiState(
     val authHeader: Map<String, String> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val rotation: Float = 0f
+    val rotation: Float = 0f,
+    val subtitleTracks: List<SubtitleTrack> = emptyList(),
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0
 )
 
 class MediaPlayerViewModel(
@@ -51,7 +61,9 @@ class MediaPlayerViewModel(
                     fileRepository.listFiles(parentPath)
                 }
                 
-                val playlist = allFiles.filter { it.type == FileEntry.FileType.AUDIO || it.type == FileEntry.FileType.VIDEO }
+                val playlist = allFiles
+                    .filter { it.type == FileEntry.FileType.AUDIO || it.type == FileEntry.FileType.VIDEO }
+                    .sortedBy { it.name.lowercase() }
                 val index = playlist.indexOfFirst { it.path == filePath }
 
                 _uiState.value = _uiState.value.copy(
@@ -116,5 +128,13 @@ class MediaPlayerViewModel(
 
     fun rotate() {
         _uiState.value = _uiState.value.copy(rotation = (_uiState.value.rotation + 90f) % 360f)
+    }
+
+    fun setVideoSize(width: Int, height: Int) {
+        _uiState.value = _uiState.value.copy(videoWidth = width, videoHeight = height)
+    }
+
+    fun updateSubtitleTracks(tracks: List<SubtitleTrack>) {
+        _uiState.value = _uiState.value.copy(subtitleTracks = tracks)
     }
 }

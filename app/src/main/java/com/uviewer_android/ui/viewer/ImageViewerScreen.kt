@@ -45,6 +45,16 @@ fun ImageViewerScreen(
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Ensure status bar icons are visible (white) on dark background even in light theme
+    LaunchedEffect(isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = false
+        }
+    }
 
     // Load images on start
     LaunchedEffect(filePath) {
@@ -122,28 +132,34 @@ fun ImageViewerScreen(
                     detectTapGestures(
                         onTap = { offset ->
                             scope.launch {
-                                val thirdOfScreen = size.width / 3
-                                val isLeftTap = offset.x < thirdOfScreen
-                                val isRightTap = offset.x > thirdOfScreen * 2
+                                val screenWidth = size.width
+                                val screenHeight = size.height
+                                val thirdOfWidth = screenWidth / 3
+                                val isLeftTap = offset.x < thirdOfWidth
+                                val isRightTap = offset.x > thirdOfWidth * 2
+                                val isTopTap = offset.y < screenHeight / 4 // Top 25%
                                 
                                 val goPrev = if (invertImageControl) isRightTap else isLeftTap
                                 val goNext = if (invertImageControl) isLeftTap else isRightTap
 
                                 when {
-                                    goPrev -> {
+                                    isTopTap -> {
+                                        onToggleFullScreen()
+                                    }
+                                    goPrev && !isTopTap -> {
                                         val current = pagerState.currentPage
                                         if (current > 0) {
                                             pagerState.scrollToPage(current - 1)
                                         }
                                     }
-                                    goNext -> {
+                                    goNext && !isTopTap -> {
                                         val current = pagerState.currentPage
                                         if (current < pageCount - 1) {
                                             pagerState.scrollToPage(current + 1)
                                         }
                                     }
                                     else -> {
-                                        onToggleFullScreen()
+                                        // Center tap - do nothing or toggle UI if preferred
                                     }
                                 }
                             }
@@ -316,14 +332,23 @@ fun ZoomableImage(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val oldScale = scale
                     val newScale = (scale * zoom).coerceIn(1f, 5f)
                     onScaleChanged(newScale)
+                    
                     if (newScale > 1f) {
-                        val maxOffsetX = (size.width * (newScale - 1)) / 2
-                        val maxOffsetY = (size.height * (newScale - 1)) / 2
-                        offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
-                        offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                        val width = size.width
+                        val height = size.height
+                        val scaleChange = newScale / oldScale
+                        
+                        offsetX = (pan.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
+                        offsetY = (pan.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
+                        
+                        val maxOffsetX = (width * (newScale - 1)) / 2
+                        val maxOffsetY = (height * (newScale - 1)) / 2
+                        offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                        offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
                     } else {
                         offsetX = 0f
                         offsetY = 0f
@@ -415,14 +440,23 @@ fun ZoomableDualImage(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
+                detectTransformGestures { centroid, pan, zoom, _ ->
+                    val oldScale = scale
                     val newScale = (scale * zoom).coerceIn(1f, 5f)
                     onScaleChanged(newScale)
+                    
                     if (newScale > 1f) {
-                        val maxOffsetX = (size.width * (newScale - 1)) / 2
-                        val maxOffsetY = (size.height * (newScale - 1)) / 2
-                        offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
-                        offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
+                        val width = size.width
+                        val height = size.height
+                        val scaleChange = newScale / oldScale
+                        
+                        offsetX = (pan.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
+                        offsetY = (pan.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
+                        
+                        val maxOffsetX = (width * (newScale - 1)) / 2
+                        val maxOffsetY = (height * (newScale - 1)) / 2
+                        offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                        offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
                     } else {
                         offsetX = 0f
                         offsetY = 0f

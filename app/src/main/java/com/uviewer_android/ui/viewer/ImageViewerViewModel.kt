@@ -124,6 +124,7 @@ data class ImageViewerUiState(
                             fileRepository.listFiles(parentPath)
                         }
                         files.filter { it.type == FileEntry.FileType.IMAGE }
+                            .sortedBy { it.name.lowercase() }
                     }
 
                     val index = if (isZip) 0 else images.indexOfFirst { it.path == filePath }

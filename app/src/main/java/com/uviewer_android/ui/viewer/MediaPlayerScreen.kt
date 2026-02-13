@@ -3,6 +3,7 @@ package com.uviewer_android.ui.viewer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.filled.*
@@ -47,6 +48,15 @@ fun MediaPlayerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     
+    // Ensure status bar icons are visible (white) on dark background even in light theme
+    LaunchedEffect(isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = false
+        }
+    }
+
     LaunchedEffect(filePath) {
         viewModel.prepareMedia(filePath, isWebDav, serverId, fileType)
     }
@@ -110,6 +120,41 @@ fun MediaPlayerScreen(
                             Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                         }
                         if (fileType == FileEntry.FileType.VIDEO) {
+                            var showSubtitleMenu by remember { mutableStateOf(false) }
+                            IconButton(onClick = { showSubtitleMenu = true }) {
+                                Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                            }
+                            if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
+                                DropdownMenu(
+                                    expanded = showSubtitleMenu,
+                                    onDismissRequest = { showSubtitleMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Off") },
+                                        onClick = { 
+                                            exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters
+                                                ?.buildUpon()
+                                                ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                                                ?.build() ?: exoPlayer!!.trackSelectionParameters
+                                            showSubtitleMenu = false 
+                                        }
+                                    )
+                                    uiState.subtitleTracks.forEach { track ->
+                                        DropdownMenuItem(
+                                            text = { Text(track.label) },
+                                            onClick = {
+                                                exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters
+                                                    ?.buildUpon()
+                                                    ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                                                    ?.setPreferredTextLanguage(track.language)
+                                                    ?.build() ?: exoPlayer!!.trackSelectionParameters
+                                                showSubtitleMenu = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
                             IconButton(onClick = { viewModel.rotate() }) {
                                 Icon(Icons.Default.RotateRight, contentDescription = "Rotate", tint = Color.White)
                             }
@@ -120,13 +165,16 @@ fun MediaPlayerScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
                 .padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
+            val screenWidth = maxWidth.value
+            val screenHeight = maxHeight.value
+            
             if (uiState.isLoading) {
                 CircularProgressIndicator()
             } else if (uiState.error != null || playbackError != null) {
@@ -143,13 +191,53 @@ fun MediaPlayerScreen(
                     }
                 }
             } else if (exoPlayer != null) {
+                // Update subtitle tracks and video size
+                LaunchedEffect(exoPlayer) {
+                    exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
+                            val subtitleTracks = mutableListOf<SubtitleTrack>()
+                            tracks.groups.forEach { group ->
+                                if (group.type == androidx.media3.common.C.TRACK_TYPE_TEXT) {
+                                    for (i in 0 until group.length) {
+                                        val format = group.getTrackFormat(i)
+                                        subtitleTracks.add(
+                                            SubtitleTrack(
+                                                id = format.id ?: i.toString(),
+                                                label = format.label ?: format.language ?: "Track $i",
+                                                language = format.language,
+                                                isSelected = group.isTrackSelected(i)
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                            viewModel.updateSubtitleTracks(subtitleTracks)
+                        }
+
+                        override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                            viewModel.setVideoSize(videoSize.width, videoSize.height)
+                        }
+                    })
+                }
+
+                val isRotated = uiState.rotation % 180f != 0f
+                val scale = if (isRotated && screenWidth > 0f && screenHeight > 0f) {
+                    // When rotated 90/270, the view's width becomes height and height becomes width.
+                    // To fit the screen perfectly, we want the new width (old height) to be maxWidth
+                    // and new height (old width) to be maxHeight.
+                    // So scale = maxWidth / screenHeight (if we want to match width) 
+                    // or scale = maxHeight / screenWidth (if we want to match height)
+                    // Usually we want to fit both, so min(maxWidth / screenHeight, maxHeight / screenWidth)
+                    if (screenHeight > screenWidth) screenHeight / screenWidth else screenWidth / screenHeight
+                } else 1f
+
                 AndroidView(
                     factory = { ctx ->
                         PlayerView(ctx).apply {
                             player = exoPlayer
                             useController = true
                             if (fileType == FileEntry.FileType.AUDIO) {
-                                hideController() // Initially hide for audio
+                                hideController()
                             }
                         }
                     },
@@ -158,15 +246,17 @@ fun MediaPlayerScreen(
                     },
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer(rotationZ = uiState.rotation)
-                        .padding(if (uiState.rotation % 180f != 0f) 50.dp else 0.dp) // Avoid cropping during rotation
+                        .graphicsLayer(
+                            rotationZ = uiState.rotation,
+                            scaleX = scale,
+                            scaleY = scale
+                        )
                 )
                 
-                // Overlay for center tap
+                // Overlay for tap-to-toggle UI (below top bar area)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 100.dp, vertical = 100.dp)
                         .clickable(
                             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                             indication = null,
