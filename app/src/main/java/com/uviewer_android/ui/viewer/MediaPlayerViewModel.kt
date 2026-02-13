@@ -12,6 +12,8 @@ import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -98,7 +100,16 @@ class MediaPlayerViewModel(
             val finalMediaItem = if (isWebDav && serverId != null) {
                 val server = webDavRepository.getServer(serverId) // Need this method
                 if (server != null) {
-                    val fullUrl = server.url.trimEnd('/') + filePath
+                    val fullUrl = try {
+                        val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
+                        val builder = baseHttpUrl.newBuilder()
+                        filePath.split("/").filter { it.isNotEmpty() }.forEach {
+                            builder.addPathSegment(it)
+                        }
+                        builder.build().toString()
+                    } catch (e: Exception) {
+                        server.url.trimEnd('/') + filePath
+                    }
                     MediaItem.fromUri(fullUrl)
                 } else null
             } else {

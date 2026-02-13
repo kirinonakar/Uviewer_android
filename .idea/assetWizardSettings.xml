@@ -111,6 +111,12 @@
                                       </entry>
                                     </map>
                                   </option>
+                                  <option name="values">
+                                    <map>
+                                      <entry key="backgroundAssetType" value="COLOR" />
+                                      <entry key="backgroundColor" value="fffefe" />
+                                    </map>
+                                  </option>
                                 </PersistentState>
                               </value>
                             </entry>

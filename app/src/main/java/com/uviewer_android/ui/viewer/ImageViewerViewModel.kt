@@ -18,7 +18,8 @@ data class ImageViewerUiState(
     val initialIndex: Int = 0,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val authHeader: String? = null
+    val authHeader: String? = null,
+    val serverUrl: String? = null
 )
 
 class ImageViewerViewModel(
@@ -80,7 +81,7 @@ class ImageViewerViewModel(
                     EpubParser.unzip(zipFile, unzipDir)
                     
                     // List all files in unzipDir recursively and filter for images
-                    unzipDir.walkTopDown()
+                    val zipImages = unzipDir.walkTopDown()
                         .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
                         .map { file ->
                             FileEntry(
@@ -95,10 +96,10 @@ class ImageViewerViewModel(
                         .sortedBy { it.name.lowercase() }
                         .toList()
 
-                    if (images.isEmpty()) {
+                    if (zipImages.isEmpty()) {
                         throw Exception("No images found in the zip file.")
                     }
-                    images
+                    zipImages
                 } else {
                     val parentPath = if (isWebDav) {
                         if (filePath.endsWith("/")) filePath.dropLast(1).substringBeforeLast("/")
@@ -121,11 +122,16 @@ class ImageViewerViewModel(
                     webDavRepository.getAuthHeader(serverId)
                 } else null
 
+                val serverUrl = if (isWebDav && serverId != null) {
+                    webDavRepository.getServer(serverId)?.url
+                } else null
+
                 _uiState.value = _uiState.value.copy(
                     images = images,
                     initialIndex = if (index != -1) index else 0,
                     isLoading = false,
-                    authHeader = auth
+                    authHeader = auth,
+                    serverUrl = serverUrl
                 )
 
             } catch (e: Exception) {

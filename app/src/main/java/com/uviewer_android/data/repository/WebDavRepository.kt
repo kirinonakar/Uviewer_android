@@ -24,11 +24,25 @@ class WebDavRepository(
         val requestedPath = if (path.endsWith("/")) path.dropLast(1) else path
 
         webDavFiles.mapNotNull { file ->
-            val decodedHref = java.net.URLDecoder.decode(file.href, "UTF-8").trimEnd('/')
+            // file.href can be a full URL (https://...) or an absolute path (/...) or even a relative path (file.txt)
+            val decodedHref = java.net.URLDecoder.decode(file.href, "UTF-8")
+            
+            // Extract path part if it's a full URL
+            var cleanPath = if (decodedHref.startsWith("http://") || decodedHref.startsWith("https://")) {
+                try {
+                    java.net.URL(decodedHref).path
+                } catch (e: Exception) {
+                    decodedHref.substringAfter("://").substringAfter("/")
+                }
+            } else {
+                decodedHref
+            }.trimEnd('/')
+
+            if (!cleanPath.startsWith("/")) cleanPath = "/" + cleanPath
             
             // Calculate relative path from server root
-            var relativePath = decodedHref
-            if (serverPath.isNotEmpty() && relativePath.startsWith(serverPath)) {
+            var relativePath = cleanPath
+            if (serverPath.isNotEmpty() && relativePath.startsWith(serverPath, ignoreCase = true)) {
                 relativePath = relativePath.substring(serverPath.length)
             }
             if (!relativePath.startsWith("/")) relativePath = "/" + relativePath

@@ -1,6 +1,7 @@
 package com.uviewer_android.network
 
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
@@ -37,9 +38,29 @@ class WebDavClient(
         val contentType: String?
     )
 
+    private fun buildUrl(path: String): String {
+        return try {
+            val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
+            val builder = baseHttpUrl.newBuilder()
+            path.split("/").filter { it.isNotEmpty() }.forEach {
+                builder.addPathSegment(it)
+            }
+            // If the original path ended with a slash, ensure the built URL does too
+            if (path.endsWith("/") && !builder.build().toString().endsWith("/")) {
+                // builder.addPathSegment("") results in a trailing slash if not already there
+            }
+            // Actually, WebDAV paths for files shouldn't end with slash, but for folders they should.
+            // PROPFIND on folder usually needs trailing slash.
+            val built = builder.build().toString()
+            if (path.endsWith("/") && !built.endsWith("/")) built + "/" else built
+        } catch (e: Exception) {
+            server.url.trimEnd('/') + path
+        }
+    }
+
     suspend fun listFiles(path: String = "/"): List<WebDavFile> {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val url = server.url.trimEnd('/') + path
+            val url = buildUrl(path)
             val request = Request.Builder()
                 .url(url)
                 .header("Depth", "1")
@@ -131,7 +152,7 @@ class WebDavClient(
 
     suspend fun checkConnection(): Boolean {
         return try {
-            val url = server.url.trimEnd('/') + "/"
+            val url = buildUrl("/")
             val request = Request.Builder()
                 .url(url)
                 // .method("PROPFIND", null) // OkHttp doesn't support PROPFIND directly without custom method
@@ -149,7 +170,7 @@ class WebDavClient(
 
     suspend fun downloadContent(path: String): String {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val url = server.url.trimEnd('/') + path
+            val url = buildUrl(path)
             val request = Request.Builder()
                 .url(url)
                 .header("Authorization", getAuthHeader())
@@ -165,7 +186,7 @@ class WebDavClient(
 
     suspend fun downloadToFile(path: String, destinationFile: java.io.File) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val url = server.url.trimEnd('/') + path
+            val url = buildUrl(path)
             val request = Request.Builder()
                 .url(url)
                 .header("Authorization", getAuthHeader())

@@ -25,6 +25,8 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.uviewer_android.ui.AppViewModelProvider
 import kotlinx.coroutines.launch
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import com.uviewer_android.data.model.FileEntry
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,9 +81,10 @@ fun ImageViewerScreen(
             ) { page ->
                 val image = uiState.images[page]
                 ZoomableImage(
-                    imageUrl = image.path, // Or WebDAV URL logic
+                    imageUrl = image.path,
                     isWebDav = isWebDav,
-                    authHeader = uiState.authHeader
+                    authHeader = uiState.authHeader,
+                    serverUrl = uiState.serverUrl
                 )
             }
 
@@ -105,7 +108,7 @@ fun ImageViewerScreen(
 }
 
 @Composable
-fun ZoomableImage(imageUrl: String, isWebDav: Boolean, authHeader: String?) {
+fun ZoomableImage(imageUrl: String, isWebDav: Boolean, authHeader: String?, serverUrl: String?) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -130,19 +133,27 @@ fun ZoomableImage(imageUrl: String, isWebDav: Boolean, authHeader: String?) {
     ) {
         // Construct ImageRequest
         val context = LocalContext.current
-        val model = if (isWebDav) {
-             // Basic URL construction - needs improvement for proper WebDAV URL
-             imageUrl.trim() 
-             // Logic to append auth header
-             ImageRequest.Builder(context)
-                 .data(imageUrl)
-                 .apply {
-                     if (authHeader != null) {
-                         addHeader("Authorization", authHeader)
-                     }
-                 }
-                 .crossfade(true)
-                 .build()
+        val model = if (isWebDav && serverUrl != null) {
+            val fullUrl = try {
+                val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
+                val builder = baseHttpUrl.newBuilder()
+                imageUrl.split("/").filter { it.isNotEmpty() }.forEach {
+                    builder.addPathSegment(it)
+                }
+                builder.build().toString()
+            } catch (e: Exception) {
+                serverUrl.trimEnd('/') + imageUrl
+            }
+
+            ImageRequest.Builder(context)
+                .data(fullUrl)
+                .apply {
+                    if (authHeader != null) {
+                        addHeader("Authorization", authHeader)
+                    }
+                }
+                .crossfade(true)
+                .build()
         } else {
             ImageRequest.Builder(context)
                 .data(java.io.File(imageUrl))
