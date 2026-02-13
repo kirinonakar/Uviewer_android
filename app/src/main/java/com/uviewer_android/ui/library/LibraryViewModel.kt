@@ -4,43 +4,89 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.FavoriteDao
 import com.uviewer_android.data.FavoriteItem
+import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.flow.combine
 
 data class LibraryUiState(
     val currentPath: String = "/",
     val fileList: List<FileEntry> = emptyList(),
-    val favoritePaths: Set<String> = emptySet(), // Paths of favorite items
+    val favoritePaths: Set<String> = emptySet(),
+    val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
     val isLoading: Boolean = false,
-    val isWebDav: Boolean = false,
+    val isWebDavTab: Boolean = false,
     val serverId: Int? = null,
-    val error: String? = null
+    val error: String? = null,
+    val sortOption: SortOption = SortOption.NAME
 )
+
+enum class SortOption { NAME, DATE_ASC, DATE_DESC, SIZE_ASC, SIZE_DESC }
 
 class LibraryViewModel(
     private val fileRepository: FileRepository,
     private val webDavRepository: WebDavRepository,
     private val favoriteDao: FavoriteDao,
-    private val webDavServerDao: com.uviewer_android.data.WebDavServerDao
+    private val webDavServerDao: WebDavServerDao,
+    private val recentFileDao: com.uviewer_android.data.RecentFileDao
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LibraryUiState())
-    // Keep track of servers
     private val _servers = webDavServerDao.getAllServers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Combine state with favorites flow
+    private val _sortOption = MutableStateFlow(SortOption.NAME)
+
     val uiState: StateFlow<LibraryUiState> = combine(
         _state,
         favoriteDao.getAllFavorites(),
-        _servers
-    ) { state, favorites, servers ->
-        // If at root and local, append servers
-        val files = if (state.currentPath == "/" && state.serverId == null) {
+        _sortOption,
+        recentFileDao.getMostRecentFile()
+    ) { state, favorites, sort, mostRecent ->
+        val sortedList = if (state.currentPath == "WebDAV" && state.fileList.all { it.isWebDav && it.isDirectory && it.path == "/" }) {
+            // Server list, usually by ID or Name
+            state.fileList.sortedBy { it.name }
+        } else {
+            when (sort) {
+                SortOption.NAME -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+                SortOption.DATE_ASC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.lastModified }))
+                SortOption.DATE_DESC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { -it.lastModified }))
+                SortOption.SIZE_ASC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.size }))
+                SortOption.SIZE_DESC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { -it.size }))
+            }
+        }
+        
+        state.copy(
+            fileList = sortedList,
+            favoritePaths = favorites.map { it.path }.toSet(),
+            sortOption = sort,
+            mostRecentFile = mostRecent
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = LibraryUiState()
+    )
+
+    fun setSortOption(option: SortOption) {
+        _sortOption.value = option
+    }
+
+    fun loadInitialPath(isWebDav: Boolean) {
+        _state.value = _state.value.copy(isWebDavTab = isWebDav, serverId = null)
+        if (isWebDav) {
+            showServerList()
+        } else {
+            val root = android.os.Environment.getExternalStorageDirectory().absolutePath
+            loadFiles(root)
+        }
+    }
+
+    private fun showServerList() {
+        viewModelScope.launch { 
+            val servers = _servers.first()
             val serverEntries = servers.map { server ->
                 FileEntry(
                     name = server.name,
@@ -49,86 +95,53 @@ class LibraryViewModel(
                     type = FileEntry.FileType.FOLDER,
                     lastModified = 0L,
                     size = 0L,
-                    serverId = server.id, // Important: ID links to server
+                    serverId = server.id,
                     isWebDav = true
                 )
             }
-            // Local files + Server entries
-            // We need to fetch local files too. They are in state.fileList?
-            // Yes, state.fileList contains what loadFiles fetched.
-            // But we need to make sure we don't duplicate or overwrite if we use this combine.
-            // Actually, loadFiles sets fileList.
-            // If we just modify fileList here, it works visually.
-            // But if loadFiles *only* fetches local files, we add servers here.
-            state.fileList + serverEntries
-        } else {
-            state.fileList
+            _state.value = _state.value.copy(
+                currentPath = "WebDAV",
+                fileList = serverEntries,
+                isLoading = false
+            )
         }
-        
-        state.copy(
-            fileList = files,
-            favoritePaths = favorites.map { it.path }.toSet()
-        )
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = LibraryUiState()
-    )
-
-    init {
-        loadFiles("/")
     }
 
-    fun loadFiles(path: String, serverId: Int? = null) {
+    private fun loadFiles(path: String, serverId: Int? = _state.value.serverId) {
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val files = if (serverId != null) {
+                val files = if (_state.value.isWebDavTab && serverId != null) {
                     webDavRepository.listFiles(serverId, path)
                 } else {
                     fileRepository.listFiles(path)
                 }
-                
-                // If root local, we only fetched local files here. 
-                // The combine block will add servers.
-                
                 _state.value = _state.value.copy(
                     currentPath = path,
                     fileList = files,
-                    isWebDav = serverId != null,
                     serverId = serverId,
                     isLoading = false
                 )
             } catch (e: Exception) {
-                 _state.value = _state.value.copy(
+                _state.value = _state.value.copy(
                     isLoading = false,
                     error = e.message ?: "Unknown error"
                 )
             }
         }
     }
-    
+
     fun toggleFavorite(entry: FileEntry) {
         viewModelScope.launch {
-            val isFavorite = uiState.value.favoritePaths.contains(entry.path)
-            if (isFavorite) {
-                // To delete, we need the favorite item. 
-                // Since we only have path in set, we need to find it or change DAO to delete by path.
-                // Or just get the list from flow and find it.
-                // Ideally DAO has deleteByPath.
-                // Implementation:
-                // We'll iterate current favorites from flow (we don't have direct access here easily without collecting).
-                // Actually uiState is derived.
-                // Let's add deleteByPath to DAO or fetch-delete.
-                // Simple fetch-delete:
+            if (uiState.value.favoritePaths.contains(entry.path)) {
                 favoriteDao.deleteFavoriteByPath(entry.path)
             } else {
                 favoriteDao.insertFavorite(
                     FavoriteItem(
                         title = entry.name,
                         path = entry.path,
-                        isWebDav = uiState.value.isWebDav,
-                        serverId = uiState.value.serverId,
+                        isWebDav = entry.isWebDav,
+                        serverId = entry.serverId,
                         type = entry.type.name
                     )
                 )
@@ -144,27 +157,29 @@ class LibraryViewModel(
 
     fun navigateUp() {
         val currentPath = _state.value.currentPath
-        if (currentPath == "/") return
-        
-        val parentPath = if (currentPath.trimEnd('/').contains("/")) {
-            currentPath.trimEnd('/').substringBeforeLast("/")
-            if (currentPath.startsWith("/") && !currentPath.startsWith("//")) {
-                // Ensure we don't lose the leading slash if it's there
-                val p = currentPath.trimEnd('/').substringBeforeLast("/")
-                if (p.isEmpty()) "/" else p
-            } else {
-                 currentPath.trimEnd('/').substringBeforeLast("/")
-            }
-        } else {
-            "/"
-        }
-        
-        // Simplified robust version:
-        val robustParent = currentPath.trimEnd('/').let {
-            val lastIdx = it.lastIndexOf('/')
-            if (lastIdx <= 0) "/" else it.substring(0, lastIdx)
-        }
+        val serverId = _state.value.serverId
 
-        loadFiles(robustParent, _state.value.serverId)
+        if (_state.value.isWebDavTab && serverId != null && currentPath == "/") {
+            showServerList()
+            _state.value = _state.value.copy(serverId = null)
+        } else if (currentPath != "/") {
+            val parentPath = currentPath.trimEnd('/').substringBeforeLast('/', "/")
+            loadFiles(if(parentPath.isEmpty()) "/" else parentPath)
+        }
+    }
+
+    fun navigateToRoot() {
+        if (_state.value.isWebDavTab) {
+            showServerList()
+            _state.value = _state.value.copy(serverId = null)
+        } else {
+            loadFiles("/")
+        }
+    }
+
+    fun openFolder(path: String, serverId: Int?) {
+        val isWebDav = serverId != null && serverId != -1
+        _state.value = _state.value.copy(isWebDavTab = isWebDav, serverId = serverId)
+        loadFiles(path, serverId)
     }
 }

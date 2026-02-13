@@ -11,8 +11,10 @@ import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
+import com.uviewer_android.data.repository.UserPreferencesRepository
 
 data class DocumentViewerUiState(
     val content: String = "", // HTML or Text content
@@ -21,9 +23,12 @@ data class DocumentViewerUiState(
     val error: String? = null,
     val isVertical: Boolean = false,
     val fontSize: Int = 18,
-    val fontType: String = "serif",
+    val fontFamily: String = "serif", // Changed from fontType to fontFamily
+    val docBackgroundColor: String = UserPreferencesRepository.DOC_BG_WHITE, // Added this line
     val epubChapters: List<com.uviewer_android.data.model.EpubSpineItem> = emptyList(),
-    val currentChapterIndex: Int = -1
+    val currentChapterIndex: Int = -1,
+    val totalLines: Int = 0,
+    val currentLine: Int = 1
 )
 
 class DocumentViewerViewModel(
@@ -43,19 +48,21 @@ class DocumentViewerViewModel(
 
     init {
         viewModelScope.launch {
-            kotlinx.coroutines.flow.combine(
+            combine(
                 userPreferencesRepository.fontSize,
-                userPreferencesRepository.fontFamily
-            ) { size, family ->
-                 Pair(size, family)
-            }.collect { (size, family) ->
+                userPreferencesRepository.fontFamily,
+                userPreferencesRepository.docBackgroundColor
+            ) { size, family, docBgColor ->
+                 Triple(size, family, docBgColor)
+            }.collect { (size, family, docBgColor) ->
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
-                    fontType = family
+                    fontFamily = family,
+                    docBackgroundColor = docBgColor
                 )
                 if (rawContentCache != null && currentFileType == FileEntry.FileType.TEXT) {
                     val htmlBody = AozoraParser.parse(rawContentCache!!)
-                    val processedContent = AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, family, size)
+                    val processedContent = AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, family, size, docBgColor)
                     _uiState.value = _uiState.value.copy(content = processedContent)
                 }
             }
@@ -122,7 +129,12 @@ class DocumentViewerViewModel(
                     val processedContent = when (type) {
                         FileEntry.FileType.TEXT -> {
                             val htmlBody = AozoraParser.parse(rawContent)
-                            AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, _uiState.value.fontType, _uiState.value.fontSize)
+                            AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, _uiState.value.fontFamily, _uiState.value.fontSize, _uiState.value.docBackgroundColor)
+                        }
+                        FileEntry.FileType.HTML -> {
+                            // For HTML, we use it as is, but maybe inject style for BG color/Font if needed?
+                            // For now, return as is.
+                            rawContent
                         }
                         else -> "Unsupported format"
                     }
@@ -130,7 +142,9 @@ class DocumentViewerViewModel(
                     _uiState.value = _uiState.value.copy(
                         content = processedContent,
                         url = null,
-                        isLoading = false
+                        isLoading = false,
+                        totalLines = if (type == FileEntry.FileType.TEXT) rawContent.lines().size else 0,
+                        currentLine = 1
                     )
                 }
 
@@ -174,7 +188,7 @@ class DocumentViewerViewModel(
         
         if (rawContentCache != null && currentFileType == FileEntry.FileType.TEXT) {
             val htmlBody = AozoraParser.parse(rawContentCache!!)
-            val processedContent = AozoraParser.wrapInHtml(htmlBody, newVertical, _uiState.value.fontType, _uiState.value.fontSize)
+            val processedContent = AozoraParser.wrapInHtml(htmlBody, newVertical, _uiState.value.fontFamily, _uiState.value.fontSize, _uiState.value.docBackgroundColor)
             _uiState.value = _uiState.value.copy(content = processedContent)
         }
     }

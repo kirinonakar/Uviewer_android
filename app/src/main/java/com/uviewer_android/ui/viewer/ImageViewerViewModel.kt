@@ -19,7 +19,8 @@ data class ImageViewerUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val authHeader: String? = null,
-    val serverUrl: String? = null
+    val serverUrl: String? = null,
+    val isContentLoadedFromWebDav: Boolean = false
 )
 
 class ImageViewerViewModel(
@@ -59,7 +60,8 @@ class ImageViewerViewModel(
 
             try {
                 val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
-                
+                val contentIsWebDav = isWebDav && !isZip
+
                 val images = if (isZip) {
                     val context = getApplication<Application>()
                     val cacheDir = context.cacheDir
@@ -118,7 +120,7 @@ class ImageViewerViewModel(
 
                 val index = if (isZip) 0 else images.indexOfFirst { it.path == filePath }
                 
-                val auth = if (isWebDav && serverId != null && !isZip) { // Don't need auth for unzipped local files
+                val auth = if (contentIsWebDav && serverId != null) {
                     webDavRepository.getAuthHeader(serverId)
                 } else null
 
@@ -131,7 +133,8 @@ class ImageViewerViewModel(
                     initialIndex = if (index != -1) index else 0,
                     isLoading = false,
                     authHeader = auth,
-                    serverUrl = serverUrl
+                    serverUrl = serverUrl,
+                    isContentLoadedFromWebDav = contentIsWebDav
                 )
 
             } catch (e: Exception) {

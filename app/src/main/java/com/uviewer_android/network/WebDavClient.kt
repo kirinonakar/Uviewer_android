@@ -43,25 +43,21 @@ class WebDavClient(
             val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
             val builder = baseHttpUrl.newBuilder()
             
-            // path is a decoded relative path like "/Folder/File.txt"
             val segments = path.split("/").filter { it.isNotEmpty() }
-            segments.forEach { builder.addPathSegment(it) }
             
-            if (path.endsWith("/") && segments.isNotEmpty()) {
-                builder.addPathSegment("") // Adds trailing slash if missing
-            } else if (path == "/" && !baseHttpUrl.toString().endsWith("/")) {
-                // builder.addPathSegment("") // Root case
+            segments.forEach { segment ->
+                builder.addPathSegment(segment) 
             }
             
-            var result = builder.build().toString()
-            // If the original input path was just "/", ensure result ends with "/" if it's the base
-            if (path == "/" && !result.endsWith("/")) result += "/"
-            // If path ended with / but segments was empty (already /), handled by result check
-            if (path.endsWith("/") && !result.endsWith("/")) result += "/"
+            if (path.endsWith("/") && segments.isNotEmpty()) {
+                builder.addPathSegment("") 
+            }
             
-            result
+            builder.build().toString()
         } catch (e: Exception) {
-            server.url.trimEnd('/') + path
+            val baseUrl = server.url.trimEnd('/')
+            val formattedPath = if (path.startsWith("/")) path else "/$path"
+            baseUrl + formattedPath
         }
     }
 
@@ -78,7 +74,6 @@ class WebDavClient(
             try {
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) {
-                    // 404 or other error
                     return@withContext emptyList()
                 }
 
@@ -95,59 +90,58 @@ class WebDavClient(
         val files = mutableListOf<WebDavFile>()
         try {
             val factory = org.xmlpull.v1.XmlPullParserFactory.newInstance()
-            factory.isNamespaceAware = true
+            factory.isNamespaceAware = true // important for DAV: namespace
             val parser = factory.newPullParser()
             parser.setInput(java.io.StringReader(xml))
 
             var eventType = parser.eventType
             var currentHref = ""
             var currentName = ""
-            var isDir = false
-            var size = 0L
-            var lastMod = 0L
-            var contentType: String? = null
+            var currentIsDirectory = false
+            var currentSize = 0L
+            var currentLastModified = 0L
+            var currentContentType: String? = null
+            
             var inResponse = false
-            var inProp = false
 
             while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-                val name = parser.name ?: ""
                 when (eventType) {
                     org.xmlpull.v1.XmlPullParser.START_TAG -> {
-                        if (name.equals("response", ignoreCase = true) || name.endsWith(":response")) {
-                            inResponse = true
-                            currentHref = ""
-                            currentName = ""
-                            isDir = false
-                            size = 0L
-                            lastMod = 0L
-                            contentType = null
-                        } else if (inResponse) {
-                            if (name.equals("href", ignoreCase = true) || name.endsWith(":href")) {
-                                currentHref = parser.nextText()
-                                // Extract name from href using HttpUrl for robust decoding
-                                currentName = try {
-                                    val url = if (currentHref.startsWith("http", true)) currentHref.toHttpUrl()
-                                    else ("http://h" + (if (currentHref.startsWith("/")) "" else "/") + currentHref).toHttpUrl()
-                                    url.pathSegments.lastOrNull { it.isNotEmpty() } ?: currentHref.trimEnd('/').substringAfterLast('/')
-                                } catch (e: Exception) {
-                                    java.net.URLDecoder.decode(currentHref.trimEnd('/').substringAfterLast('/'), "UTF-8")
-                                }
-                            } else if (name.equals("collection", ignoreCase = true) || name.endsWith(":collection")) {
-                                isDir = true
-                            } else if (name.equals("getcontentlength", ignoreCase = true) || name.endsWith(":getcontentlength")) {
-                                size = parser.nextText().toLongOrNull() ?: 0L
-                            } else if (name.equals("getcontenttype", ignoreCase = true) || name.endsWith(":getcontenttype")) {
-                                contentType = parser.nextText()
+                        // Ignore namespace, just check local name
+                        val name = parser.name
+                        when (name) {
+                            "response" -> {
+                                currentHref = ""
+                                currentName = ""
+                                currentIsDirectory = false
+                                currentSize = 0L
+                                currentLastModified = 0L
+                                currentContentType = null
+                                inResponse = true
                             }
-                            // Date parsing skipped for brevity, defaults to 0
+                            "href" -> if (inResponse) currentHref = parser.nextText()
+                            "displayname" -> if (inResponse) currentName = parser.nextText()
+                            "getcontentlength" -> if (inResponse) currentSize = parser.nextText().toLongOrNull() ?: 0L
+                            "getlastmodified" -> {
+                                if (inResponse) {
+                                    // simplified date parsing or just raw
+                                    currentLastModified = 0L 
+                                }
+                            }
+                            "collection" -> if (inResponse) currentIsDirectory = true
+                            "getcontenttype" -> if (inResponse) currentContentType = parser.nextText()
                         }
                     }
                     org.xmlpull.v1.XmlPullParser.END_TAG -> {
-                        if (name.equals("response", ignoreCase = true) || name.endsWith(":response")) {
-                            inResponse = false
-                            if (currentName.isNotEmpty()) {
-                                files.add(WebDavFile(currentHref, currentName, isDir, size, lastMod, contentType))
-                            }
+                        val name = parser.name
+                        if (name == "response") {
+                             if (currentName.isEmpty() && currentHref.isNotEmpty()) {
+                                 var decoded = java.net.URLDecoder.decode(currentHref, "UTF-8")
+                                 if (decoded.endsWith("/")) decoded = decoded.dropLast(1)
+                                 currentName = decoded.substringAfterLast('/')
+                             }
+                             files.add(WebDavFile(currentHref, currentName, currentIsDirectory, currentSize, currentLastModified, currentContentType))
+                             inResponse = false
                         }
                     }
                 }
@@ -156,10 +150,6 @@ class WebDavClient(
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        // Filter out the requested directory itself (usually first entry with same path)
-        // logic needs to be robust. PROPFIND returns the dir itself.
-        // We can filter by checking if href (decoded) equals the request path?
-        // Let's return all and let repository filter.
         return files
     }
 
@@ -168,9 +158,9 @@ class WebDavClient(
             val url = buildUrl("/")
             val request = Request.Builder()
                 .url(url)
-                // .method("PROPFIND", null) // OkHttp doesn't support PROPFIND directly without custom method
                 .header("Authorization", getAuthHeader())
-                .head() // Use HEAD for check connection or minimal GET
+                .header("Depth", "0")
+                .method("PROPFIND", null) // Use PROPFIND with Depth 0 for checking existence/auth
                 .build()
 
             val response = client.newCall(request).execute()

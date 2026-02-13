@@ -20,11 +20,20 @@ interface FavoriteDao {
 
 @Dao
 interface RecentFileDao {
-    @Query("SELECT * FROM recent_files ORDER BY lastAccessed DESC LIMIT 50")
+    @Query("SELECT * FROM recent_files ORDER BY lastAccessed DESC LIMIT 20")
     fun getRecentFiles(): Flow<List<RecentFile>>
+
+    @Query("SELECT * FROM recent_files ORDER BY lastAccessed DESC LIMIT 1")
+    fun getMostRecentFile(): Flow<RecentFile?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecent(file: RecentFile)
+
+    @Query("DELETE FROM recent_files")
+    suspend fun deleteAll()
+
+    @Query("DELETE FROM recent_files WHERE path NOT IN (SELECT path FROM recent_files ORDER BY lastAccessed DESC LIMIT 20)")
+    suspend fun deleteExcess()
 }
 
 @Dao

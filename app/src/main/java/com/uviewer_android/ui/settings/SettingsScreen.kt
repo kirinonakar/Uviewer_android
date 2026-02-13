@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
+import com.uviewer_android.data.repository.UserPreferencesRepository
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -13,6 +14,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.WebDavServer
@@ -27,10 +31,14 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val fontSize by viewModel.fontSize.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
-    
+    val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
+    val language by viewModel.language.collectAsState()
+
     var showAddDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
+    var showDocBgDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -56,8 +64,8 @@ fun SettingsScreen(
             }
             item {
                 val themeLabel = when (themeMode) {
-                    "light" -> stringResource(R.string.theme_light)
-                    "dark" -> stringResource(R.string.theme_dark)
+                    UserPreferencesRepository.THEME_LIGHT -> stringResource(R.string.theme_light)
+                    UserPreferencesRepository.THEME_DARK -> stringResource(R.string.theme_dark)
                     else -> stringResource(R.string.theme_system)
                 }
                 ListItem(
@@ -66,12 +74,38 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showThemeDialog = true }
                 )
             }
+            item {
+                val languageLabel = when (language) {
+                    UserPreferencesRepository.LANG_EN -> stringResource(R.string.lang_en)
+                    UserPreferencesRepository.LANG_KO -> stringResource(R.string.lang_ko)
+                    UserPreferencesRepository.LANG_JA -> stringResource(R.string.lang_ja)
+                    else -> stringResource(R.string.lang_system)
+                }
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.language)) },
+                    supportingContent = { Text(languageLabel) },
+                    modifier = Modifier.clickable { showLanguageDialog = true }
+                )
+            }
             item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_reading),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp)
+                )
+            }
+            item {
+                val docBgLabel = when (docBackgroundColor) {
+                    UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
+                    UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
+                    UserPreferencesRepository.DOC_BG_DARK -> stringResource(R.string.doc_bg_dark)
+                    else -> stringResource(R.string.doc_bg_white)
+                }
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.document_background)) },
+                    supportingContent = { Text(docBgLabel) },
+                    modifier = Modifier.clickable { showDocBgDialog = true }
                 )
             }
             item {
@@ -123,7 +157,7 @@ fun SettingsScreen(
                 }
             )
         }
-        
+
         if (showThemeDialog) {
             ThemeSelectionDialog(
                 currentMode = themeMode,
@@ -145,7 +179,78 @@ fun SettingsScreen(
                 }
             )
         }
+
+        if (showDocBgDialog) {
+            DocBgSelectionDialog(
+                currentBg = docBackgroundColor,
+                onDismiss = { showDocBgDialog = false },
+                onSelect = { bg ->
+                    viewModel.setDocBackgroundColor(bg)
+                    showDocBgDialog = false
+                }
+            )
+        }
+
+        if (showLanguageDialog) {
+            LanguageSelectionDialog(
+                currentLanguage = language,
+                onDismiss = { showLanguageDialog = false },
+                onSelect = { lang ->
+                    viewModel.setLanguage(lang)
+                    showLanguageDialog = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun LanguageSelectionDialog(
+    currentLanguage: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.select_language)) },
+        text = {
+            Column {
+                ThemeOptionRow(stringResource(R.string.lang_system), UserPreferencesRepository.LANG_SYSTEM, currentLanguage, onSelect)
+                ThemeOptionRow(stringResource(R.string.lang_en), UserPreferencesRepository.LANG_EN, currentLanguage, onSelect)
+                ThemeOptionRow(stringResource(R.string.lang_ko), UserPreferencesRepository.LANG_KO, currentLanguage, onSelect)
+                ThemeOptionRow(stringResource(R.string.lang_ja), UserPreferencesRepository.LANG_JA, currentLanguage, onSelect)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun DocBgSelectionDialog(
+    currentBg: String,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.select_doc_bg)) },
+        text = {
+            Column {
+                ThemeOptionRow(stringResource(R.string.doc_bg_white), UserPreferencesRepository.DOC_BG_WHITE, currentBg, onSelect)
+                ThemeOptionRow(stringResource(R.string.doc_bg_sepia), UserPreferencesRepository.DOC_BG_SEPIA, currentBg, onSelect)
+                ThemeOptionRow(stringResource(R.string.doc_bg_dark), UserPreferencesRepository.DOC_BG_DARK, currentBg, onSelect)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable
@@ -183,9 +288,9 @@ fun ThemeSelectionDialog(
         title = { Text(stringResource(R.string.select_theme)) },
         text = {
             Column {
-                ThemeOptionRow(stringResource(R.string.theme_system), "system", currentMode, onSelect)
-                ThemeOptionRow(stringResource(R.string.theme_light), "light", currentMode, onSelect)
-                ThemeOptionRow(stringResource(R.string.theme_dark), "dark", currentMode, onSelect)
+                ThemeOptionRow(stringResource(R.string.theme_system), UserPreferencesRepository.THEME_SYSTEM, currentMode, onSelect)
+                ThemeOptionRow(stringResource(R.string.theme_light), UserPreferencesRepository.THEME_LIGHT, currentMode, onSelect)
+                ThemeOptionRow(stringResource(R.string.theme_dark), UserPreferencesRepository.THEME_DARK, currentMode, onSelect)
             }
         },
         confirmButton = {
@@ -241,7 +346,10 @@ fun AddServerDialog(
     onAdd: (String, String, String, String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("https://") }
+    var protocol by remember { mutableStateOf("https") }
+    var address by remember { mutableStateOf("") }
+    var port by remember { mutableStateOf("") }
+    var path by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -256,12 +364,54 @@ fun AddServerDialog(
                     label = { Text(stringResource(R.string.server_name)) },
                     singleLine = true
                 )
+                
+                // Protocol Selection
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(stringResource(R.string.protocol))
+                    Spacer(Modifier.width(8.dp))
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, 
+                        modifier = Modifier.clickable { protocol = "http" }
+                    ) {
+                        RadioButton(selected = protocol == "http", onClick = { protocol = "http" })
+                        Text("http")
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, 
+                        modifier = Modifier.clickable { protocol = "https" }
+                    ) {
+                        RadioButton(selected = protocol == "https", onClick = { protocol = "https" })
+                        Text("https")
+                    }
+                }
+
                 OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(stringResource(R.string.server_url)) },
-                    singleLine = true
+                    value = address,
+                    onValueChange = { address = it },
+                    label = { Text(stringResource(R.string.server_address)) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
                 )
+                
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = port,
+                        onValueChange = { port = it.filter { char -> char.isDigit() } },
+                        label = { Text(stringResource(R.string.server_port)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+                    )
+                    OutlinedTextField(
+                        value = path,
+                        onValueChange = { path = it },
+                        label = { Text(stringResource(R.string.server_path)) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
@@ -273,14 +423,22 @@ fun AddServerDialog(
                     onValueChange = { password = it },
                     label = { Text(stringResource(R.string.password)) },
                     singleLine = true,
-                    visualTransformation = PasswordVisualTransformation()
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
                 )
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onAdd(name, url, username, password) },
-                enabled = name.isNotBlank() && url.isNotBlank()
+                onClick = { 
+                    val portPart = if (port.isNotBlank()) ":$port" else ""
+                    val pathPart = if (path.isNotBlank()) {
+                         if (path.startsWith("/")) path else "/$path"
+                    } else ""
+                    val fullUrl = "$protocol://$address$portPart$pathPart"
+                    onAdd(name, fullUrl, username, password) 
+                },
+                enabled = name.isNotBlank() && address.isNotBlank()
             ) {
                 Text(stringResource(R.string.add))
             }

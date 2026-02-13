@@ -11,6 +11,7 @@ data class FileEntry(
     val isWebDav: Boolean = false
 ) {
     enum class FileType {
-        FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP
+        FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP
+
     }
 }

@@ -20,7 +20,15 @@ class RecentFilesViewModel(
             initialValue = emptyList()
         )
     
-    // Recent files logic usually involves adding items when files are opened.
-    // That logic should be in ViewModels related to opening files (ImageViewer, DocumentViewer, MediaPlayer).
-    // This ViewModel is primarily for displaying the list.
+    init {
+        viewModelScope.launch {
+            recentFileDao.deleteExcess()
+        }
+    }
+
+    fun clearAll() {
+        viewModelScope.launch {
+            recentFileDao.deleteAll()
+        }
+    }
 }

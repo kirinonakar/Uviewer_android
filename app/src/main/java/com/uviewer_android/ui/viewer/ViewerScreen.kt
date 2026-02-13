@@ -16,7 +16,9 @@ fun ViewerScreen(
     fileType: String?, 
     isWebDav: Boolean, 
     serverId: Int?,
-    onBack: () -> Unit = {} // Add callback
+    onBack: () -> Unit = {},
+    isFullScreen: Boolean = false,
+    onToggleFullScreen: () -> Unit = {}
 ) {
     val type = try {
         fileType?.let { FileEntry.FileType.valueOf(it) } ?: FileEntry.FileType.UNKNOWN
@@ -25,9 +27,14 @@ fun ViewerScreen(
     }
 
     when (type) {
-        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack)
-        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB -> DocumentViewerScreen(filePath, type, isWebDav, serverId, onBack = onBack)
-        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, isWebDav, serverId, onBack = onBack)
+        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML -> DocumentViewerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.PDF -> {
+             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("PDF viewing is not yet supported in-app. Please use an external viewer.")
+            }
+        }
         else -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(stringResource(R.string.unsupported_type_fmt, fileType ?: "", filePath))

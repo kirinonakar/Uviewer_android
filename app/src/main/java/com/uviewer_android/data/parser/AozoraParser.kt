@@ -60,6 +60,7 @@ object AozoraParser {
                         font-size: ${fontSize}px;
                         background-color: $backgroundColor;
                         writing-mode: $writingMode;
+                        text-orientation: upright;
                         margin: 20px;
                         line-height: 1.8;
                     }

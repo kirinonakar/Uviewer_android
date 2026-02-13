@@ -24,6 +24,16 @@ class UserPreferencesRepository(context: Context) {
     )
     val fontFamily: StateFlow<String> = _fontFamily.asStateFlow()
 
+    private val _docBackgroundColor = MutableStateFlow(
+        sharedPreferences.getString("doc_background_color", "white") ?: "white"
+    )
+    val docBackgroundColor: StateFlow<String> = _docBackgroundColor.asStateFlow()
+
+    private val _language = MutableStateFlow(
+        sharedPreferences.getString("language", "system") ?: "system"
+    )
+    val language: StateFlow<String> = _language.asStateFlow()
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -45,9 +55,32 @@ class UserPreferencesRepository(context: Context) {
         _fontFamily.value = family
     }
 
+    fun setDocBackgroundColor(color: String) {
+        sharedPreferences.edit {
+            putString("doc_background_color", color)
+        }
+        _docBackgroundColor.value = color
+    }
+
+    fun setLanguage(lang: String) {
+        sharedPreferences.edit {
+            putString("language", lang)
+        }
+        _language.value = lang
+    }
+
     companion object {
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
+
+        const val DOC_BG_WHITE = "white"
+        const val DOC_BG_SEPIA = "sepia"
+        const val DOC_BG_DARK = "dark"
+
+        const val LANG_SYSTEM = "system"
+        const val LANG_EN = "en"
+        const val LANG_KO = "ko"
+        const val LANG_JA = "ja"
     }
 }

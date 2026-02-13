@@ -16,6 +16,9 @@
     <!-- Library -->
     <string name="add_to_favorites">Add to favorites</string>
     <string name="remove_from_favorites">Remove from favorites</string>
+    <string name="go_to_root">Go to root</string>
+    <string name="local">Local Storage</string>
+    <string name="remote">Remote Storage</string>
 
     <!-- Favorites -->
     <string name="title_favorites">Favorites</string>
@@ -36,6 +39,11 @@
     <string name="theme_dark">Dark</string>
     <string name="theme_system">System Default</string>
     <string name="select_theme">Select Theme</string>
+    <string name="document_background">Document Background</string>
+    <string name="doc_bg_white">White</string>
+    <string name="doc_bg_sepia">Sepia</string>
+    <string name="doc_bg_dark">Dark</string>
+    <string name="select_doc_bg">Select Document Background</string>
 
     <!-- Settings: Reading -->
     <string name="section_reading">Reading</string>
@@ -46,12 +54,23 @@
     <string name="font_sans_serif">Sans-serif</string>
     <string name="font_monospace">Monospace</string>
     <string name="font_default">Default</string>
+    <string name="language">Language</string>
+    <string name="lang_system">System Default</string>
+    <string name="lang_en">English</string>
+    <string name="lang_ko">Korean</string>
+    <string name="lang_ja">Japanese</string>
+    <string name="select_language">Select Language</string>
 
     <!-- Settings: WebDAV -->
     <string name="section_webdav">WebDAV Servers</string>
     <string name="add_webdav_server">Add WebDAV Server</string>
     <string name="server_name">Name</string>
+
     <string name="server_url">URL</string>
+    <string name="server_address">Address (IP or Domain)</string>
+    <string name="server_port">Port (Optional)</string>
+    <string name="server_path">Path (Optional)</string>
+    <string name="protocol">Protocol</string>
     <string name="username">Username</string>
     <string name="password">Password</string>
     <string name="add_server_desc">Add Server</string>

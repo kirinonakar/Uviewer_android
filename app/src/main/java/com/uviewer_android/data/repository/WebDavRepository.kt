@@ -51,21 +51,40 @@ class WebDavRepository(
 
             // Filter out the directory itself
             // Normalized comparison
-            val normRelative = relativePath.trimEnd('/')
-            val normRequested = requestedPath.trimEnd('/')
-            if (normRelative == normRequested || (normRequested.isEmpty() && normRelative == "/")) {
+            // Normalize: ensure both start with / and end without / (except root)
+            var normRelative = relativePath
+            if (!normRelative.startsWith("/")) normRelative = "/$normRelative"
+            if (normRelative.length > 1) normRelative = normRelative.trimEnd('/')
+
+            var normRequested = requestedPath
+            if (!normRequested.startsWith("/")) normRequested = "/$normRequested"
+            if (normRequested.length > 1) normRequested = normRequested.trimEnd('/')
+
+            // Filter out the directory itself (exact match)
+            if (normRelative == normRequested) {
                 return@mapNotNull null
+            }
+
+            // Also ensure it is a direct child if we don't assume depth 1 response only?
+            // WebDav Depth 1 returns children. So we should be fine.
+            // But if relativePath is unrelated?
+            // Typically relative path should start with requested path
+            if (!normRelative.startsWith(normRequested)) {
+                 // Should not happen with Depth 1 unless URL logic is weird
+                 // return@mapNotNull null
             }
 
             // Determine FileType
             val type = when {
                 file.isDirectory -> FileEntry.FileType.FOLDER
-                file.name.endsWith(".jpg", true) || file.name.endsWith(".png", true) -> FileEntry.FileType.IMAGE
-                file.name.endsWith(".txt", true) -> FileEntry.FileType.TEXT
+                file.name.endsWith(".jpg", true) || file.name.endsWith(".png", true) || file.name.endsWith(".webp", true) || file.name.endsWith(".gif", true) -> FileEntry.FileType.IMAGE
+                file.name.endsWith(".txt", true) || file.name.endsWith(".md", true) -> FileEntry.FileType.TEXT
+                file.name.endsWith(".html", true) || file.name.endsWith(".htm", true) || file.name.endsWith(".xhtml", true) -> FileEntry.FileType.HTML
+                file.name.endsWith(".pdf", true) -> FileEntry.FileType.PDF
                 file.name.endsWith(".epub", true) -> FileEntry.FileType.EPUB
-                file.name.endsWith(".mp3", true) || file.name.endsWith(".wav", true) -> FileEntry.FileType.AUDIO
-                file.name.endsWith(".mp4", true) || file.name.endsWith(".mkv", true) -> FileEntry.FileType.VIDEO
-                file.name.endsWith(".zip", true) -> FileEntry.FileType.ZIP
+                file.name.endsWith(".mp3", true) || file.name.endsWith(".wav", true) || file.name.endsWith(".ogg", true) || file.name.endsWith(".flac", true) -> FileEntry.FileType.AUDIO
+                file.name.endsWith(".mp4", true) || file.name.endsWith(".mkv", true) || file.name.endsWith(".webm", true) || file.name.endsWith(".avi", true) || file.name.endsWith(".mov", true) -> FileEntry.FileType.VIDEO
+                file.name.endsWith(".zip", true) || file.name.endsWith(".rar", true) || file.name.endsWith(".cbz", true) -> FileEntry.FileType.ZIP
                 else -> FileEntry.FileType.UNKNOWN
             }
 

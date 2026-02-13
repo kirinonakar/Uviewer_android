@@ -3,138 +3,79 @@ package com.uviewer_android.ui.viewer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.uviewer_android.data.RecentFileDao
+import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import okhttp3.HttpUrl
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import kotlinx.coroutines.launch
-import java.io.File
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
-@UnstableApi // Needed for DefaultHttpDataSource
+data class MediaPlayerUiState(
+    val mediaUrl: String? = null,
+    val authHeader: Map<String, String> = emptyMap(),
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
 class MediaPlayerViewModel(
     application: Application,
     private val webDavRepository: WebDavRepository,
-    private val recentFileDao: com.uviewer_android.data.RecentFileDao
+    private val recentFileDao: RecentFileDao
 ) : AndroidViewModel(application) {
 
-    private val _playerState = MutableStateFlow<ExoPlayer?>(null)
-    val playerState: StateFlow<ExoPlayer?> = _playerState.asStateFlow()
+    private val _uiState = MutableStateFlow(MediaPlayerUiState())
+    val uiState: StateFlow<MediaPlayerUiState> = _uiState.asStateFlow()
 
-    private var player: ExoPlayer? = null
-
-    fun initializePlayer(filePath: String, isWebDav: Boolean, serverId: Int?) {
-        if (player != null) return // Already initialized
-
+    fun prepareMedia(filePath: String, isWebDav: Boolean, serverId: Int?, fileType: FileEntry.FileType) {
         viewModelScope.launch {
-            // Add to Recent
+            _uiState.value = MediaPlayerUiState(isLoading = true)
             try {
-                // Determine title
-                val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
-                recentFileDao.insertRecent(
-                    com.uviewer_android.data.RecentFile(
-                        path = filePath,
-                        title = title,
-                        isWebDav = isWebDav,
-                        serverId = serverId,
-                        type = "MEDIA",
-                        lastAccessed = System.currentTimeMillis()
+                // Add to Recent
+                try {
+                    val title = filePath.substringAfterLast("/")
+                    recentFileDao.insertRecent(
+                        com.uviewer_android.data.RecentFile(
+                            path = filePath,
+                            title = title,
+                            isWebDav = isWebDav,
+                            serverId = serverId,
+                            type = fileType.name,
+                            lastAccessed = System.currentTimeMillis()
+                        )
                     )
-                )
-            } catch (e: Exception) {
-                // Ignore
-            }
+                } catch (e: Exception) {
+                    // Ignore
+                }
 
-            val context = getApplication<Application>()
-            
-            // WebDAV Headers
-            val authHeader = if (isWebDav && serverId != null) {
-                webDavRepository.getAuthHeader(serverId)
-            } else null
-
-            // Build DataSource Factory
-            val dataSourceFactory = if (authHeader != null) {
-                val factory = DefaultHttpDataSource.Factory()
-                factory.setDefaultRequestProperties(mapOf("Authorization" to authHeader))
-                factory
-            } else {
-                DefaultHttpDataSource.Factory() // Or DefaultDataSource.Factory for mixed local/remote
-            }
-            
-            // Build Player
-            // For local files, we need DefaultDataSourceFactory to handle file://
-            // Creating a generic DefaultDataSource.Factory might be better, but lets start simple.
-            // Actually DefaultMediaSourceFactory handles most URIs automatically if no custom factory provided, 
-            // EXCEPT headers.
-            
-            val newPlayer = if (authHeader != null) {
-                ExoPlayer.Builder(context)
-                    .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
-                    .build()
-            } else {
-                ExoPlayer.Builder(context).build()
-            }
-
-            val mediaItem = if (isWebDav) {
-                MediaItem.fromUri(filePath) // filePath should be full URL ideally, but let's assume UI/Nav passes URL or path
-                // Wait, ViewerScreen receives `filePath`. If WebDav, is it full URL?
-                // In LibraryScreen, file path is used. WebDavRepository logic suggests path relative to server?
-                // We need full URL for ExoPlayer if it's WebDAV.
-                // WebDavRepository doesn't expose full URL generator easily yet without server details.
-                // Let's assume we can fetch server URL or reconstruct it.
-                // For now, let's look at how LibraryViewModel passes it. It passes `entry.path`.
-                // If it's WebDAV, `entry.path` is likely just the path on server.
-                // We need the server Base URL.
-                // Let's fetch server details inside ViewModel.
-            } else {
-                MediaItem.fromUri(File(filePath).toURI().toString())
-            }
-
-            // Correction: For WebDAV we need server URL.
-            val finalMediaItem = if (isWebDav && serverId != null) {
-                val server = webDavRepository.getServer(serverId) // Need this method
-                if (server != null) {
-                    val fullUrl = try {
-                        val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
-                        val builder = baseHttpUrl.newBuilder()
-                        filePath.split("/").filter { it.isNotEmpty() }.forEach {
-                            builder.addPathSegment(it)
+                if (isWebDav && serverId != null) {
+                    val server = webDavRepository.getServer(serverId)
+                    val authHeaderValue = webDavRepository.getAuthHeader(serverId)
+                    if (server != null && authHeaderValue != null) {
+                        val fullUrl = try {
+                            val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
+                            val builder = baseHttpUrl.newBuilder()
+                            filePath.split("/").filter { it.isNotEmpty() }.forEach {
+                                builder.addPathSegment(it)
+                            }
+                            builder.build().toString()
+                        } catch (e: Exception) {
+                            server.url.trimEnd('/') + filePath
                         }
-                        builder.build().toString()
-                    } catch (e: Exception) {
-                        server.url.trimEnd('/') + filePath
-                    }
-                    MediaItem.fromUri(fullUrl)
-                } else null
-            } else {
-                MediaItem.fromUri(File(filePath).toURI().toString())
-            }
 
-            if (finalMediaItem != null) {
-                newPlayer.setMediaItem(finalMediaItem)
-                newPlayer.prepare()
-                newPlayer.playWhenReady = true
-                
-                player = newPlayer
-                _playerState.value = newPlayer
+                        val headers = mapOf("Authorization" to authHeaderValue)
+                        _uiState.value = MediaPlayerUiState(mediaUrl = fullUrl, authHeader = headers, isLoading = false)
+                    } else {
+                        _uiState.value = MediaPlayerUiState(error = "Can't get WebDAV server details", isLoading = false)
+                    }
+                } else {
+                    // For local files, the path is the URL
+                    _uiState.value = MediaPlayerUiState(mediaUrl = filePath, isLoading = false)
+                }
+            } catch (e: Exception) {
+                _uiState.value = MediaPlayerUiState(error = e.message, isLoading = false)
             }
         }
-    }
-
-    fun releasePlayer() {
-        player?.release()
-        player = null
-        _playerState.value = null
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        releasePlayer()
     }
 }
