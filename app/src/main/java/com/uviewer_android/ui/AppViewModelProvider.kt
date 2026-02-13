@@ -21,6 +21,7 @@ object AppViewModelProvider {
         initializer {
             val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as UviewerApplication)
             com.uviewer_android.ui.viewer.ImageViewerViewModel(
+                application = app,
                 fileRepository = app.container.fileRepository,
                 webDavRepository = app.container.webDavRepository,
                 recentFileDao = app.container.database.recentFileDao()

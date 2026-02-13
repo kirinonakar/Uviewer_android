@@ -1,8 +1,10 @@
 package com.uviewer_android.ui.viewer
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.model.FileEntry
+import com.uviewer_android.data.parser.EpubParser
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,10 +22,11 @@ data class ImageViewerUiState(
 )
 
 class ImageViewerViewModel(
+    application: Application,
     private val fileRepository: FileRepository,
     private val webDavRepository: WebDavRepository,
     private val recentFileDao: com.uviewer_android.data.RecentFileDao
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(ImageViewerUiState())
     val uiState: StateFlow<ImageViewerUiState> = _uiState.asStateFlow()
@@ -37,13 +40,15 @@ class ImageViewerViewModel(
             // Add to Recent
             try {
                 val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
+                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                
                 recentFileDao.insertRecent(
                     com.uviewer_android.data.RecentFile(
                         path = filePath,
                         title = title,
                         isWebDav = isWebDav,
                         serverId = serverId,
-                        type = "IMAGE",
+                        type = if (isZip) "ZIP" else "IMAGE",
                         lastAccessed = System.currentTimeMillis()
                     )
                 )
@@ -52,29 +57,70 @@ class ImageViewerViewModel(
             }
 
             try {
-                val parentPath = if (isWebDav) {
-                    if (filePath.endsWith("/")) filePath.dropLast(1).substringBeforeLast("/")
-                    else filePath.substringBeforeLast("/")
+                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                
+                val images = if (isZip) {
+                    val context = getApplication<Application>()
+                    val cacheDir = context.cacheDir
+                    
+                    val zipFile = if (isWebDav && serverId != null) {
+                        val fileName = File(filePath).name
+                        val tempFile = File(cacheDir, "temp_$fileName")
+                        webDavRepository.downloadFile(serverId, filePath, tempFile)
+                        tempFile
+                    } else {
+                        File(filePath)
+                    }
+
+                    val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
+                    if (unzipDir.exists()) unzipDir.deleteRecursively()
+                    unzipDir.mkdirs()
+                    
+                    // EpubParser has a static unzip method we can use
+                    EpubParser.unzip(zipFile, unzipDir)
+                    
+                    // List all files in unzipDir recursively and filter for images
+                    unzipDir.walkTopDown()
+                        .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
+                        .map { file ->
+                            FileEntry(
+                                name = file.name,
+                                path = file.absolutePath,
+                                isDirectory = false,
+                                type = FileEntry.FileType.IMAGE,
+                                lastModified = file.lastModified(),
+                                size = file.length()
+                            )
+                        }
+                        .sortedBy { it.name.lowercase() }
+                        .toList()
+
+                    if (images.isEmpty()) {
+                        throw Exception("No images found in the zip file.")
+                    }
+                    images
                 } else {
-                    File(filePath).parent ?: "/"
+                    val parentPath = if (isWebDav) {
+                        if (filePath.endsWith("/")) filePath.dropLast(1).substringBeforeLast("/")
+                        else filePath.substringBeforeLast("/")
+                    } else {
+                        File(filePath).parent ?: "/"
+                    }
+
+                    val files = if (isWebDav && serverId != null) {
+                        webDavRepository.listFiles(serverId, parentPath)
+                    } else {
+                        fileRepository.listFiles(parentPath)
+                    }
+                    files.filter { it.type == FileEntry.FileType.IMAGE }
                 }
 
-                // Get Client first if WebDAV to extract Auth Header?
-                // WebDavRepository should expose getAuthHeader or credentials.
-                // Let's assume WebDavRepository has a method 'getAuthHeader(serverId)'
-                val auth = if (isWebDav && serverId != null) {
+                val index = if (isZip) 0 else images.indexOfFirst { it.path == filePath }
+                
+                val auth = if (isWebDav && serverId != null && !isZip) { // Don't need auth for unzipped local files
                     webDavRepository.getAuthHeader(serverId)
                 } else null
 
-                val files = if (isWebDav && serverId != null) {
-                    webDavRepository.listFiles(serverId, parentPath)
-                } else {
-                    fileRepository.listFiles(parentPath)
-                }
-
-                val images = files.filter { it.type == FileEntry.FileType.IMAGE }
-                val index = images.indexOfFirst { it.path == filePath }
-                
                 _uiState.value = _uiState.value.copy(
                     images = images,
                     initialIndex = if (index != -1) index else 0,

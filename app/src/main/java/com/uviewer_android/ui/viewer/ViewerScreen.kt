@@ -25,7 +25,7 @@ fun ViewerScreen(
     }
 
     when (type) {
-        FileEntry.FileType.IMAGE -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack)
+        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack)
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB -> DocumentViewerScreen(filePath, type, isWebDav, serverId, onBack = onBack)
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, isWebDav, serverId, onBack = onBack)
         else -> {
