@@ -35,6 +35,8 @@ fun SettingsScreen(
     val language by viewModel.language.collectAsState()
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
+    val persistZoom by viewModel.persistZoom.collectAsState()
+    val upscaleFilter by viewModel.upscaleFilter.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -138,9 +140,33 @@ fun SettingsScreen(
             item { HorizontalDivider() }
             item {
                 Text(
-                    text = "Image Viewer",
+                    text = stringResource(R.string.section_image_viewer),
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.padding(16.dp)
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.persist_zoom)) },
+                    supportingContent = { Text(stringResource(R.string.persist_zoom_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = persistZoom,
+                            onCheckedChange = { viewModel.setPersistZoom(it) }
+                        )
+                    }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.upscale_filter)) },
+                    supportingContent = { Text(stringResource(R.string.upscale_filter_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = upscaleFilter,
+                            onCheckedChange = { viewModel.setUpscaleFilter(it) }
+                        )
+                    }
                 )
             }
             item {

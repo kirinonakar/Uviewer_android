@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class LibraryUiState(
-    val currentPath: String = "/",
+    val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
     val fileList: List<FileEntry> = emptyList(),
     val favoritePaths: Set<String> = emptySet(),
     val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
@@ -33,29 +33,51 @@ class LibraryViewModel(
     private val recentFileDao: com.uviewer_android.data.RecentFileDao
 ) : ViewModel() {
 
+
     private val _state = MutableStateFlow(LibraryUiState())
     private val _servers = webDavServerDao.getAllServers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _sortOption = MutableStateFlow(SortOption.NAME)
 
+    init {
+        // Force initial load of Local root directory as soon as ViewModel is created
+        val root = android.os.Environment.getExternalStorageDirectory().absolutePath
+        loadFiles(root)
+    }
+
+
     val uiState: StateFlow<LibraryUiState> = combine(
         _state,
         favoriteDao.getAllFavorites(),
         _sortOption,
-        recentFileDao.getMostRecentFile()
-    ) { state, favorites, sort, mostRecent ->
-        val sortedList = if (state.currentPath == "WebDAV" && state.fileList.all { it.isWebDav && it.isDirectory && it.path == "/" }) {
-            // Server list, usually by ID or Name
-            state.fileList.sortedBy { it.name }
-        } else {
-            when (sort) {
-                SortOption.NAME -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-                SortOption.DATE_ASC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.lastModified }))
-                SortOption.DATE_DESC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { -it.lastModified }))
-                SortOption.SIZE_ASC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { it.size }))
-                SortOption.SIZE_DESC -> state.fileList.sortedWith(compareBy({ !it.isDirectory }, { -it.size }))
+        recentFileDao.getMostRecentFile(),
+        webDavServerDao.getAllServers()
+    ) { state, favorites, sort, mostRecent, servers ->
+        var listToProcess = state.fileList
+        
+        // If we are in WebDAV tab and no server selected, show server list automatically
+        if (state.isWebDavTab && state.serverId == null) {
+            listToProcess = servers.map { server ->
+                FileEntry(
+                    name = server.name,
+                    path = "/",
+                    isDirectory = true,
+                    type = FileEntry.FileType.FOLDER,
+                    lastModified = 0L,
+                    size = 0L,
+                    serverId = server.id,
+                    isWebDav = true
+                )
             }
+        }
+
+        val sortedList = when (sort) {
+            SortOption.NAME -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+            SortOption.DATE_ASC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.lastModified }))
+            SortOption.DATE_DESC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { -it.lastModified }))
+            SortOption.SIZE_ASC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.size }))
+            SortOption.SIZE_DESC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { -it.size }))
         }
         
         state.copy(
@@ -85,26 +107,12 @@ class LibraryViewModel(
     }
 
     private fun showServerList() {
-        viewModelScope.launch { 
-            val servers = _servers.first()
-            val serverEntries = servers.map { server ->
-                FileEntry(
-                    name = server.name,
-                    path = "/", // Root of that server
-                    isDirectory = true,
-                    type = FileEntry.FileType.FOLDER,
-                    lastModified = 0L,
-                    size = 0L,
-                    serverId = server.id,
-                    isWebDav = true
-                )
-            }
-            _state.value = _state.value.copy(
-                currentPath = "WebDAV",
-                fileList = serverEntries,
-                isLoading = false
-            )
-        }
+        _state.value = _state.value.copy(
+            currentPath = "WebDAV",
+            fileList = emptyList(), // Will be populated by combine
+            serverId = null,
+            isLoading = false
+        )
     }
 
     private fun loadFiles(path: String, serverId: Int? = _state.value.serverId) {
@@ -158,11 +166,12 @@ class LibraryViewModel(
     fun navigateUp() {
         val currentPath = _state.value.currentPath
         val serverId = _state.value.serverId
+        val rootPath = android.os.Environment.getExternalStorageDirectory().absolutePath
 
         if (_state.value.isWebDavTab && serverId != null && currentPath == "/") {
             showServerList()
             _state.value = _state.value.copy(serverId = null)
-        } else if (currentPath != "/") {
+        } else if (currentPath != rootPath && currentPath != "/") {
             val parentPath = currentPath.trimEnd('/').substringBeforeLast('/', "/")
             loadFiles(if(parentPath.isEmpty()) "/" else parentPath)
         }
@@ -173,7 +182,8 @@ class LibraryViewModel(
             showServerList()
             _state.value = _state.value.copy(serverId = null)
         } else {
-            loadFiles("/")
+            val root = android.os.Environment.getExternalStorageDirectory().absolutePath
+            loadFiles(root)
         }
     }
 

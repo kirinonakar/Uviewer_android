@@ -133,7 +133,7 @@ class WebDavRepository(
         return webDavServerDao.getById(serverId)
     }
 
-    suspend fun readFileContent(serverId: Int, path: String): String {
+    suspend fun readFileContent(serverId: Int, path: String): ByteArray {
         return withContext(Dispatchers.IO) {
             val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
             client.downloadContent(path)

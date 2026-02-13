@@ -54,12 +54,18 @@
     <string name="font_sans_serif">Sans-serif</string>
     <string name="font_monospace">Monospace</string>
     <string name="font_default">Default</string>
+    <string name="section_image_viewer">Image Viewer</string>
     <string name="invert_image_control">Invert Image Control</string>
     <string name="invert_image_control_desc">Reverse tap directions for next/previous image</string>
     <string name="dual_page_order">Dual Page Order</string>
     <string name="dual_page_ltr">Left to Right</string>
     <string name="dual_page_rtl">Right to Left</string>
     <string name="select_dual_page_order">Select Dual Page Order</string>
+    <string name="persist_zoom">Persistent Zoom</string>
+    <string name="persist_zoom_desc">Maintain zoom level across different images</string>
+    <string name="upscale_filter">Upscale Filter</string>
+    <string name="upscale_filter_desc">Apply high-quality sharpening for large images</string>
+
     <string name="language">Language</string>
     <string name="lang_system">System Default</string>
     <string name="lang_en">English</string>
@@ -90,4 +96,10 @@
     <string name="prev_chapter">Previous Chapter</string>
     <string name="next_chapter">Next Chapter</string>
     <string name="table_of_contents">Table of Contents</string>
+    <string name="select_encoding">Select Text Encoding</string>
+    <string name="encoding_auto">Auto</string>
+    <string name="encoding_sjis">Shift_JIS (Japan)</string>
+    <string name="encoding_euckr">EUC-KR (Korea)</string>
+    <string name="encoding_johab">Johab (Legacy Korea)</string>
+    <string name="encoding_w1252">Windows-1252</string>
 </resources>

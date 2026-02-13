@@ -171,7 +171,7 @@ class WebDavClient(
         }
     }
 
-    suspend fun downloadContent(path: String): String {
+    suspend fun downloadContent(path: String): ByteArray {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val url = buildUrl(path)
             val request = Request.Builder()
@@ -183,7 +183,7 @@ class WebDavClient(
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
             
-            response.body?.string() ?: ""
+            response.body?.bytes() ?: byteArrayOf()
         }
     }
 

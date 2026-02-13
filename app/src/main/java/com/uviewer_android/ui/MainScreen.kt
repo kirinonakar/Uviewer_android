@@ -83,9 +83,8 @@ fun MainScreen() {
                                         }
                                         launchSingleTop = true
                                         
-                                        // Reset state for Favorites/Recent (User Request)
-                                        // "favorites 초기화면으로 복귀", "recent 초기화면으로 복귀"
-                                        if (screen is Screen.Favorites || screen is Screen.Recent) {
+                                        // Reset state for Favorites/Recent/Settings (User Request)
+                                        if (screen is Screen.Favorites || screen is Screen.Recent || screen is Screen.Settings) {
                                             restoreState = false
                                         } else {
                                             restoreState = true
@@ -102,7 +101,7 @@ fun MainScreen() {
         NavHost(
             navController = navController,
             startDestination = Screen.Library("").route,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
             enterTransition = { androidx.compose.animation.EnterTransition.None },
             exitTransition = { androidx.compose.animation.ExitTransition.None },
             popEnterTransition = { androidx.compose.animation.EnterTransition.None },
@@ -189,7 +188,16 @@ fun MainScreen() {
                     fileType = type,
                     isWebDav = isWebDav,
                     serverId = serverId,
-                    onBack = { navController.popBackStack() },
+                    onBack = { 
+                        val decodedPath = java.net.URLDecoder.decode(filePath, StandardCharsets.UTF_8.toString())
+                        val parentPath = decodedPath.substringBeforeLast('/', "/")
+                        val encodedParentPath = URLEncoder.encode(parentPath, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                        val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
+                        navController.navigate(route) {
+                            popUpTo(navController.graph.findStartDestination().id)
+                            launchSingleTop = true
+                        }
+                    },
                     isFullScreen = isFullScreen,
                     onToggleFullScreen = { isFullScreen = !isFullScreen }
                 )

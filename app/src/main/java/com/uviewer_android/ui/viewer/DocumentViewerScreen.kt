@@ -5,11 +5,15 @@ import com.uviewer_android.R
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.RotateRight
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +53,7 @@ fun DocumentViewerScreen(
     var showGoToLineDialog by remember { mutableStateOf(false) }
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var showEncodingDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(filePath) {
         viewModel.loadDocument(filePath, type, isWebDav, serverId)
@@ -75,10 +80,19 @@ fun DocumentViewerScreen(
                         NavigationDrawerItem(
                             label = { Text(item.title ?: "Chapter ${index + 1}") },
                             selected = index == uiState.currentChapterIndex,
-                            onClick = {
+                        onClick = {
+                            if (item.href.startsWith("line-")) {
+                                val line = item.href.replace("line-", "").toIntOrNull() ?: 1
+                                currentLine = line
+                                if (webViewRef != null) {
+                                    val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                    webViewRef?.evaluateJavascript(js, null)
+                                }
+                            } else {
                                 viewModel.loadChapter(index)
-                                scope.launch { drawerState.close() }
-                            },
+                            }
+                            scope.launch { drawerState.close() }
+                        },
                             modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                         )
                     }
@@ -98,10 +112,8 @@ fun DocumentViewerScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = {
-                                viewModel.toggleBookmark(filePath, uiState.currentLine, isWebDav, serverId, type.name)
-                            }) {
-                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                            IconButton(onClick = { showEncodingDialog = true }) {
+                                Icon(Icons.Default.Translate, contentDescription = "Encoding")
                             }
                             if (type == FileEntry.FileType.EPUB) {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -121,99 +133,141 @@ fun DocumentViewerScreen(
                         }
                     )
                 }
+                
+                if (showEncodingDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showEncodingDialog = false },
+                        title = { Text(stringResource(R.string.select_encoding)) },
+                        text = {
+                            Column {
+                                val encodings = listOf(
+                                    stringResource(R.string.encoding_auto) to null,
+                                    "UTF-8" to "UTF-8",
+                                    stringResource(R.string.encoding_sjis) to "Shift_JIS",
+                                    stringResource(R.string.encoding_euckr) to "EUC-KR",
+                                    stringResource(R.string.encoding_johab) to "x-Johab",
+                                    stringResource(R.string.encoding_w1252) to "windows-1252"
+                                )
+                                encodings.forEach { (label, value) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { 
+                                                viewModel.setManualEncoding(value, isWebDav, serverId)
+                                                showEncodingDialog = false 
+                                            }
+                                            .padding(16.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(selected = uiState.manualEncoding == value, onClick = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(label)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showEncodingDialog = false }) { Text(stringResource(R.string.cancel)) }
+                        }
+                    )
+                }
             },
             bottomBar = {
                 if (!isFullScreen) {
                     BottomAppBar {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            if (uiState.totalLines > 0) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Line: $currentLine / ${uiState.totalLines}")
-                                    // Percentage
-                                    Text("${(currentLine * 100 / uiState.totalLines)}%")
-                                }
-                                Slider(
-                                     value = currentLine.toFloat(),
-                                     onValueChange = { 
-                                         currentLine = it.toInt()
-                                         if (uiState.totalLines > 0 && webViewRef != null) {
-                                             val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                             webViewRef?.evaluateJavascript(js, null)
-                                         }
-                                     },
-                                     valueRange = 1f..uiState.totalLines.toFloat(),
-                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                                 )
-                             }
+                            Text(
+                                uiState.fileName ?: "", 
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Line: $currentLine / ${uiState.totalLines}", style = MaterialTheme.typography.bodySmall)
+                                // Percentage
+                                Text("${if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines) else 0}%", style = MaterialTheme.typography.bodySmall)
+                            }
+                            Slider(
+                                 value = currentLine.toFloat(),
+                                 onValueChange = { 
+                                     currentLine = it.toInt()
+                                     if (uiState.totalLines > 0 && webViewRef != null) {
+                                         val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                         webViewRef?.evaluateJavascript(js, null)
+                                     }
+                                 },
+                                 valueRange = 1f..uiState.totalLines.toFloat().coerceAtLeast(1f),
+                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                             )
+                         }
 
-                             // Text Chunk Navigation
-                             if (type == FileEntry.FileType.TEXT && (uiState.currentChunkIndex > 0 || uiState.hasMoreContent)) {
-                                 Row(
-                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                     verticalAlignment = Alignment.CenterVertically
+                         // Text Chunk Navigation
+                         if (type == FileEntry.FileType.TEXT && (uiState.currentChunkIndex > 0 || uiState.hasMoreContent)) {
+                             Row(
+                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                 horizontalArrangement = Arrangement.SpaceBetween,
+                                 verticalAlignment = Alignment.CenterVertically
+                             ) {
+                                 TextButton(
+                                     onClick = { viewModel.prevChunk() },
+                                     enabled = uiState.currentChunkIndex > 0
                                  ) {
-                                     TextButton(
-                                         onClick = { viewModel.prevChunk() },
-                                         enabled = uiState.currentChunkIndex > 0
-                                     ) {
-                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                         Spacer(Modifier.width(8.dp))
-                                         Text("Prev Seg")
-                                     }
-
-                                     Text(
-                                         "Segment ${uiState.currentChunkIndex + 1}",
-                                         style = MaterialTheme.typography.bodyMedium
-                                     )
-
-                                     TextButton(
-                                         onClick = { viewModel.nextChunk() },
-                                         enabled = uiState.hasMoreContent
-                                     ) {
-                                         Text("Next Seg")
-                                         Spacer(Modifier.width(8.dp))
-                                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                                     }
+                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                     Spacer(Modifier.width(8.dp))
+                                     Text("Prev Seg")
                                  }
-                             }
-                             if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
-                                 Row(
-                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                     horizontalArrangement = Arrangement.SpaceBetween,
-                                     verticalAlignment = Alignment.CenterVertically
+
+                                 Text(
+                                     "Segment ${uiState.currentChunkIndex + 1}",
+                                     style = MaterialTheme.typography.bodyMedium
+                                 )
+
+                                 TextButton(
+                                     onClick = { viewModel.nextChunk() },
+                                     enabled = uiState.hasMoreContent
                                  ) {
-                                     TextButton(
-                                         onClick = { viewModel.prevChapter() },
-                                         enabled = uiState.currentChapterIndex > 0
-                                     ) {
-                                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                         Spacer(Modifier.width(8.dp))
-                                         Text(stringResource(R.string.prev_chapter))
-                                     }
-                                     
-                                     Text(
-                                         "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
-                                         style = MaterialTheme.typography.bodyMedium
-                                     )
- 
-                                     TextButton(
-                                         onClick = { viewModel.nextChapter() },
-                                         enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
-                                     ) {
-                                         Text(stringResource(R.string.next_chapter))
-                                         Spacer(Modifier.width(8.dp))
-                                         Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                                     }
+                                     Text("Next Seg")
+                                     Spacer(Modifier.width(8.dp))
+                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
                                  }
                              }
                          }
-                     }
-                 }
+                         if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
+                             Row(
+                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                 horizontalArrangement = Arrangement.SpaceBetween,
+                                 verticalAlignment = Alignment.CenterVertically
+                             ) {
+                                 TextButton(
+                                     onClick = { viewModel.prevChapter() },
+                                     enabled = uiState.currentChapterIndex > 0
+                                 ) {
+                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                                     Spacer(Modifier.width(8.dp))
+                                     Text(stringResource(R.string.prev_chapter))
+                                 }
+                                 
+                                 Text(
+                                     "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
+                                     style = MaterialTheme.typography.bodyMedium
+                                 )
+
+                                 TextButton(
+                                     onClick = { viewModel.nextChapter() },
+                                     enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
+                                 ) {
+                                     Text(stringResource(R.string.next_chapter))
+                                     Spacer(Modifier.width(8.dp))
+                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
+                                 }
+                             }
+                         }
+                    }
+                }
             }
         ) { innerPadding ->
              if (uiState.isLoading) {
@@ -239,13 +293,19 @@ fun DocumentViewerScreen(
                          .padding(innerPadding),
                     factory = { context ->
                         object : WebView(context) {
-                            var targetLine: Int = 1
-                            var lastContentHash: Int = 0
-                            
-                            fun getHorizontalScrollRangePublic(): Int {
-                                return computeHorizontalScrollRange()
-                            }
+                            fun getHorizontalScrollRangePublic(): Int = computeHorizontalScrollRange()
                         }.apply {
+                            addJavascriptInterface(object {
+                                @android.webkit.JavascriptInterface
+                                fun onLineChanged(line: Int) {
+                                    post {
+                                        if (line != currentLine) {
+                                            currentLine = line
+                                        }
+                                    }
+                                }
+                            }, "Android")
+
                             settings.allowFileAccess = true 
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
@@ -253,14 +313,23 @@ fun DocumentViewerScreen(
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     super.onPageFinished(view, url)
-                                    val customView = view as? Object
-                                    val line = try { customView?.javaClass?.getField("targetLine")?.getInt(customView) ?: 1 } catch(e:Exception) { 1 }
+                                    val js = """
+                                        window.onscroll = function() {
+                                            var el = document.elementFromPoint(window.innerWidth/2, 20);
+                                            while (el && (!el.id || !el.id.startsWith('line-'))) {
+                                                el = el.parentElement;
+                                            }
+                                            if (el && el.id.startsWith('line-')) {
+                                                var line = parseInt(el.id.replace('line-', ''));
+                                                Android.onLineChanged(line);
+                                            }
+                                        };
+                                    """.trimIndent()
+                                    view?.evaluateJavascript(js, null)
                                     
-                                    // Restore Scroll
-                                    if (line > 1) {
-                                         // We need totalLines which is in uiState. But here we are in Factory/Client.
-                                         // We can't easily access uiState. 
-                                         // We will rely on the 'update' block to restore scroll after content load.
+                                    if (currentLine > 1) {
+                                        val restoreJs = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                        view?.evaluateJavascript(restoreJs, null)
                                     }
                                 }
                             }
@@ -403,10 +472,9 @@ fun DocumentViewerScreen(
                 viewModel = viewModel,
                 onDismiss = { showFontSettingsDialog = false }
             )
-        }
+         }
     }
 }
-
 @Composable
 fun FontSettingsDialog(
     viewModel: DocumentViewerViewModel,
@@ -436,7 +504,7 @@ fun FontSettingsDialog(
                 Column {
                     Text(stringResource(R.string.font_family))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("serif", "sans-serif", "monospace").forEach { family ->
+                        listOf("serif", "sans-serif").forEach { family ->
                             FilterChip(
                                 selected = fontFamily == family,
                                 onClick = { viewModel.setFontFamily(family) },

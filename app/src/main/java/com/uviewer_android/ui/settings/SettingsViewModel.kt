@@ -49,6 +49,12 @@ class SettingsViewModel(
     val dualPageOrder: StateFlow<Int> = userPreferencesRepository.dualPageOrder
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val persistZoom: StateFlow<Boolean> = userPreferencesRepository.persistZoom
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val upscaleFilter: StateFlow<Boolean> = userPreferencesRepository.upscaleFilter
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun setThemeMode(mode: String) {
         userPreferencesRepository.setThemeMode(mode)
     }
@@ -75,6 +81,14 @@ class SettingsViewModel(
 
     fun setDualPageOrder(order: Int) {
         userPreferencesRepository.setDualPageOrder(order)
+    }
+
+    fun setPersistZoom(persist: Boolean) {
+        userPreferencesRepository.setPersistZoom(persist)
+    }
+
+    fun setUpscaleFilter(upscale: Boolean) {
+        userPreferencesRepository.setUpscaleFilter(upscale)
     }
 
     fun addServer(name: String, url: String, username: String, password: String?) {

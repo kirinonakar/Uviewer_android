@@ -40,12 +40,19 @@
     <!-- Settings: Reading -->
     <string name="section_reading">읽기</string>
     <string name="font_size_fmt">글자 크기: %d sp</string>
-    <string name="font_family">글꼴</string>
-    <string name="select_font_family">글꼴 선택</string>
-    <string name="font_serif">바탕체 (Serif)</string>
-    <string name="font_sans_serif">고딕체 (Sans-serif)</string>
-    <string name="font_monospace">고정폭 (Monospace)</string>
     <string name="font_default">기본값</string>
+    <string name="section_image_viewer">이미지 뷰어</string>
+    <string name="invert_image_control">조작 반전</string>
+    <string name="invert_image_control_desc">이전/다음 이미지 전환 터치 방향 반전</string>
+    <string name="dual_page_order">두 페이지 보기 순서</string>
+    <string name="dual_page_ltr">왼쪽에서 오른쪽</string>
+    <string name="dual_page_rtl">오른쪽에서 왼쪽</string>
+    <string name="select_dual_page_order">페이지 순서 선택</string>
+    <string name="persist_zoom">확률 고정</string>
+    <string name="persist_zoom_desc">이미지가 바뀌어도 확대 수준 유지</string>
+    <string name="upscale_filter">업스케일 필터</string>
+    <string name="upscale_filter_desc">고해상도 이미지에 선명도 필터 적용</string>
+
 
     <!-- Settings: WebDAV -->
     <string name="section_webdav">WebDAV 서버</string>
@@ -65,4 +72,10 @@
     <string name="prev_chapter">이전 장</string>
     <string name="next_chapter">다음 장</string>
     <string name="table_of_contents">목차</string>
+    <string name="select_encoding">인코딩 선택</string>
+    <string name="encoding_auto">자동</string>
+    <string name="encoding_sjis">Shift_JIS (일본어)</string>
+    <string name="encoding_euckr">EUC-KR (한국어)</string>
+    <string name="encoding_johab">조합형 (레거시 한국어)</string>
+    <string name="encoding_w1252">Windows-1252</string>
 </resources>

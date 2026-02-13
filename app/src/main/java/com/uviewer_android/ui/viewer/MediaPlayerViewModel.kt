@@ -14,13 +14,18 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 
 data class MediaPlayerUiState(
     val mediaUrl: String? = null,
+    val currentPath: String? = null,
+    val playlist: List<FileEntry> = emptyList(),
+    val currentIndex: Int = -1,
     val authHeader: Map<String, String> = emptyMap(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val rotation: Float = 0f
 )
 
 class MediaPlayerViewModel(
     application: Application,
+    private val fileRepository: com.uviewer_android.data.repository.FileRepository,
     private val webDavRepository: WebDavRepository,
     private val recentFileDao: RecentFileDao
 ) : AndroidViewModel(application) {
@@ -30,52 +35,86 @@ class MediaPlayerViewModel(
 
     fun prepareMedia(filePath: String, isWebDav: Boolean, serverId: Int?, fileType: FileEntry.FileType) {
         viewModelScope.launch {
-            _uiState.value = MediaPlayerUiState(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, currentPath = filePath)
             try {
-                // Add to Recent
-                try {
-                    val title = filePath.substringAfterLast("/")
-                    recentFileDao.insertRecent(
-                        com.uviewer_android.data.RecentFile(
-                            path = filePath,
-                            title = title,
-                            isWebDav = isWebDav,
-                            serverId = serverId,
-                            type = fileType.name,
-                            lastAccessed = System.currentTimeMillis()
-                        )
-                    )
-                } catch (e: Exception) {
-                    // Ignore
-                }
-
-                if (isWebDav && serverId != null) {
-                    val server = webDavRepository.getServer(serverId)
-                    val authHeaderValue = webDavRepository.getAuthHeader(serverId)
-                    if (server != null && authHeaderValue != null) {
-                        val fullUrl = try {
-                            val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
-                            val builder = baseHttpUrl.newBuilder()
-                            filePath.split("/").filter { it.isNotEmpty() }.forEach {
-                                builder.addPathSegment(it)
-                            }
-                            builder.build().toString()
-                        } catch (e: Exception) {
-                            server.url.trimEnd('/') + filePath
-                        }
-
-                        val headers = mapOf("Authorization" to authHeaderValue)
-                        _uiState.value = MediaPlayerUiState(mediaUrl = fullUrl, authHeader = headers, isLoading = false)
-                    } else {
-                        _uiState.value = MediaPlayerUiState(error = "Can't get WebDAV server details", isLoading = false)
-                    }
+                // List files in same directory for playlist
+                val parentPath = if (isWebDav) {
+                    if (filePath.endsWith("/")) filePath.dropLast(1).substringBeforeLast("/")
+                    else filePath.substringBeforeLast("/")
                 } else {
-                    // For local files, the path is the URL
-                    _uiState.value = MediaPlayerUiState(mediaUrl = filePath, isLoading = false)
+                    java.io.File(filePath).parent ?: "/"
                 }
+
+                val allFiles = if (isWebDav && serverId != null) {
+                    webDavRepository.listFiles(serverId, parentPath)
+                } else {
+                    fileRepository.listFiles(parentPath)
+                }
+                
+                val playlist = allFiles.filter { it.type == FileEntry.FileType.AUDIO || it.type == FileEntry.FileType.VIDEO }
+                val index = playlist.indexOfFirst { it.path == filePath }
+
+                _uiState.value = _uiState.value.copy(
+                    playlist = playlist,
+                    currentIndex = index
+                )
+
+                loadMedia(filePath, isWebDav, serverId)
             } catch (e: Exception) {
-                _uiState.value = MediaPlayerUiState(error = e.message, isLoading = false)
+                _uiState.value = _uiState.value.copy(error = e.message, isLoading = false)
             }
         }
+    }
+
+    fun next(isWebDav: Boolean, serverId: Int?) {
+        val nextIndex = _uiState.value.currentIndex + 1
+        if (nextIndex < _uiState.value.playlist.size) {
+            val nextFile = _uiState.value.playlist[nextIndex]
+            _uiState.value = _uiState.value.copy(currentIndex = nextIndex, isLoading = true)
+            viewModelScope.launch {
+                loadMedia(nextFile.path, isWebDav, serverId)
+            }
+        }
+    }
+
+    fun prev(isWebDav: Boolean, serverId: Int?) {
+        val prevIndex = _uiState.value.currentIndex - 1
+        if (prevIndex >= 0) {
+            val prevFile = _uiState.value.playlist[prevIndex]
+            _uiState.value = _uiState.value.copy(currentIndex = prevIndex, isLoading = true)
+            viewModelScope.launch {
+                loadMedia(prevFile.path, isWebDav, serverId)
+            }
+        }
+    }
+
+    private suspend fun loadMedia(filePath: String, isWebDav: Boolean, serverId: Int?) {
+        if (isWebDav && serverId != null) {
+            val server = webDavRepository.getServer(serverId)
+            val authHeaderValue = webDavRepository.getAuthHeader(serverId)
+            if (server != null && authHeaderValue != null) {
+                val fullUrl = try {
+                    val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
+                    val builder = baseHttpUrl.newBuilder()
+                    filePath.split("/").filter { it.isNotEmpty() }.forEach {
+                        builder.addPathSegment(it)
+                    }
+                    builder.build().toString()
+                } catch (e: Exception) {
+                    server.url.trimEnd('/') + filePath
+                }
+
+                val headers = mapOf("Authorization" to authHeaderValue)
+                _uiState.value = _uiState.value.copy(mediaUrl = fullUrl, authHeader = headers, isLoading = false, currentPath = filePath)
+            } else {
+                _uiState.value = _uiState.value.copy(error = "Can't get WebDAV server details", isLoading = false)
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(mediaUrl = filePath, isLoading = false, currentPath = filePath)
+        }
+    }
+
+    fun rotate() {
+        _uiState.value = _uiState.value.copy(rotation = (_uiState.value.rotation + 90f) % 360f)
     }
 }

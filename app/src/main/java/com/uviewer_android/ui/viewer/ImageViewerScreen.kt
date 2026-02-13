@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Bookmark
-import androidx.compose.material.icons.filled.ViewAgenda
-import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -98,6 +96,8 @@ fun ImageViewerScreen(
         // But pagerState.scrollToPage must be called in LaunchedEffect.
         
         val scales = remember { mutableStateMapOf<Int, Float>() }
+        // Hoist global scale for "maintain zoom" feature
+        var globalScale by remember { mutableFloatStateOf(1f) }
         
         var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
         
@@ -186,8 +186,11 @@ fun ImageViewerScreen(
                             isWebDav = uiState.isContentLoadedFromWebDav,
                             authHeader = uiState.authHeader,
                             serverUrl = uiState.serverUrl,
-                            scale = scales.getOrPut(page) { 1f },
-                            onScaleChanged = { newScale -> scales[page] = newScale }
+                            scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
+                            upscaleFilter = uiState.upscaleFilter,
+                            onScaleChanged = { newScale -> 
+                                if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                            }
                         )
                     } else if (firstImage != null) {
                          ZoomableImage(
@@ -195,8 +198,11 @@ fun ImageViewerScreen(
                             isWebDav = uiState.isContentLoadedFromWebDav,
                             authHeader = uiState.authHeader,
                             serverUrl = uiState.serverUrl,
-                            scale = scales.getOrPut(page) { 1f },
-                            onScaleChanged = { newScale -> scales[page] = newScale }
+                            scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
+                            upscaleFilter = uiState.upscaleFilter,
+                            onScaleChanged = { newScale -> 
+                                if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                            }
                         )
                     }
                 }
@@ -218,6 +224,8 @@ fun ImageViewerScreen(
                     } else ""
                 }
                 
+                var showSettingsDialog by remember { mutableStateOf(false) }
+
                 TopAppBar(
                     title = { Text(title, color = Color.White, maxLines = 1) }, 
                     navigationIcon = {
@@ -239,12 +247,52 @@ fun ImageViewerScreen(
                                 tint = Color.White
                             )
                         }
+                        IconButton(onClick = { showSettingsDialog = true }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                        }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = Color.Black.copy(alpha = 0.5f)
                     ),
                     modifier = Modifier.align(Alignment.TopCenter)
                 )
+
+                if (showSettingsDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showSettingsDialog = false },
+                        title = { Text(stringResource(R.string.section_image_viewer)) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = uiState.persistZoom, onCheckedChange = { viewModel.setPersistZoom(it) })
+                                    Text(stringResource(R.string.persist_zoom))
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = uiState.upscaleFilter, onCheckedChange = { viewModel.setUpscaleFilter(it) })
+                                    Text(stringResource(R.string.upscale_filter))
+                                }
+                                Column {
+                                    Text(stringResource(R.string.dual_page_order))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        FilterChip(
+                                            selected = dualPageOrder == 0,
+                                            onClick = { viewModel.setDualPageOrder(0) },
+                                            label = { Text(stringResource(R.string.dual_page_ltr)) }
+                                        )
+                                        FilterChip(
+                                            selected = dualPageOrder == 1,
+                                            onClick = { viewModel.setDualPageOrder(1) },
+                                            label = { Text(stringResource(R.string.dual_page_rtl)) }
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            Button(onClick = { showSettingsDialog = false }) { Text("Close") }
+                        }
+                    )
+                }
             }
         }
     }
@@ -257,6 +305,7 @@ fun ZoomableImage(
     authHeader: String?,
     serverUrl: String?,
     scale: Float,
+    upscaleFilter: Boolean,
     onScaleChanged: (Float) -> Unit,
     secondImageUrl: String? = null // For dual page
 ) {
@@ -294,7 +343,7 @@ fun ZoomableImage(
             
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
-                return if (isWebDav && serverUrl != null) {
+                val loaderBuilder = if (isWebDav && serverUrl != null) {
                    val fullUrl = try {
                         val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
                         val builder = baseHttpUrl.newBuilder()
@@ -313,20 +362,33 @@ fun ZoomableImage(
                                 addHeader("Authorization", authHeader)
                             }
                         }
-                        .crossfade(true)
-                        .build()
                 } else {
                     ImageRequest.Builder(context)
                         .data(java.io.File(url))
-                        .crossfade(true)
-                        .build()
                 }
+                
+                return loaderBuilder
+                    .crossfade(true)
+                    .build()
             }
+            
+            // Custom ImageLoader for GIF/WebP support
+            val imageLoader = coil.ImageLoader.Builder(context)
+                .components {
+                    if (android.os.Build.VERSION.SDK_INT >= 28) {
+                        add(coil.decode.ImageDecoderDecoder.Factory())
+                    } else {
+                        add(coil.decode.GifDecoder.Factory())
+                    }
+                }
+                .build()
 
             AsyncImage(
                 model = buildRequest(imageUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
+                imageLoader = imageLoader,
+                filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
@@ -343,6 +405,7 @@ fun ZoomableDualImage(
     authHeader: String?,
     serverUrl: String?,
     scale: Float,
+    upscaleFilter: Boolean,
     onScaleChanged: (Float) -> Unit
 ) {
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -413,6 +476,8 @@ fun ZoomableDualImage(
                     model = buildRequest(firstImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    alignment = Alignment.CenterEnd,
+                    filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -426,6 +491,8 @@ fun ZoomableDualImage(
                     model = buildRequest(secondImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    alignment = Alignment.CenterStart,
+                    filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()

@@ -21,7 +21,9 @@ data class ImageViewerUiState(
     val authHeader: String? = null,
     val serverUrl: String? = null,
     val isContentLoadedFromWebDav: Boolean = false,
-    val containerName: String? = null
+    val containerName: String? = null,
+    val persistZoom: Boolean = false,
+    val upscaleFilter: Boolean = false
 )
 
     class ImageViewerViewModel(
@@ -134,21 +136,46 @@ data class ImageViewerUiState(
                         webDavRepository.getServer(serverId)?.url
                     } else null
 
-                    _uiState.value = _uiState.value.copy(
-                        images = images,
-                        initialIndex = if (index != -1) index else 0,
-                        isLoading = false,
-                        authHeader = auth,
-                        serverUrl = serverUrl,
-                        isContentLoadedFromWebDav = contentIsWebDav,
-                        containerName = if (isZip) File(filePath).name else null
-                    )
+                _uiState.value = _uiState.value.copy(
+                    images = images,
+                    initialIndex = if (index != -1) index else 0,
+                    isLoading = false,
+                    authHeader = auth,
+                    serverUrl = serverUrl,
+                    isContentLoadedFromWebDav = contentIsWebDav,
+                    containerName = if (isZip) File(filePath).name else null,
+                    persistZoom = userPreferencesRepository.persistZoom.value,
+                    upscaleFilter = userPreferencesRepository.upscaleFilter.value
+                )
 
-                } catch (e: Exception) {
-                    _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                // Observe preferences
+                viewModelScope.launch {
+                    userPreferencesRepository.persistZoom.collect { 
+                        _uiState.value = _uiState.value.copy(persistZoom = it)
+                    }
                 }
+                viewModelScope.launch {
+                    userPreferencesRepository.upscaleFilter.collect {
+                        _uiState.value = _uiState.value.copy(upscaleFilter = it)
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
         }
+    }
+
+    fun setPersistZoom(persist: Boolean) {
+        userPreferencesRepository.setPersistZoom(persist)
+    }
+
+    fun setUpscaleFilter(upscale: Boolean) {
+        userPreferencesRepository.setUpscaleFilter(upscale)
+    }
+
+    fun setDualPageOrder(order: Int) {
+        userPreferencesRepository.setDualPageOrder(order)
+    }
 
         fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String) {
             viewModelScope.launch {

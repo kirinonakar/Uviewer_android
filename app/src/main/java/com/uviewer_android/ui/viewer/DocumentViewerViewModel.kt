@@ -33,7 +33,8 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
         val currentLine: Int = 1,
         val fileName: String? = null,
         val currentChunkIndex: Int = 0,
-        val hasMoreContent: Boolean = false
+        val hasMoreContent: Boolean = false,
+        val manualEncoding: String? = null
     )
 
     class DocumentViewerViewModel(
@@ -145,15 +146,37 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
                         
                         loadChapter(0)
 
+                    } else if (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv")) {
+                         val rawContent = if (isWebDav && serverId != null) {
+                            val bytes = webDavRepository.readFileContent(serverId, filePath)
+                            decodeBytes(bytes, _uiState.value.manualEncoding)
+                        } else {
+                            fileRepository.readFileContent(filePath, _uiState.value.manualEncoding)
+                        }
+                        rawContentCache = rawContent
+                        
+                        val htmlTable = fileRepository.csvToHtml(rawContent)
+                        val (bgColor, textColor) = getColors()
+                        val processedContent = AozoraParser.wrapInHtml(htmlTable, false, _uiState.value.fontFamily, _uiState.value.fontSize, bgColor, textColor)
+                        
+                        _uiState.value = _uiState.value.copy(
+                            content = processedContent,
+                            isLoading = false,
+                            totalLines = rawContent.lines().size,
+                            currentLine = 1,
+                            fileName = File(filePath).name,
+                            epubChapters = emptyList()
+                        )
                     } else {
                         // Text Logic with Chunking
-                        if (type == FileEntry.FileType.TEXT && !isWebDav) { // Local Text Only for Chunking for now
+                        if (type == FileEntry.FileType.TEXT && !isWebDav && _uiState.value.manualEncoding == null) { // Local Text Only for Chunking for now
                             loadTextChunk(0)
                         } else {
                             val rawContent = if (isWebDav && serverId != null) {
-                                webDavRepository.readFileContent(serverId, filePath)
+                                val bytes = webDavRepository.readFileContent(serverId, filePath)
+                                decodeBytes(bytes, _uiState.value.manualEncoding)
                             } else {
-                                fileRepository.readFileContent(filePath)
+                                fileRepository.readFileContent(filePath, _uiState.value.manualEncoding)
                             }
                             
                             rawContentCache = rawContent
@@ -168,7 +191,7 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
         }
         
         private suspend fun loadTextChunk(chunkIndex: Int) {
-             val (content, hasMore) = fileRepository.readLinesChunk(currentFilePath, chunkIndex * CHUNK_SIZE, CHUNK_SIZE)
+             val (content, hasMore) = fileRepository.readLinesChunk(currentFilePath, chunkIndex * CHUNK_SIZE, CHUNK_SIZE, _uiState.value.manualEncoding)
              rawContentCache = content
              val processedContent = AozoraParser.wrapInHtml(
                  AozoraParser.parse(content), 
@@ -208,25 +231,49 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
             }
         }
 
+        private fun getColors(): Pair<String, String> {
+            return when (_uiState.value.docBackgroundColor) {
+                UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+                UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
+                else -> "#ffffff" to "#000000"
+            }
+        }
+
         private fun processContent(rawContent: String, type: FileEntry.FileType) {
              val processedContent = when (type) {
                 FileEntry.FileType.TEXT -> {
                     val htmlBody = AozoraParser.parse(rawContent)
-                    AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, _uiState.value.fontFamily, _uiState.value.fontSize, _uiState.value.docBackgroundColor)
+                    val (bgColor, textColor) = getColors()
+                    AozoraParser.wrapInHtml(htmlBody, _uiState.value.isVertical, _uiState.value.fontFamily, _uiState.value.fontSize, bgColor, textColor)
                 }
-                FileEntry.FileType.HTML -> rawContent
+                FileEntry.FileType.HTML -> {
+                    // Inject line numbers for HTML if missing
+                    val lines = rawContent.lines()
+                    val htmlBody = lines.mapIndexed { index, line ->
+                        if (!line.contains("id=\"line-")) "<div id=\"line-${index + 1}\">$line</div>" else line
+                    }.joinToString("\n")
+                    htmlBody
+                }
                 else -> "Unsupported format"
             }
+
+            // Extract TOC for Aozora
+            val aozoraTitles = if (type == FileEntry.FileType.TEXT) {
+                AozoraParser.extractTitles(rawContent).map { (title, line) ->
+                    com.uviewer_android.data.model.EpubSpineItem(id = "line-$line", title = title, href = "line-$line")
+                }
+            } else emptyList()
 
             _uiState.value = _uiState.value.copy(
                 content = processedContent,
                 url = null,
                 isLoading = false,
-                totalLines = if (type == FileEntry.FileType.TEXT) rawContent.lines().size else 0,
+                totalLines = rawContent.lines().size,
                 currentLine = 1,
                 hasMoreContent = false,
                 currentChunkIndex = 0,
-                fileName = File(currentFilePath).name
+                fileName = File(currentFilePath).name,
+                epubChapters = if (type == FileEntry.FileType.TEXT) aozoraTitles else _uiState.value.epubChapters
             )
         }
 
@@ -301,6 +348,24 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
         fun setDocBackgroundColor(color: String) {
             viewModelScope.launch {
                 userPreferencesRepository.setDocBackgroundColor(color)
+            }
+        }
+
+        fun setManualEncoding(encoding: String?, isWebDav: Boolean, serverId: Int?) {
+            _uiState.value = _uiState.value.copy(manualEncoding = encoding)
+            // Reload
+            loadDocument(currentFilePath, currentFileType ?: FileEntry.FileType.TEXT, isWebDav, serverId)
+        }
+
+        private fun decodeBytes(bytes: ByteArray, manualEncoding: String?): String {
+            return if (manualEncoding != null) {
+                try {
+                    String(bytes, java.nio.charset.Charset.forName(manualEncoding))
+                } catch (e: Exception) {
+                    String(bytes, com.uviewer_android.data.utils.EncodingDetector.detectEncoding(bytes))
+                }
+            } else {
+                String(bytes, com.uviewer_android.data.utils.EncodingDetector.detectEncoding(bytes))
             }
         }
     }

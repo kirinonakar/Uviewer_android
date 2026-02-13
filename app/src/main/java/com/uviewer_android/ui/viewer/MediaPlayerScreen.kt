@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material3.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -89,13 +92,27 @@ fun MediaPlayerScreen(
     }
 
     Scaffold(
+        containerColor = Color.Black,
         topBar = {
             if (!isFullScreen) {
                 TopAppBar(
-                    title = { Text(filePath.substringAfterLast('/'), color = Color.White) },
+                    title = { Text(uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.prev(isWebDav, serverId) }) {
+                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+                        }
+                        IconButton(onClick = { viewModel.next(isWebDav, serverId) }) {
+                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
+                        }
+                        if (fileType == FileEntry.FileType.VIDEO) {
+                            IconButton(onClick = { viewModel.rotate() }) {
+                                Icon(Icons.Default.RotateRight, contentDescription = "Rotate", tint = Color.White)
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
@@ -106,6 +123,7 @@ fun MediaPlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.Black)
                 .padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
@@ -137,11 +155,23 @@ fun MediaPlayerScreen(
                     },
                     update = { playerView ->
                         playerView.player = exoPlayer
-                        if (fileType == FileEntry.FileType.AUDIO) {
-                            playerView.showController()
-                        }
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(rotationZ = uiState.rotation)
+                        .padding(if (uiState.rotation % 180f != 0f) 50.dp else 0.dp) // Avoid cropping during rotation
+                )
+                
+                // Overlay for center tap
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 100.dp, vertical = 100.dp)
+                        .clickable(
+                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                            indication = null,
+                            onClick = onToggleFullScreen
+                        )
                 )
             }
         }

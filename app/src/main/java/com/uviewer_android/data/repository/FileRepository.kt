@@ -1,6 +1,7 @@
 package com.uviewer_android.data.repository
 
 import com.uviewer_android.data.model.FileEntry
+import com.uviewer_android.data.utils.EncodingDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -23,7 +24,7 @@ class FileRepository {
         val type = when {
             file.isDirectory -> FileEntry.FileType.FOLDER
             extension in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> FileEntry.FileType.IMAGE
-            extension in listOf("txt", "md", "aozora") -> FileEntry.FileType.TEXT
+            extension in listOf("txt", "md", "aozora", "csv") -> FileEntry.FileType.TEXT
             extension in listOf("html", "htm", "xhtml") -> FileEntry.FileType.HTML
             extension == "pdf" -> FileEntry.FileType.PDF
             extension == "epub" -> FileEntry.FileType.EPUB
@@ -43,13 +44,22 @@ class FileRepository {
         )
     }
 
-    suspend fun readFileContent(path: String): String {
+    companion object {
+        fun formatFileSize(size: Long): String {
+            if (size <= 0) return "0 B"
+            val units = arrayOf("B", "KB", "MB", "GB", "TB")
+            val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
+            return java.text.DecimalFormat("#,##0.#").format(size / Math.pow(1024.0, digitGroups.toDouble())) + " " + units[digitGroups]
+        }
+    }
+
+    suspend fun readFileContent(path: String, manualCharset: String? = null): String {
         return withContext(Dispatchers.IO) {
             val file = File(path)
             if (!file.exists()) throw java.io.FileNotFoundException("File not found: $path")
             
-            // Limit to 2MB to prevent OOM/Performance issues
-            val limit = 2 * 1024 * 1024L
+            // Limit to 4MB for text
+            val limit = 4 * 1024 * 1024L
             val length = file.length()
             val bytes = if (length > limit) {
                 val buffer = ByteArray(limit.toInt())
@@ -59,54 +69,33 @@ class FileRepository {
                 file.readBytes()
             }
             
-            // 1. Detect if it's UTF-8 with BOM or UTF-16 with BOM
-            if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) {
-                return@withContext String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-            }
-            if (bytes.size >= 2) {
-                if (bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) {
-                    return@withContext String(bytes, java.nio.charset.StandardCharsets.UTF_16BE)
-                }
-                if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) {
-                    return@withContext String(bytes, java.nio.charset.StandardCharsets.UTF_16LE)
-                }
+            if (manualCharset != null) {
+                return@withContext String(bytes, java.nio.charset.Charset.forName(manualCharset))
             }
 
-            // 2. Try strict UTF-8
-            if (tryDecode(bytes, java.nio.charset.StandardCharsets.UTF_8)) {
-                return@withContext String(bytes, java.nio.charset.StandardCharsets.UTF_8)
-            }
-
-            // 3. Heuristic / Priority detection for CJK
-            // User specifically asked for SJIS, EUC-KR, JOJAB support.
-            
-            // Try EUC-KR
-            if (tryDecode(bytes, java.nio.charset.Charset.forName("EUC-KR"))) {
-                return@withContext String(bytes, java.nio.charset.Charset.forName("EUC-KR"))
-            }
-
-            // Try Shift_JIS
-            if (tryDecode(bytes, java.nio.charset.Charset.forName("Shift_JIS"))) {
-                return@withContext String(bytes, java.nio.charset.Charset.forName("Shift_JIS"))
-            }
-
-            // Try Johab (x-johab or ksc5601-1992) - common for legacy Korean
-            try {
-                if (tryDecode(bytes, java.nio.charset.Charset.forName("x-Johab"))) {
-                    return@withContext String(bytes, java.nio.charset.Charset.forName("x-Johab"))
-                }
-            } catch (e: Exception) {
-                // Charset might not be supported on this Android version or JVM
-            }
-            
-             // Try Windows-1252 (Western) as last resort for 8-bit
-             if (tryDecode(bytes, java.nio.charset.Charset.forName("windows-1252"))) {
-                return@withContext String(bytes, java.nio.charset.Charset.forName("windows-1252"))
-            }
-
-            // Fallback
-            return@withContext String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+            // Use improved EncodingDetector
+            val charset = EncodingDetector.detectEncoding(bytes)
+            return@withContext String(bytes, charset)
         }
+    }
+
+    fun csvToHtml(csvContent: String): String {
+        val lines = csvContent.lines().filter { it.isNotBlank() }
+        if (lines.isEmpty()) return ""
+        
+        val sb = StringBuilder()
+        sb.append("<table border='1' style='border-collapse: collapse; width: 100%;'>")
+        lines.forEach { line ->
+            sb.append("<tr>")
+            // Simple split, doesn't handle escaped commas in quotes perfectly but good enough for now
+            val cols = line.split(",")
+            cols.forEach { col ->
+                sb.append("<td style='padding: 8px;'>").append(col.trim()).append("</td>")
+            }
+            sb.append("</tr>")
+        }
+        sb.append("</table>")
+        return sb.toString()
     }
 
     suspend fun getFileCharset(path: String): java.nio.charset.Charset = withContext(Dispatchers.IO) {
@@ -114,28 +103,10 @@ class FileRepository {
         if (!file.exists()) return@withContext java.nio.charset.StandardCharsets.UTF_8
         
         val buffer = ByteArray(4096)
-        java.io.FileInputStream(file).use { it.read(buffer) }
-        val bytes = buffer
+        val read = java.io.FileInputStream(file).use { it.read(buffer) }
+        val bytes = if (read < 4096) buffer.copyOf(read) else buffer
         
-        // 1. BOM
-        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte()) return@withContext java.nio.charset.StandardCharsets.UTF_8
-        if (bytes.size >= 2) {
-            if (bytes[0] == 0xFE.toByte() && bytes[1] == 0xFF.toByte()) return@withContext java.nio.charset.StandardCharsets.UTF_16BE
-            if (bytes[0] == 0xFF.toByte() && bytes[1] == 0xFE.toByte()) return@withContext java.nio.charset.StandardCharsets.UTF_16LE
-        }
-        
-        // 2. Strict UTF-8
-        if (tryDecode(bytes, java.nio.charset.StandardCharsets.UTF_8)) return@withContext java.nio.charset.StandardCharsets.UTF_8
-        
-        // 3. Priorities
-         if (tryDecode(bytes, java.nio.charset.Charset.forName("EUC-KR"))) return@withContext java.nio.charset.Charset.forName("EUC-KR")
-         if (tryDecode(bytes, java.nio.charset.Charset.forName("Shift_JIS"))) return@withContext java.nio.charset.Charset.forName("Shift_JIS")
-         try {
-             if (tryDecode(bytes, java.nio.charset.Charset.forName("x-Johab"))) return@withContext java.nio.charset.Charset.forName("x-Johab")
-         } catch (e: Exception) {}
-         if (tryDecode(bytes, java.nio.charset.Charset.forName("windows-1252"))) return@withContext java.nio.charset.Charset.forName("windows-1252")
-         
-         return@withContext java.nio.charset.StandardCharsets.UTF_8
+        return@withContext EncodingDetector.detectEncoding(bytes)
     }
 
     suspend fun readFileChunk(path: String, offset: Long, size: Int): String {
@@ -144,11 +115,15 @@ class FileRepository {
          return ""
     }
 
-    suspend fun readLinesChunk(path: String, startLine: Int, count: Int): Pair<String, Boolean> = withContext(Dispatchers.IO) {
+    suspend fun readLinesChunk(path: String, startLine: Int, count: Int, manualCharset: String? = null): Pair<String, Boolean> = withContext(Dispatchers.IO) {
         val file = File(path)
         if (!file.exists()) return@withContext "" to false
         
-        val charset = getFileCharset(path)
+        val charset = if (manualCharset != null) {
+            try { java.nio.charset.Charset.forName(manualCharset) } catch (e: Exception) { getFileCharset(path) }
+        } else {
+            getFileCharset(path)
+        }
         val sb = StringBuilder()
         var linesRead = 0
         var hasMore = false

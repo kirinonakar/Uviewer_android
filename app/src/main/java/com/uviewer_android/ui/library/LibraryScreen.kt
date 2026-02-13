@@ -43,21 +43,20 @@ fun LibraryScreen(
     }
 
     // Handle tab switching
-    LaunchedEffect(selectedTab) {
-        // Only load root if the current state doesn't match the tab (to avoid overwriting initial navigation)
-        // Check if we need to switch context
-        val isWebDav = selectedTab == 1
-        if (uiState.isWebDavTab != isWebDav) {
-             viewModel.loadInitialPath(isWebDav)
-        }
-    }
+    // LaunchedEffect(selectedTab) { // Removed as it was causing redundant loads and issues
+    //     val isWebDav = selectedTab == 1
+    //     if (uiState.isWebDavTab != isWebDav) {
+    //          viewModel.loadInitialPath(isWebDav)
+    //     }
+    // }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(uiState.currentPath) },
                 navigationIcon = {
-                    if (uiState.currentPath != "/") {
+                    val rootPath = android.os.Environment.getExternalStorageDirectory().absolutePath
+                    if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
                         IconButton(onClick = { viewModel.navigateUp() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                         }
@@ -98,14 +97,23 @@ fun LibraryScreen(
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
+                    onClick = { 
+                        if (selectedTab != 0) {
+                            selectedTab = 0
+                            viewModel.loadInitialPath(false)
+                        }
+                    },
                     text = { Text(stringResource(R.string.local)) }
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    text = { Text(stringResource(R.string.remote))
-                    }
+                    onClick = { 
+                        if (selectedTab != 1) {
+                            selectedTab = 1
+                            viewModel.loadInitialPath(true)
+                        }
+                    },
+                    text = { Text(stringResource(R.string.remote)) }
                 )
             }
 
@@ -151,10 +159,20 @@ fun FileItemRow(
                 contentDescription = null
             )
         },
-        headlineContent = { Text(file.name) },
+        headlineContent = { 
+            Text(
+                file.name, 
+                maxLines = 2, 
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall
+            ) 
+        },
         supportingContent = {
             if (!file.isDirectory) {
-                Text(file.size.toString()) // Format size properly later
+                Text(
+                    com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
+                    style = MaterialTheme.typography.labelSmall
+                )
             }
         },
         trailingContent = {

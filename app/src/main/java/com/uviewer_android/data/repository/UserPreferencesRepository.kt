@@ -44,6 +44,16 @@ class UserPreferencesRepository(context: Context) {
     )
     val dualPageOrder: StateFlow<Int> = _dualPageOrder.asStateFlow()
 
+    private val _persistZoom = MutableStateFlow(
+        sharedPreferences.getBoolean("persist_zoom", false)
+    )
+    val persistZoom: StateFlow<Boolean> = _persistZoom.asStateFlow()
+
+    private val _upscaleFilter = MutableStateFlow(
+        sharedPreferences.getBoolean("upscale_filter", false)
+    )
+    val upscaleFilter: StateFlow<Boolean> = _upscaleFilter.asStateFlow()
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -91,6 +101,20 @@ class UserPreferencesRepository(context: Context) {
             putInt("dual_page_order", order)
         }
         _dualPageOrder.value = order
+    }
+
+    fun setPersistZoom(persist: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("persist_zoom", persist)
+        }
+        _persistZoom.value = persist
+    }
+
+    fun setUpscaleFilter(upscale: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("upscale_filter", upscale)
+        }
+        _upscaleFilter.value = upscale
     }
 
     companion object {
