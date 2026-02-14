@@ -27,7 +27,15 @@ class WebDavRepository(
 
         webDavFiles.mapNotNull { file ->
             // file.href can be a full URL (https://...) or an absolute path (/...) or even a relative path (file.txt)
-            val decodedHref = java.net.URLDecoder.decode(file.href, "UTF-8")
+            var decodedPath = file.href
+            while (decodedPath.contains("%")) {
+                try {
+                    val next = java.net.URLDecoder.decode(decodedPath, "UTF-8")
+                    if (next == decodedPath) break
+                    decodedPath = next
+                } catch (e: Exception) { break }
+            }
+            val decodedHref = decodedPath
             
             // Extract path part if it's a full URL
             var cleanPath = if (decodedHref.startsWith("http://", true) || decodedHref.startsWith("https://", true)) {

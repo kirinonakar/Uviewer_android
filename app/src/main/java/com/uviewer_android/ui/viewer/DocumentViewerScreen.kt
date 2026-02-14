@@ -11,7 +11,6 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.RotateRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.*
@@ -24,7 +23,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -130,9 +128,10 @@ fun DocumentViewerScreen(
                         onClick = {
                             if (item.href.startsWith("line-")) {
                                 val line = item.href.replace("line-", "").toIntOrNull() ?: 1
+                                viewModel.jumpToLine(line)
                                 currentLine = line
                                 if (webViewRef != null) {
-                                    val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                    val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant' });"
                                     webViewRef?.evaluateJavascript(js, null)
                                 }
                             } else {
@@ -152,7 +151,11 @@ fun DocumentViewerScreen(
             topBar = {
                 if (!isFullScreen) {
                     TopAppBar(
-                        title = { Text(uiState.fileName ?: stringResource(R.string.title_document_viewer), maxLines = 1) },
+                        title = { 
+                            if (!uiState.isLoading) {
+                                Text(uiState.fileName ?: stringResource(R.string.title_document_viewer), maxLines = 1) 
+                            }
+                        },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
                                 Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
@@ -179,9 +182,7 @@ fun DocumentViewerScreen(
                                     Text("G", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
                                 }
                             }
-                            IconButton(onClick = { viewModel.toggleVerticalMode() }) {
-                                Icon(Icons.Default.RotateRight, contentDescription = stringResource(R.string.toggle_vertical))
-                            }
+
                             IconButton(onClick = { showFontSettingsDialog = true }) {
                                 Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
                             }
@@ -231,12 +232,16 @@ fun DocumentViewerScreen(
                 if (!isFullScreen) {
                     BottomAppBar {
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                uiState.fileName ?: "", 
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                            )
+                            if (!uiState.isLoading) {
+                                Text(
+                                    uiState.fileName ?: "", 
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
+                            }
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -246,6 +251,18 @@ fun DocumentViewerScreen(
                                 // Percentage
                                 Text("${if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines) else 0}%", style = MaterialTheme.typography.bodySmall)
                             }
+                            
+                            // Chunk Navigation for Large Files
+                            if (uiState.hasMoreContent || uiState.currentChunkIndex > 0) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    TextButton(onClick = { viewModel.prevChunk() }, enabled = uiState.currentChunkIndex > 0) { Text("Prev Seg") }
+                                    TextButton(onClick = { viewModel.nextChunk() }, enabled = uiState.hasMoreContent) { Text("Next Seg") }
+                                }
+                            }
+                            
                             Slider(
                                  value = currentLine.toFloat(),
                                  onValueChange = { 
@@ -255,9 +272,12 @@ fun DocumentViewerScreen(
                                          webViewRef?.evaluateJavascript(js, null)
                                      }
                                  },
+                                 onValueChangeFinished = {
+                                     viewModel.jumpToLine(currentLine)
+                                 },
                                  valueRange = 1f..uiState.totalLines.toFloat().coerceAtLeast(1f),
                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                             )
+                            )
                          }
  
                          // Text Chunk Navigation
@@ -360,7 +380,7 @@ fun DocumentViewerScreen(
                                         }
                                     }
                                 }, "Android")
- 
+
                                 settings.allowFileAccess = true 
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
@@ -395,7 +415,7 @@ fun DocumentViewerScreen(
                                             };
                                         """.trimIndent()
                                         
-                                        val finalJs = if (uiState.isVertical) jsVertical else js 
+                                        val finalJs = js 
                                         view?.evaluateJavascript(finalJs, null)
                                         
                                         if (currentLine > 1) {
@@ -411,27 +431,8 @@ fun DocumentViewerScreen(
                                         val width = width
                                         val x = e.x
                                         // Custom instant scrolling via JS to avoid animation
-                                        if (uiState.isVertical) {
-                                            // Vertical Text (Horizontal Scroll, RTL)
-                                            // Left side = Next (Scroll Negative/Left)
-                                            // Right side = Prev (Scroll Positive/Right)
-                                            if (x < width / 3) {
-                                                // Next Page Logic
-                                                if (canScrollHorizontally(-1)) {
-                                                    webViewRef?.evaluateJavascript("window.scrollBy({ left: -window.innerWidth, behavior: 'instant' });", null)
-                                                } else {
-                                                    viewModel.nextChapter()
-                                                }
-                                            } else if (x > width * 2 / 3) {
-                                                // Prev Page Logic
-                                                if (canScrollHorizontally(1)) {
-                                                    webViewRef?.evaluateJavascript("window.scrollBy({ left: window.innerWidth, behavior: 'instant' });", null)
-                                                } else {
-                                                    viewModel.prevChapter()
-                                                }
-                                            } else {
-                                                onToggleFullScreen()
-                                            }
+                                        if (false) {
+                                            // Vertical Text (Removed)
                                         } else {
                                             // Standard Text (Vertical Scroll)
                                             // Left side = Prev
@@ -467,33 +468,15 @@ fun DocumentViewerScreen(
                                     false
                                 }
                                 
-                                setOnScrollChangeListener { _, scrollX, scrollY, _, _ ->
-                                     // Only use this for very rough estimation or if JS fails? 
-                                     // User reported "Line increases by 1 pixel", which is likely due to this calculation.
-                                     // Disabling local calculation to rely on JS for line number accuracy.
+                                setOnScrollChangeListener { _, _, _, _, _ ->
+                                     // JS handle scroll
                                 }
-                                     if (uiState.isVertical) {
-                                         val range = getHorizontalScrollRangePublic()
-                                         val maxScroll = (range - width).coerceAtLeast(1)
-                                         val rawProgress = 1.0f - (scrollX.toFloat() / maxScroll)
-                                         val p = rawProgress.coerceIn(0f, 1f)
-                                         val line = (p * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
-                                         if (kotlin.math.abs(line - currentLine) > 0) {
-                                             currentLine = line
-                                         }
-                                     } else {
-                                         if (uiState.totalLines > 0 && contentHeight > 0) {
-                                              val progress = scrollY.toFloat() / (contentHeight - height).coerceAtLeast(1)
-                                              val line = (progress * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
-                                              currentLine = line
-                                         }
-                                     }
-                             }
-                         },
-                         update = { webView ->
-                             val customWebView = webView as? WebView // It's already a WebView
-                             val currentHash = uiState.content.hashCode()
-                             val previousHash = (webView.tag as? Int) ?: 0
+                            }
+                        },
+                        update = { webView ->
+                            val wv = webView as android.webkit.WebView
+                            val currentHash = uiState.content.hashCode()
+                            val previousHash = (wv.tag as? Int) ?: 0
                              
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
                                   UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
@@ -503,51 +486,53 @@ fun DocumentViewerScreen(
                                   val style = """
                                   <style>
                                       html, body {
-                                          height: 100%;
                                           margin: 0;
                                           padding: 0;
-                                          overflow: auto; /* Allow scrolling in direction needed */
-                                      }
-                                      body {
                                           background-color: $bgColor !important;
                                           color: $textColor !important;
+                                          writing-mode: horizontal-tb !important;
+                                          -webkit-writing-mode: horizontal-tb !important;
+                                      }
+                                      body {
                                           font-family: ${uiState.fontFamily} !important;
                                           font-size: ${uiState.fontSize}px !important;
                                           line-height: 1.6 !important;
                                           padding: 1.5em !important; 
                                           box-sizing: border-box !important;
+                                          word-wrap: break-word !important;
+                                          overflow-wrap: break-word !important;
                                           /* Ensure safe area for cutouts if needed */
                                           padding-top: env(safe-area-inset-top, 1.5em);
-                                          padding-bottom: env(safe-area-inset-bottom, 1.5em);
+                                          padding-bottom: calc(env(safe-area-inset-bottom, 1.5em) + 50vh); /* Allow scrolling past end */
                                           padding-left: env(safe-area-inset-left, 1.5em);
                                           padding-right: env(safe-area-inset-right, 1.5em);
                                       }
                                       </style>
                                   """
-                                  val contentWithStyle = "$style${uiState.content}"
-                                  val jsWritingMode = "document.body.style.writingMode = '${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"}';"
+                                  // Inject style intelligently
+                                  val contentWithStyle = if (uiState.content.contains("</head>")) {
+                                      uiState.content.replace("</head>", "$style</head>")
+                                  } else {
+                                      "$style${uiState.content}"
+                                  }
       
                                   if (contentWithStyle.hashCode() != previousHash) {
-                                      webView.tag = contentWithStyle.hashCode()
+                                      wv.tag = contentWithStyle.hashCode()
                                       if (uiState.url != null) {
-                                          webView.loadUrl(uiState.url!!)
+                                          wv.loadUrl(uiState.url!!)
                                       } else {
                                           // Use provided baseUrl or fallback to parent directory of filePath
                                           val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
-                                          webView.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
+                                          wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
                                       }
                                       
                                       // Restore Scroll after load
-                                      webView.postDelayed({
-                                          webView.evaluateJavascript(jsWritingMode, null)
-                                          // Restore position
+                                      wv.post {
                                           if (currentLine > 1 && uiState.totalLines > 0) {
                                               val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                              webView.evaluateJavascript(js, null)
+                                              wv.evaluateJavascript(js, null)
                                           }
-                                      }, 500) 
-                                  } else {
-                                      webView.evaluateJavascript(jsWritingMode, null)
+                                      }
                                   }
                              }
                           )
@@ -593,11 +578,7 @@ fun DocumentViewerScreen(
                      TextButton(onClick = {  
                            val line = targetLineStr.toIntOrNull()
                            if (line != null) {
-                               currentLine = line.coerceIn(1, uiState.totalLines)
-                               if (uiState.totalLines > 0 && webViewRef != null) {
-                                   val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                   webViewRef?.evaluateJavascript(js, null)
-                               }
+                                viewModel.jumpToLine(line)
                                showGoToLineDialog = false 
                            }
                      }) { Text("Go") }

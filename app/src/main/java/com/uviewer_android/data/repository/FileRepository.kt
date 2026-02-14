@@ -23,7 +23,7 @@ class FileRepository {
         val extension = file.extension.lowercase()
         val type = when {
             file.isDirectory -> FileEntry.FileType.FOLDER
-            extension in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") -> FileEntry.FileType.IMAGE
+            extension in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heif", "heic") -> FileEntry.FileType.IMAGE
             extension in listOf("txt", "md", "aozora", "csv", "log") -> FileEntry.FileType.TEXT
             extension in listOf("html", "htm", "xhtml") -> FileEntry.FileType.HTML
             extension == "pdf" -> FileEntry.FileType.PDF

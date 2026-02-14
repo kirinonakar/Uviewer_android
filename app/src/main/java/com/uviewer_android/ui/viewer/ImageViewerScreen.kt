@@ -2,9 +2,11 @@ package com.uviewer_android.ui.viewer
 
 import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -19,7 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -102,11 +104,17 @@ fun ImageViewerScreen(
         var isDualPage by remember { mutableStateOf(false) }
         val pageCount = if (isDualPage) (totalImages + 1) / 2 else totalImages
         
-        val pagerState = rememberPagerState(initialPage = uiState.initialIndex) {
+        val pagerState = rememberPagerState(initialPage = if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex) {
             pageCount
         }
         
-        // Since we changed pageCount, we need to make sure currentPage is valid or mapped
+        // Sync pager state with initialIndex from ViewModel
+        LaunchedEffect(uiState.initialIndex, isDualPage) {
+            val target = if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex
+            if (pagerState.currentPage != target && target < pageCount) {
+                pagerState.scrollToPage(target)
+            }
+        }
         // This is tricky with Compose Pager state preservation on count change.
         // For simplicity, we restart at 0 or try to map. 
         // Better: Use a derived state or handle it carefully.
@@ -119,6 +127,9 @@ fun ImageViewerScreen(
         var globalScale by remember { mutableFloatStateOf(1f) }
         
         var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
+        
+        // Ensure starting page is correct even if state hasn't synced yet
+        val initialMappedPage = remember { if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex }
         
         // Update index when mode toggles
         LaunchedEffect(isDualPage) {
@@ -177,57 +188,62 @@ fun ImageViewerScreen(
                     )
                 }
         ) {
+                Log.d("ImageViewer", "Pager state: currentPage=${pagerState.currentPage}, pageCount=$pageCount")
                 val currentScale = if (uiState.persistZoom) globalScale else (scales[pagerState.currentPage] ?: 1f)
                 HorizontalPager(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
-                    userScrollEnabled = currentScale <= 1.1f
+                    userScrollEnabled = currentScale <= 1.1f,
+                    beyondViewportPageCount = 1
                 ) { page ->
-                    // Calculate indices based on order
-                    val p1 = page * 2
-                    val p2 = page * 2 + 1
+                    Log.d("ImageViewer", "Rendering Pager item for page $page")
                     
-                    val indices = if (dualPageOrder == 1) { // RTL
-                        Pair(p2, p1)
-                    } else { // LTR
-                        Pair(p1, p2)
+                    val (firstIdx, secondIdx) = if (isDualPage) {
+                        val p1 = page * 2
+                        val p2 = page * 2 + 1
+                        if (dualPageOrder == 1) Pair(p2, p1) else Pair(p1, p2)
+                    } else {
+                        Pair(page, -1)
                     }
-                    val firstIdx = indices.first
-                    val secondIdx = indices.second
 
                 Box(
                     modifier = Modifier.fillMaxSize()
-                        // Ensure this box catches gestures if Pager is disabled
                 ) {
-                    val firstImage = if (firstIdx < uiState.images.size) uiState.images[firstIdx] else null
-                    val secondImage = if (isDualPage && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
+                    val firstImage = if (firstIdx >= 0 && firstIdx < uiState.images.size) uiState.images[firstIdx] else null
+                    val secondImage = if (isDualPage && secondIdx >= 0 && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
 
-                    if (isDualPage) {
-                        ZoomableDualImage(
-                            firstImageUrl = firstImage?.path,
-                            secondImageUrl = secondImage?.path,
-                            isWebDav = uiState.isContentLoadedFromWebDav,
-                            authHeader = uiState.authHeader,
-                            serverUrl = uiState.serverUrl,
-                            scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
-                            upscaleFilter = uiState.upscaleFilter,
-                            onScaleChanged = { newScale -> 
-                                if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
-                            }
-                        )
-                    } else if (firstImage != null) {
-                        val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
-                         ZoomableImage(
-                            imageUrl = firstImage.path,
-                            isWebDav = uiState.isContentLoadedFromWebDav,
-                            authHeader = uiState.authHeader,
-                            serverUrl = uiState.serverUrl,
-                            scale = currentScale,
-                            upscaleFilter = uiState.upscaleFilter,
-                            onScaleChanged = { newScale -> 
-                                if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
-                            }
-                        )
+                    if (firstImage != null) {
+                        Log.d("ImageViewer", "Page $page: Showing image $firstIdx: ${firstImage.name}")
+                    }
+
+                    key(firstIdx) {
+                        if (isDualPage) {
+                            ZoomableDualImage(
+                                firstImageUrl = firstImage?.path,
+                                secondImageUrl = secondImage?.path,
+                                isWebDav = uiState.isContentLoadedFromWebDav,
+                                authHeader = uiState.authHeader,
+                                serverUrl = uiState.serverUrl,
+                                scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
+                                upscaleFilter = uiState.upscaleFilter,
+                                onScaleChanged = { newScale -> 
+                                    if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                                }
+                            )
+                        } else if (firstImage != null) {
+                            val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
+                             ZoomableImage(
+                                imageUrl = firstImage.path,
+                                isWebDav = uiState.isContentLoadedFromWebDav,
+                                authHeader = uiState.authHeader,
+                                serverUrl = uiState.serverUrl,
+                                scale = currentScale,
+                                upscaleFilter = uiState.upscaleFilter,
+                                onScaleChanged = { newScale -> 
+                                    if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -334,6 +350,7 @@ fun ZoomableImage(
     onScaleChanged: (Float) -> Unit,
     secondImageUrl: String? = null // For dual page
 ) {
+    Log.d("ImageViewer", "ZoomableImage: url=$imageUrl, isWebDav=$isWebDav, serverUrl=$serverUrl")
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
 
@@ -341,27 +358,80 @@ fun ZoomableImage(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    val oldScale = scale
-                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                    onScaleChanged(newScale)
+                awaitEachGesture {
+                    var zoom = 1f
+                    var panX = 0f
+                    var panY = 0f
+                    var pastTouchSlop = false
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    awaitFirstDown(requireUnconsumed = false)
                     
-                    if (newScale > 1f) {
-                        val width = size.width
-                        val height = size.height
-                        val scaleChange = newScale / oldScale
-                        
-                        offsetX = (pan.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
-                        offsetY = (pan.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
-                        
-                        val maxOffsetX = (width * (newScale - 1)) / 2
-                        val maxOffsetY = (height * (newScale - 1)) / 2
-                        offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
-                        offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
-                    } else {
-                        offsetX = 0f
-                        offsetY = 0f
-                    }
+                    do {
+                        val event = awaitPointerEvent()
+                        val canceled = event.changes.any { it.isConsumed }
+                        if (!canceled) {
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+
+                            if (!pastTouchSlop) {
+                                zoom *= zoomChange
+                                panX += panChange.x
+                                panY += panChange.y
+
+                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                val zoomMotion = kotlin.math.abs(1 - zoom) * centroidSize
+                                val panMotion = androidx.compose.ui.geometry.Offset(panX, panY).getDistance()
+
+                                if (zoomMotion > touchSlop ||
+                                    panMotion > touchSlop
+                                ) {
+                                    pastTouchSlop = true
+                                }
+                            }
+
+                            if (pastTouchSlop) {
+                                val centroid = event.calculateCentroid(useCurrent = false)
+                                
+                                // Zoom Logic
+                                if (zoomChange != 1f) {
+                                    val oldScale = scale
+                                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                                    onScaleChanged(newScale)
+                                    
+                                    val scaleChange = newScale / oldScale
+                                    val width = size.width
+                                    val height = size.height
+                                    
+                                     offsetX = (panChange.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
+                                     offsetY = (panChange.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
+                                     
+                                     val maxOffsetX = (width * (newScale - 1)) / 2
+                                     val maxOffsetY = (height * (newScale - 1)) / 2
+                                     offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                                     offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                } else {
+                                     // Pan Logic
+                                     val width = size.width
+                                     val height = size.height
+                                     val maxOffsetX = (width * (scale - 1)) / 2
+                                     val maxOffsetY = (height * (scale - 1)) / 2
+                                     
+                                     offsetX = (offsetX + panChange.x).coerceIn(-maxOffsetX, maxOffsetX)
+                                     offsetY = (offsetY + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
+                                }
+                                
+                                // CONSUME EVENTS if we are zoomed in or strictly panning/zooming
+                                if (scale > 1f || zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
+                                    event.changes.forEach { 
+                                        if (it.positionChange() != androidx.compose.ui.geometry.Offset.Zero) {
+                                            it.consume() 
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } while (!canceled && event.changes.any { it.pressed })
                 }
             }
     ) {
@@ -377,6 +447,7 @@ fun ZoomableImage(
             
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
+                Log.d("ImageViewer", "ZoomableImage: buildRequest: url=$url, isWebDav=$isWebDav, serverUrl=$serverUrl, authHeader=${authHeader != null}")
                 val loaderBuilder = if (isWebDav && serverUrl != null) {
                    val fullUrl = try {
                         val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
@@ -386,46 +457,67 @@ fun ZoomableImage(
                         }
                         builder.build().toString()
                     } catch (e: Exception) {
-                        serverUrl.trimEnd('/') + url
+                        val trimmedBase = serverUrl.trimEnd('/')
+                        val trimmedPath = if (url.startsWith("/")) url else "/$url"
+                        trimmedBase + trimmedPath
                     }
+                    Log.d("ImageViewer", "ZoomableImage: Built WebDAV URL: $fullUrl")
 
                     ImageRequest.Builder(context)
                         .data(fullUrl)
                         .apply {
                             if (authHeader != null) {
                                 addHeader("Authorization", authHeader)
+                                Log.d("ImageViewer", "ZoomableImage: Added Authorization header.")
                             }
                         }
                 } else {
+                    Log.d("ImageViewer", "ZoomableImage: Requesting Local: $url")
                     ImageRequest.Builder(context)
                         .data(java.io.File(url))
                 }
                 
                 return loaderBuilder
                     .crossfade(true)
+                    .allowHardware(false) // Disable hardware bitmaps to prevent potential black screen issues
                     .build()
             }
             
-            // Custom ImageLoader for GIF/WebP support
-            val imageLoader = coil.ImageLoader.Builder(context)
-                .components {
-                    if (android.os.Build.VERSION.SDK_INT >= 28) {
-                        add(coil.decode.ImageDecoderDecoder.Factory())
-                    } else {
-                        add(coil.decode.GifDecoder.Factory())
+            val imageLoader = remember {
+                coil.ImageLoader.Builder(context)
+                    .components {
+                        if (android.os.Build.VERSION.SDK_INT >= 28) {
+                            add(coil.decode.ImageDecoderDecoder.Factory())
+                        } else {
+                            add(coil.decode.GifDecoder.Factory())
+                        }
                     }
-                }
-                .build()
+                    .build()
+            }
 
-            AsyncImage(
+            coil.compose.SubcomposeAsyncImage(
                 model = buildRequest(imageUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 imageLoader = imageLoader,
                 filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
+                loading = {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(strokeWidth = 2.dp)
+                    }
+                },
+                error = { state ->
+                    val errorMsg = state.result.throwable.message ?: "Unknown error"
+                    Log.e("ImageViewer", "Failed to load image: $imageUrl", state.result.throwable)
+                    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Image Error", color = Color.Red, style = MaterialTheme.typography.bodyMedium)
+                            Text(imageUrl.substringAfterLast("/"), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                            Text(errorMsg, color = Color.Gray, style = MaterialTheme.typography.labelSmall, maxLines = 3)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
             )
         }
     }
@@ -449,27 +541,67 @@ fun ZoomableDualImage(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { centroid, pan, zoom, _ ->
-                    val oldScale = scale
-                    val newScale = (scale * zoom).coerceIn(1f, 5f)
-                    onScaleChanged(newScale)
+               awaitEachGesture {
+                    var zoom = 1f
+                    var panX = 0f
+                    var panY = 0f
+                    var pastTouchSlop = false
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    awaitFirstDown(requireUnconsumed = false)
                     
-                    if (newScale > 1f) {
-                        val width = size.width
-                        val height = size.height
-                        val scaleChange = newScale / oldScale
-                        
-                        offsetX = (pan.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
-                        offsetY = (pan.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
-                        
-                        val maxOffsetX = (width * (newScale - 1)) / 2
-                        val maxOffsetY = (height * (newScale - 1)) / 2
-                        offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
-                        offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
-                    } else {
-                        offsetX = 0f
-                        offsetY = 0f
-                    }
+                    do {
+                        val event = awaitPointerEvent()
+                        val canceled = event.changes.any { it.isConsumed }
+                        if (!canceled) {
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+
+                            if (!pastTouchSlop) {
+                                zoom *= zoomChange
+                                panX += panChange.x
+                                panY += panChange.y
+
+                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                val zoomMotion = kotlin.math.abs(1 - zoom) * centroidSize
+                                val panMotion = androidx.compose.ui.geometry.Offset(panX, panY).getDistance()
+
+                                if (zoomMotion > touchSlop ||
+                                    panMotion > touchSlop
+                                ) {
+                                    pastTouchSlop = true
+                                }
+                            }
+
+                            if (pastTouchSlop) {
+                                val centroid = event.calculateCentroid(useCurrent = false)
+                                
+                                if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
+                                    val oldScale = scale
+                                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                                    onScaleChanged(newScale)
+                                    
+                                    val scaleChange = newScale / oldScale
+                                    val width = size.width
+                                    val height = size.height
+                                    
+                                     offsetX = (panChange.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
+                                     offsetY = (panChange.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
+                                     
+                                     val maxOffsetX = (width * (newScale - 1)) / 2
+                                     val maxOffsetY = (height * (newScale - 1)) / 2
+                                     offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                                     offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                     
+                                     event.changes.forEach { 
+                                        if (it.positionChange() != androidx.compose.ui.geometry.Offset.Zero) {
+                                            it.consume() 
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } while (!canceled && event.changes.any { it.pressed })
                 }
             }
     ) {
@@ -485,7 +617,8 @@ fun ZoomableDualImage(
             
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
-                return if (isWebDav && serverUrl != null) {
+                Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav, serverUrl=$serverUrl, authHeader=${authHeader != null}")
+                val loaderBuilder = if (isWebDav && serverUrl != null) {
                    val fullUrl = try {
                         val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
                         val builder = baseHttpUrl.newBuilder()
@@ -494,33 +627,67 @@ fun ZoomableDualImage(
                         }
                         builder.build().toString()
                     } catch (e: Exception) {
-                        serverUrl.trimEnd('/') + url
+                        val trimmedBase = serverUrl.trimEnd('/')
+                        val trimmedPath = if (url.startsWith("/")) url else "/$url"
+                        trimmedBase + trimmedPath
                     }
 
+                    Log.d("ImageViewer", "ZoomableDualImage: Built WebDAV URL (Dual): $fullUrl")
                     ImageRequest.Builder(context)
                         .data(fullUrl)
                         .apply {
                             if (authHeader != null) {
                                 addHeader("Authorization", authHeader)
+                                Log.d("ImageViewer", "ZoomableDualImage: Added Authorization header.")
                             }
                         }
-                        .crossfade(true)
-                        .build()
                 } else {
+                    Log.d("ImageViewer", "ZoomableDualImage: Requesting Local (Dual): $url")
                     ImageRequest.Builder(context)
                         .data(java.io.File(url))
-                        .crossfade(true)
-                        .build()
                 }
+
+                return loaderBuilder
+                    .crossfade(true)
+                    .allowHardware(false)
+                    .build()
+            }
+
+            val imageLoader = remember {
+                coil.ImageLoader.Builder(context)
+                    .components {
+                        if (android.os.Build.VERSION.SDK_INT >= 28) {
+                            add(coil.decode.ImageDecoderDecoder.Factory())
+                        } else {
+                            add(coil.decode.GifDecoder.Factory())
+                        }
+                    }
+                    .build()
             }
 
             if (firstImageUrl != null) {
-                AsyncImage(
+                coil.compose.SubcomposeAsyncImage(
                     model = buildRequest(firstImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    imageLoader = imageLoader,
                     alignment = Alignment.CenterEnd,
                     filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(strokeWidth = 2.dp)
+                        }
+                    },
+                    error = { state ->
+                        val errorMsg = state.result.throwable.message ?: "Unknown error"
+                        Log.e("ImageViewer", "Failed to load image 1 (Dual): $firstImageUrl", state.result.throwable)
+                        Box(Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Error", color = Color.Red, style = MaterialTheme.typography.labelSmall)
+                                Text(errorMsg, color = Color.Gray, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
@@ -530,12 +697,28 @@ fun ZoomableDualImage(
             }
             
             if (secondImageUrl != null) {
-                AsyncImage(
+                coil.compose.SubcomposeAsyncImage(
                     model = buildRequest(secondImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
+                    imageLoader = imageLoader,
                     alignment = Alignment.CenterStart,
                     filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
+                    loading = {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(strokeWidth = 2.dp)
+                        }
+                    },
+                    error = { state ->
+                        val errorMsg = state.result.throwable.message ?: "Unknown error"
+                        Log.e("ImageViewer", "Failed to load image 2 (Dual): $secondImageUrl", state.result.throwable)
+                        Box(Modifier.fillMaxSize().padding(4.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Error", color = Color.Red, style = MaterialTheme.typography.labelSmall)
+                                Text(errorMsg, color = Color.Gray, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+                            }
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()

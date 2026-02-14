@@ -125,7 +125,7 @@ fun MainScreen() {
                     viewModel = libraryViewModel,
                     onNavigateToViewer = { entry ->
                         val encodedPath = android.net.Uri.encode(entry.path)
-                        val route = "viewer/$encodedPath?type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}"
+                        val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}"
                         navController.navigate(route)
                     }
                 ) 
@@ -135,13 +135,13 @@ fun MainScreen() {
                 androidx.compose.runtime.LaunchedEffect(Unit) { isFullScreen = false }
                 com.uviewer_android.ui.favorites.FavoritesScreen(
                     onNavigateToViewer = { item ->
-                        if (item.type == "FOLDER") {
+                        if (item.type.equals("FOLDER", ignoreCase = true)) {
                             val encodedPath = android.net.Uri.encode(item.path)
                             val route = "library?path=$encodedPath&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)
                         } else {
                             val encodedPath = android.net.Uri.encode(item.path)
-                            val route = "viewer/$encodedPath?type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}"
+                            val route = "viewer?path=$encodedPath&type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)
                         }
                     }
@@ -151,13 +151,13 @@ fun MainScreen() {
                 androidx.compose.runtime.LaunchedEffect(Unit) { isFullScreen = false }
                 com.uviewer_android.ui.recent.RecentFilesScreen(
                     onNavigateToViewer = { file ->
-                        if (file.type == "FOLDER") {
+                        if (file.type.equals("FOLDER", ignoreCase = true)) {
                              val encodedPath = android.net.Uri.encode(file.path)
                              val route = "library?path=$encodedPath&serverId=${file.serverId ?: -1}"
                              navController.navigate(route)
                         } else {
                             val encodedPath = android.net.Uri.encode(file.path)
-                            val route = "viewer/$encodedPath?type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}"
+                            val route = "viewer?path=$encodedPath&type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}"
                             navController.navigate(route)
                         }
                     }
@@ -170,7 +170,7 @@ fun MainScreen() {
             
              // Viewer Route
             composable(
-                route = "viewer/{filePath}?type={type}&isWebDav={isWebDav}&serverId={serverId}",
+                route = "viewer?path={filePath}&type={type}&isWebDav={isWebDav}&serverId={serverId}",
                 arguments = listOf(
                     navArgument("filePath") { type = NavType.StringType },
                     navArgument("type") { type = NavType.StringType; nullable = true },

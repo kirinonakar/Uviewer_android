@@ -27,7 +27,7 @@ data class MediaPlayerUiState(
     val authHeader: Map<String, String> = emptyMap(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val rotation: Float = 0f,
+    val savedPosition: Long = 0L,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val videoWidth: Int = 0,
     val videoHeight: Int = 0
@@ -126,12 +126,8 @@ class MediaPlayerViewModel(
         }
     }
 
-    fun rotate() {
-        _uiState.value = _uiState.value.copy(rotation = (_uiState.value.rotation + 90f) % 360f)
-    }
-
-    fun setRotation(rotation: Float) {
-        _uiState.value = _uiState.value.copy(rotation = rotation)
+    fun savePosition(position: Long) {
+        _uiState.value = _uiState.value.copy(savedPosition = position)
     }
 
     fun setVideoSize(width: Int, height: Int) {

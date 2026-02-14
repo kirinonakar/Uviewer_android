@@ -128,6 +128,9 @@ fun MediaPlayerScreen(
                     }
                 })
                 
+                if (uiState.savedPosition > 0) {
+                    seekTo(uiState.savedPosition)
+                }
                 prepare()
                 playWhenReady = true
             }
@@ -136,6 +139,7 @@ fun MediaPlayerScreen(
 
     DisposableEffect(exoPlayer) {
         onDispose {
+            viewModel.savePosition(exoPlayer?.currentPosition ?: 0L)
             exoPlayer?.release()
         }
     }
@@ -194,12 +198,7 @@ fun MediaPlayerScreen(
                                 }
                             }
 
-                            IconButton(onClick = { 
-                                val newRotation = (uiState.rotation + 90f)
-                                viewModel.setRotation(newRotation)
-                            }) {
-                                Icon(Icons.Default.RotateRight, contentDescription = "Rotate", tint = Color.White)
-                            }
+
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
@@ -276,23 +275,7 @@ fun MediaPlayerScreen(
                      modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            rotationZ = uiState.rotation
-                            // No manual scaling needed for rotation if we assume PlayerView handles content within bounds
-                            // But rotating the view container changes dimensions relative to screen.
-                            // If we rotate the Box, we might need to scale it to fit if aspects differ.
-                            // Keeping simple rotation for now, as PlayerView defaults to FIT.
-                            // If user rotates 90deg, we may want to scale to fill width?
-                            // Let's stick to Aspect Ratio maintenance first.
-                            val screenW = size.width
-                            val screenH = size.height
-                             if (uiState.rotation % 180f != 0f) {
-                                val scale = if (screenH > screenW) screenH / screenW else screenW / screenH
-                                scaleX = scale
-                                scaleY = scale
-                            } else {
-                                scaleX = 1f
-                                scaleY = 1f
-                            }
+                            // Rotation removed
                         }
                 ) {
                     if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {

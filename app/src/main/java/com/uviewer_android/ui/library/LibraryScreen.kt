@@ -149,6 +149,9 @@ fun LibraryScreen(
                             onClick = {
                                 if (file.isDirectory) {
                                     viewModel.navigateTo(file)
+                                    if (selectedTab == 2) {
+                                        selectedTab = if (file.isWebDav) 1 else 0
+                                    }
                                 } else {
                                     onNavigateToViewer(file)
                                 }

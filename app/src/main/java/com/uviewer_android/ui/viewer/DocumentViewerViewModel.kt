@@ -59,6 +59,7 @@ class DocumentViewerViewModel(
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var rawContentCache: String? = null
+    private var lineOffsets = listOf<Int>()
     private var currentFileType: FileEntry.FileType? = null
     private var currentFilePath: String = ""
     private var isWebDavContext: Boolean = false
@@ -169,6 +170,16 @@ class DocumentViewerViewModel(
                     
                     val contentString = decodeBytes(rawBytes, _uiState.value.manualEncoding)
                     rawContentCache = contentString
+
+                    // Calculate line offsets for global navigation
+                    lineOffsets = mutableListOf<Int>().apply {
+                        add(0)
+                        var pos = contentString.indexOf('\n')
+                        while (pos != -1) {
+                            add(pos + 1)
+                            pos = contentString.indexOf('\n', pos + 1)
+                        }
+                    }
                     
                     if (type == FileEntry.FileType.CSV || (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv"))) {
                         // Simple CSV to HTML Table
@@ -179,7 +190,7 @@ class DocumentViewerViewModel(
                             sb.append("<tr>")
                             val cells = row.split(",") // Basic split, regex for quotes needed for robustness
                             cells.forEach { cell ->
-                                sb.append("<td>${cell.trim()}</td>")
+                                sb.append("<td style='border:1px solid #ccc; padding: 4px;'>${cell.trim()}</td>")
                             }
                             sb.append("</tr>")
                         }
@@ -193,30 +204,44 @@ class DocumentViewerViewModel(
                             currentChunkIndex = 0,
                             hasMoreContent = false
                         )
+                    } else if (type == FileEntry.FileType.HTML || filePath.lowercase().endsWith(".html") || filePath.lowercase().endsWith(".htm")) {
+                        // Direct HTML - do not Aozora parse
+                         _uiState.value = _uiState.value.copy(
+                             content = contentString,
+                             isLoading = false,
+                             totalLines = lineOffsets.size,
+                             currentLine = savedLine
+                         )
                     } else {
-                        // Generate TOC for Text/Aozora
-                        // Simple heuristic: lines starting with specific markers
+                        // Text / Aozora
                         val chapters = mutableListOf<com.uviewer_android.data.model.EpubSpineItem>()
                         val lines = contentString.lines()
                         lines.forEachIndexed { index, line ->
                             val trimmed = line.trim()
-                            // Markers: # (Markdown), [chapter (Aozora), 第...章 (Japanese), Chapter ...
                             if (trimmed.startsWith("#") || 
-                                trimmed.startsWith("［＃") || 
-                                (trimmed.startsWith("第") && trimmed.contains("章"))) {
+                                Regex("［＃[大中小]見出し］(.+?)［＃[大中小]見出し終わり］").containsMatchIn(trimmed) ||
+                                (trimmed.startsWith("第") && trimmed.contains("章") && trimmed.length < 50)) {
+                                
+                                val title = if (trimmed.startsWith("［＃")) {
+                                    trimmed.replace(Regex("［＃.+?見出し］"), "").replace(Regex("［＃.+?見出し終わり］"), "")
+                                } else {
+                                    trimmed.removePrefix("#").trim()
+                                }
+
                                 chapters.add(com.uviewer_android.data.model.EpubSpineItem(
-                                    title = trimmed.removePrefix("#").removePrefix("［＃").removeSuffix("］").trim(),
+                                    title = title,
                                     href = "line-${index + 1}",
                                     id = "line-${index + 1}"
                                 ))
                             }
                         }
 
-                        processTextContent(contentString)
+                        processTextContent(contentString, false)
                         
                         _uiState.value = _uiState.value.copy(
                             epubChapters = chapters,
-                            currentLine = savedLine // Restore line
+                            totalLines = lineOffsets.size,
+                            currentLine = savedLine
                         )
                     }
                 }
@@ -246,9 +271,7 @@ class DocumentViewerViewModel(
              }
         }
     }
-    
-    private fun processTextContent(text: String) {
-        // Chunking check
+    private fun processTextContent(text: String, isHtml: Boolean = false) {
         val chunkIndex = _uiState.value.currentChunkIndex
         val startIndex = chunkIndex * CHUNK_SIZE
         if (startIndex >= text.length) return
@@ -256,7 +279,6 @@ class DocumentViewerViewModel(
         val endIndex = (startIndex + CHUNK_SIZE).coerceAtMost(text.length)
         var chunk = text.substring(startIndex, endIndex)
         
-        // Adjust split at line break to avoid cutting words
         if (endIndex < text.length) {
             val lastNewline = chunk.lastIndexOf('\n')
             if (lastNewline > 0) {
@@ -266,23 +288,33 @@ class DocumentViewerViewModel(
         
         val hasMore = (startIndex + chunk.length) < text.length
         
+        // Calculate global line offset for the parser
+        var globalLineOffset = 0
+        for (i in 0 until startIndex) {
+            if (text[i] == '\n') globalLineOffset++
+        }
+        
         viewModelScope.launch {
-            val processed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                val htmlBody = AozoraParser.parse(chunk)
-                AozoraParser.wrapInHtml(
-                    htmlBody, 
-                    _uiState.value.isVertical, 
-                    _uiState.value.fontFamily, 
-                    _uiState.value.fontSize, 
-                    _uiState.value.docBackgroundColor
-                )
+            val processed = if (isHtml) {
+                 chunk 
+            } else {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val htmlBody = AozoraParser.parse(chunk, globalLineOffset)
+                    AozoraParser.wrapInHtml(
+                        htmlBody, 
+                        false, 
+                        _uiState.value.fontFamily, 
+                        _uiState.value.fontSize, 
+                        _uiState.value.docBackgroundColor
+                    )
+                }
             }
             
             _uiState.value = _uiState.value.copy(
                 content = processed,
                 isLoading = false,
-                totalLines = chunk.lines().size,
-                currentLine = 1,
+                totalLines = lineOffsets.size,
+                currentLine = _uiState.value.currentLine, // Maintain or it will be 1
                 hasMoreContent = hasMore
             )
         }
@@ -299,6 +331,23 @@ class DocumentViewerViewModel(
         if (_uiState.value.currentChunkIndex > 0) {
              _uiState.value = _uiState.value.copy(currentChunkIndex = _uiState.value.currentChunkIndex - 1)
              rawContentCache?.let { processTextContent(it) }
+        }
+    }
+
+    fun jumpToLine(line: Int) {
+        if (line < 1 || lineOffsets.isEmpty()) return
+        val offset = lineOffsets.getOrNull(line - 1) ?: return
+        val targetChunk = offset / CHUNK_SIZE
+        
+        if (targetChunk != _uiState.value.currentChunkIndex) {
+            _uiState.value = _uiState.value.copy(
+                currentChunkIndex = targetChunk,
+                currentLine = line,
+                isLoading = true
+            )
+            rawContentCache?.let { processTextContent(it, false) }
+        } else {
+            _uiState.value = _uiState.value.copy(currentLine = line)
         }
     }
 
@@ -336,26 +385,38 @@ class DocumentViewerViewModel(
         val chapters = _uiState.value.epubChapters
         if (index in chapters.indices) {
             val chapter = chapters[index]
-            val chapterFile = File(chapter.href)
             
-            viewModelScope.launch {
-                val rawContent = try {
-                    chapterFile.readText()
-                } catch (e: Exception) {
-                    "Error reading chapter: ${e.message}"
-                }
+            if (currentFileType == FileEntry.FileType.EPUB) {
+                val chapterFile = File(chapter.href)
+                viewModelScope.launch {
+                    _uiState.value = _uiState.value.copy(isLoading = true) 
+                    val rawContent = try {
+                         chapterFile.readText()
+                    } catch (e: Exception) {
+                        "Error reading chapter: ${e.message}"
+                    }
 
-                val baseUrl = "file://${chapterFile.parent}/"
-                
-                _uiState.value = _uiState.value.copy(
-                    url = null, 
-                    baseUrl = baseUrl,
-                    content = rawContent, 
-                    currentChapterIndex = index,
-                    isLoading = false,
-                    currentLine = 1,
-                    totalLines = rawContent.lines().size
-                )
+                    val baseUrl = "file://${chapterFile.parent}/"
+                    
+                    _uiState.value = _uiState.value.copy(
+                        url = null, 
+                        baseUrl = baseUrl,
+                        content = rawContent, 
+                        currentChapterIndex = index,
+                        isLoading = false,
+                        currentLine = 1,
+                        totalLines = rawContent.lines().size
+                    )
+                }
+            } else {
+                // For Text files, "Next Chapter" means jump to the line of the next header
+                if (chapter.href.startsWith("line-")) {
+                    val line = chapter.href.removePrefix("line-").toIntOrNull() ?: 1
+                    _uiState.value = _uiState.value.copy(
+                        currentChapterIndex = index,
+                        currentLine = line
+                    )
+                }
             }
         }
     }
@@ -374,14 +435,7 @@ class DocumentViewerViewModel(
         }
     }
 
-    fun toggleVerticalMode() {
-        val newVertical = !_uiState.value.isVertical
-        _uiState.value = _uiState.value.copy(isVertical = newVertical)
-        
-        if (rawContentCache != null && currentFileType == FileEntry.FileType.TEXT) {
-             processTextContent(rawContentCache!!)
-        }
-    }
+
 
     fun setFontSize(size: Int) {
         viewModelScope.launch {

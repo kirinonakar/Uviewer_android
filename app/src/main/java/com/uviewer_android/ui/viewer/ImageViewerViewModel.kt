@@ -1,6 +1,7 @@
 package com.uviewer_android.ui.viewer
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.model.FileEntry
@@ -102,62 +103,30 @@ data class ImageViewerUiState(
             }
         }
 
-        fun loadImages(filePath: String, isWebDav: Boolean, serverId: Int?) {
+        fun loadImages(initialFilePath: String, isWebDav: Boolean, serverId: Int?) {
+        Log.d("ImageViewer", "loadImages: path=$initialFilePath, webDav=$isWebDav, server=$serverId")
+        
+        val decodedPath = try {
+            var path = initialFilePath
+            while (path.contains("%")) {
+                val next = java.net.URLDecoder.decode(path, "UTF-8")
+                if (next == path) break
+                path = next
+            }
+            path
+        } catch (e: Exception) { initialFilePath }
+        
+        val filePath = decodedPath
+        Log.d("ImageViewer", "Decoded path: $filePath")
+
             currentPath = filePath
             currentIsWebDav = isWebDav
             currentServerId = serverId
-            
-            // Check if we need to reload or just update index
             val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
             currentIsZip = isZip
-            val containerName = if (isZip) File(filePath).name else null
-            
-            // If already loaded and context matches, just update index
-            if (_uiState.value.images.isNotEmpty()) {
-                val images = _uiState.value.images
-                
-                // Case 1: Zip file - check if same container
-                if (isZip && _uiState.value.containerName == containerName) {
-                    // Same zip, just ensure index is 0... WAIT, user wants to Restore!
-                    // If we are already viewing it, we don't reset to 0. We keep as is.
-                     return
-                }
-                
-                // Case 2: Folder - check if file exists in current list (and strict mode: parent matches?)
-                if (!isZip && _uiState.value.containerName == null) {
-                    val index = images.indexOfFirst { it.path == filePath }
-                    if (index != -1) {
-                        _uiState.value = _uiState.value.copy(
-                            initialIndex = index,
-                            isLoading = false
-                        )
-                         // Update Recent "Last Accessed" time, but preserve Page Index? 
-                         // Actually if we just navigated to a file in the folder, we ARE at that file.
-                         // So pageIndex should be `index`.
-                         viewModelScope.launch {
-                             try {
-                                 val existing = recentFileDao.getFile(filePath)
-                                 recentFileDao.insertRecent(
-                                     com.uviewer_android.data.RecentFile(
-                                         path = filePath,
-                                         title = existing?.title ?: File(filePath).name,
-                                         isWebDav = isWebDav,
-                                         serverId = serverId,
-                                         type = "IMAGE",
-                                         lastAccessed = System.currentTimeMillis(),
-                                         pageIndex = index 
-                                     )
-                                 )
-                             } catch(e: Exception) {}
-                         }
-                        return
-                    }
-                    // If not found, fall through to reload (maybe folder content changed or different folder)
-                }
-            }
 
             viewModelScope.launch {
-                _uiState.value = _uiState.value.copy(isLoading = true)
+                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
                 // Add to Recent (and retrieve saved index)
                 var savedIndex = 0
@@ -245,15 +214,20 @@ data class ImageViewerUiState(
                         } else {
                             fileRepository.listFiles(parentPath)
                         }
-                        files.filter { it.type == FileEntry.FileType.IMAGE }
+                        files.filter { it.type == FileEntry.FileType.IMAGE || it.type == FileEntry.FileType.WEBP || it.type == FileEntry.FileType.IMAGE_ZIP }
                             .sortedBy { it.name.lowercase() }
                     }
 
+                    if (images.isEmpty()) {
+                        throw Exception("No images found in the folder.")
+                    }
+
                     // For Zip, use savedIndex. For Folder, find the file index.
+                    val normalizedFilePath = filePath.trimEnd('/')
                     val index = if (isZip) {
-                        savedIndex.coerceIn(0, images.size - 1)
+                        if (images.isNotEmpty()) savedIndex.coerceIn(0, images.size - 1) else 0
                     } else {
-                        val found = images.indexOfFirst { it.path == filePath }
+                        val found = images.indexOfFirst { it.path.trimEnd('/') == normalizedFilePath }
                          if (found != -1) found else 0
                     }
                     
@@ -264,6 +238,12 @@ data class ImageViewerUiState(
                     val serverUrl = if (isWebDav && serverId != null) {
                         webDavRepository.getServer(serverId)?.url
                     } else null
+
+                    Log.d("ImageViewer", "Loaded ${images.size} images. Initial index: $index")
+                    Log.d("ImageViewer", "WebDAV Config: isWebDav=$contentIsWebDav, serverUrl=$serverUrl, hasAuth=${auth != null}")
+                    if (index < images.size) {
+                        Log.d("ImageViewer", "Target image: ${images[index].path}")
+                    }
 
                 _uiState.value = _uiState.value.copy(
                     images = images,
@@ -288,6 +268,7 @@ data class ImageViewerUiState(
                     }
                 }
             } catch (e: Exception) {
+                Log.e("ImageViewer", "Error in loadImages", e)
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
             }
@@ -295,23 +276,21 @@ data class ImageViewerUiState(
 
     fun updateProgress(index: Int) {
          val path = currentPath ?: return
-         if (currentIsZip) { // Only save index for Zip, folders use file path
-             viewModelScope.launch {
-                 try {
-                     val title = File(path).name
-                     recentFileDao.insertRecent(
-                         com.uviewer_android.data.RecentFile(
-                             path = path,
-                             title = title,
-                             isWebDav = currentIsWebDav,
-                             serverId = currentServerId,
-                             type = "ZIP",
-                             lastAccessed = System.currentTimeMillis(),
-                             pageIndex = index
-                         )
+         viewModelScope.launch {
+             try {
+                 val title = File(path).name
+                 recentFileDao.insertRecent(
+                     com.uviewer_android.data.RecentFile(
+                         path = path,
+                         title = title,
+                         isWebDav = currentIsWebDav,
+                         serverId = currentServerId,
+                         type = if (currentIsZip) "ZIP" else "IMAGE",
+                         lastAccessed = System.currentTimeMillis(),
+                         pageIndex = index
                      )
-                 } catch (e: Exception) { e.printStackTrace() }
-             }
+                 )
+             } catch (e: Exception) { e.printStackTrace() }
          }
     }
 }

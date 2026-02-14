@@ -208,6 +208,7 @@ class LibraryViewModel(
 
     fun navigateTo(entry: FileEntry) {
         if (entry.isDirectory) {
+            _state.value = _state.value.copy(isWebDavTab = entry.isWebDav, serverId = entry.serverId)
             loadFiles(entry.path, entry.serverId)
         }
     }

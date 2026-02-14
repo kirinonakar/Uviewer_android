@@ -27,15 +27,30 @@ fun ViewerScreen(
     onToggleFullScreen: () -> Unit = {}
 ) {
     val type = try {
-        fileType?.let { FileEntry.FileType.valueOf(it) } ?: FileEntry.FileType.UNKNOWN
-    } catch (e: IllegalArgumentException) {
+        fileType?.let { FileEntry.FileType.valueOf(it.uppercase()) } ?: FileEntry.FileType.UNKNOWN
+    } catch (e: Exception) {
         FileEntry.FileType.UNKNOWN
     }
+    
+    val resolvedType = if (type == FileEntry.FileType.UNKNOWN) {
+        val ext = filePath.substringAfterLast(".", "").lowercase()
+        when (ext) {
+            "png", "jpg", "jpeg", "webp", "gif", "bmp" -> FileEntry.FileType.IMAGE
+            "zip", "cbz", "rar" -> FileEntry.FileType.ZIP
+            "txt", "md", "csv", "log", "aozora" -> FileEntry.FileType.TEXT
+            "epub" -> FileEntry.FileType.EPUB
+            "pdf" -> FileEntry.FileType.PDF
+            "mp3", "wav", "m4a", "flac" -> FileEntry.FileType.AUDIO
+            "mp4", "mkv", "avi", "webm" -> FileEntry.FileType.VIDEO
+            "html", "htm" -> FileEntry.FileType.HTML
+            else -> FileEntry.FileType.UNKNOWN
+        }
+    } else type
 
-    when (type) {
+    when (resolvedType) {
         FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
-        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> DocumentViewerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
-        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, type, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.PDF -> {
              PdfViewerScreen(
                  filePath = filePath, 

@@ -9,7 +9,7 @@ object AozoraParser {
     // Here focusing on explicit |Kanji《Ruby》 or simple cases.
     // Standard Aozora: 《Ruby》 after Kanji.
     
-    fun parse(text: String): String {
+    fun parse(text: String, lineOffset: Int = 0): String {
         val lines = text.split(Regex("\\r?\\n|\\r"))
         var isBold = false
         val parsedLines = lines.mapIndexed { index, line ->
@@ -93,9 +93,9 @@ object AozoraParser {
             val styleAttr = if (styles.isNotEmpty()) " style=\"${styles.joinToString("; ")}\"" else ""
             
             if (lineContent.isBlank()) {
-                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>&nbsp;</div>"
+                "<div id=\"line-${index + lineOffset + 1}\" $classAttr $styleAttr>&nbsp;</div>"
             } else {
-                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>$lineContent</div>"
+                "<div id=\"line-${index + lineOffset + 1}\" $classAttr $styleAttr>$lineContent</div>"
             }
         }
 
@@ -115,7 +115,7 @@ object AozoraParser {
     }
 
     fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000"): String {
-        val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
+        val writingMode = "horizontal-tb"
         // Remove monospace, use standard CJK fonts
         val fontFamily = when(font) {
             "serif" -> "'Sawarabi Mincho', serif"
