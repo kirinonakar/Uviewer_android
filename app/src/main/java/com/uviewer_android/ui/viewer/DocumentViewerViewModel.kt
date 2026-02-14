@@ -330,6 +330,7 @@ class DocumentViewerViewModel(
                             display: inline-block !important;
                             transform: scaleX(0.75) !important;
                             transform-origin: center bottom !important;
+                            margin: 0 -0.4em !important;
                             white-space: nowrap !important;
                         }
                         /* Hide potentially problematic layout elements */
@@ -504,6 +505,7 @@ class DocumentViewerViewModel(
                                 display: inline-block !important;
                                 transform: scaleX(0.75) !important;
                                 transform-origin: center bottom !important;
+                                margin: 0 -0.4em !important;
                                 white-space: nowrap !important;
                             }
                             /* Layout ignore fixes */
