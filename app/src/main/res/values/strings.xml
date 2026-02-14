@@ -9,6 +9,7 @@
 
     <!-- General -->
     <string name="cancel">Cancel</string>
+    <string name="confirm">OK</string>
     <string name="add">Add</string>
     <string name="delete">Delete</string>
     <string name="back">Back</string>
@@ -55,7 +56,7 @@
     <string name="font_monospace">Monospace</string>
     <string name="font_default">Default</string>
     <string name="section_image_viewer">Image Viewer</string>
-    <string name="invert_image_control">Invert Image Control</string>
+    <string name="invert_image_control">Invert Control Direction</string>
     <string name="invert_image_control_desc">Reverse tap directions for next/previous image</string>
     <string name="dual_page_order">Dual Page Order</string>
     <string name="dual_page_ltr">Left to Right</string>

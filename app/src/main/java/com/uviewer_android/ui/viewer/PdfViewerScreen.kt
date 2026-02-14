@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -30,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.uviewer_android.MainActivity
 
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.ui.AppViewModelProvider
@@ -55,6 +57,7 @@ fun PdfViewerScreen(
     
     val listState = rememberLazyListState()
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+    val activity = context as? MainActivity
 
     LaunchedEffect(filePath) {
         viewModel.loadPdf(filePath, isWebDav, serverId)
@@ -78,12 +81,59 @@ fun PdfViewerScreen(
         }
     }
 
+    // Status Bar Logic
+    val isLightAppTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    
+    // When UI is shown (!isFullScreen), icons follow the app's current theme (Light/Dark).
+    // When UI is hidden (isFullScreen), icons follow the document background.
+    val useLightStatusBar = if (!isFullScreen) {
+        isLightAppTheme
+    } else {
+        false // PDF full screen background is black
+    }
+    
     DisposableEffect(Unit) {
         onDispose {
             try {
                 renderer?.close()
                 fileDescriptor?.close()
             } catch (e: Exception) {}
+
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.isAppearanceLightStatusBars = isLightAppTheme
+            }
+        }
+    }
+
+    LaunchedEffect(useLightStatusBar, isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = useLightStatusBar
+            if (isFullScreen) {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+    }
+
+    // Hardware Volume Button Support
+    LaunchedEffect(activity, renderer) {
+        if (activity != null && renderer != null) {
+            activity.keyEvents.collect { keyCode: Int ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+                    val target = (listState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                    scope.launch { listState.animateScrollToItem(target) }
+                } else if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+                    val target = (listState.firstVisibleItemIndex + 1).coerceAtMost(pageCount - 1)
+                    scope.launch { listState.animateScrollToItem(target) }
+                }
+            }
         }
     }
 
@@ -101,14 +151,9 @@ fun PdfViewerScreen(
                         IconButton(onClick = {
                             viewModel.toggleBookmark(filePath, currentPage, isWebDav, serverId)
                         }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
+                            Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
                         }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Black.copy(alpha = 0.5f),
-                        titleContentColor = Color.White,
-                        navigationIconContentColor = Color.White
-                    )
+                    }
                 )
             }
         }
@@ -117,7 +162,7 @@ fun PdfViewerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color.DarkGray)
+                .background(if (isFullScreen) Color.Black else MaterialTheme.colorScheme.surface)
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -149,6 +194,7 @@ fun PdfList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     onToggleFullScreen: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -170,6 +216,30 @@ fun PdfList(
                     }
                 }
             }
+            .pointerInput(pageCount) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        val width = size.width
+                        val thirdWidth = width / 3f
+                        when {
+                            offset.x < thirdWidth -> {
+                                // Left tap -> Prev
+                                val target = (listState.firstVisibleItemIndex - 1).coerceAtLeast(0)
+                                scope.launch { listState.animateScrollToItem(target) }
+                            }
+                            offset.x > thirdWidth * 2 -> {
+                                // Right tap -> Next
+                                val target = (listState.firstVisibleItemIndex + 1).coerceAtMost(pageCount - 1)
+                                scope.launch { listState.animateScrollToItem(target) }
+                            }
+                            else -> {
+                                // Center tap -> Toggle UI
+                                onToggleFullScreen()
+                            }
+                        }
+                    }
+                )
+            }
     ) {
         LazyColumn(
             state = listState,
@@ -184,7 +254,7 @@ fun PdfList(
                 )
         ) {
             items(pageCount) { index ->
-                PdfPage(renderer, index, onToggleFullScreen)
+                PdfPage(renderer, index)
                 Spacer(modifier = Modifier.height(4.dp))
             }
         }
@@ -194,8 +264,7 @@ fun PdfList(
 @Composable
 fun PdfPage(
     renderer: PdfRenderer,
-    index: Int,
-    onTap: () -> Unit
+    index: Int
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
     val scope = rememberCoroutineScope()
@@ -231,17 +300,7 @@ fun PdfPage(
 
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .pointerInput(Unit) {
-                // Since this captures taps, it might conflict with parent zoom if not careful
-                // But LazyColumn consumes scroll. 
-                // We want to detect tap to toggle fullscreen.
-                // We use a simple clickable modifier on the Image or Box?
-                // pointerInput with detectTapGestures is safer.
-                detectTapGestures(
-                    onTap = { onTap() }
-                )
-            },
+            .fillMaxWidth(),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {

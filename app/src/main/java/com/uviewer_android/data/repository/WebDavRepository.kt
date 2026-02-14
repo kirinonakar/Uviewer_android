@@ -17,9 +17,13 @@ class WebDavRepository(
 
     suspend fun listFiles(serverId: Int, path: String): List<FileEntry> = withContext(Dispatchers.IO) {
         val client = getClient(serverId) ?: return@withContext emptyList()
-        val password = credentialsManager.getPassword(serverId) ?: return@withContext emptyList()
+        val password = credentialsManager.getPassword(serverId) // Removed early return if null
         val server = webDavServerDao.getById(serverId) ?: return@withContext emptyList()
-        val webDavFiles = client.listFiles(password, path)
+        val webDavFiles = try {
+            client.listFiles(password ?: "", path)
+        } catch (e: Exception) {
+            emptyList()
+        }
 
         val serverPath = try { java.net.URL(server.url).path.trimEnd('/') } catch (e: Exception) { "" }
         
@@ -130,6 +134,11 @@ class WebDavRepository(
 
     suspend fun getServer(serverId: Int): com.uviewer_android.data.WebDavServer? {
         return webDavServerDao.getById(serverId)
+    }
+
+    suspend fun buildUrl(serverId: Int, path: String): String? {
+        val client = getClient(serverId) ?: return null
+        return client.buildUrl(path)
     }
 
     suspend fun readFileContent(serverId: Int, path: String): ByteArray {

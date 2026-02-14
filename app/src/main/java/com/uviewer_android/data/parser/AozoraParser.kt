@@ -19,12 +19,28 @@ object AozoraParser {
                 .replace(">", "&gt;")
 
             // Ruby pattern: ｜Kanji《Ruby》 or ｜Kanji(Ruby) or ｜Kanji（Ruby）
-            l = l.replace(Regex("[｜|](.+?)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
-            l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]"), "<ruby>$1<rt>$2</rt></ruby>")
+            l = l.replace(Regex("[｜|](.+?)《(.+?)》")) { m ->
+                val ruby = m.groupValues[2]
+                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
+                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+            }
+            l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]")) { m ->
+                val ruby = m.groupValues[2]
+                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
+                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+            }
             
             // Regex for implicit Kanji《Ruby》 or Kanji(Ruby)
-            l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
-            l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]"), "<ruby>$1<rt>$2</rt></ruby>")
+            l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》")) { m ->
+                val ruby = m.groupValues[2]
+                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
+                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+            }
+            l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]")) { m ->
+                val ruby = m.groupValues[2]
+                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
+                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+            }
 
             // Image tags - Case insensitive for extensions
             l = l.replace(Regex("［＃挿絵（(.+?)）入る］"), "<img src=\"$1\" />") // Specific format with "入る"
@@ -37,13 +53,13 @@ object AozoraParser {
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
             
             // Bold - Maintain state across lines
-            if (l.contains("［＃ここから太字］")) {
+            if (l.contains("［＃ここから太字］") || l.contains("［＃ 여기서 태그 시작 ］")) {
                 isBold = true
-                l = l.replace("［＃ここから太字］", "<b>")
+                l = l.replace(Regex("［＃(?:ここから太字| 여기서 태그 시작 )］"), "<b>")
             }
-            if (l.contains("［＃ここで太字終わり］")) {
+            if (l.contains("［＃ここで太字終わり］") || l.contains("［＃太字終わり］") || l.contains("［＃ 여기서 태그 끝 ］")) {
                 isBold = false
-                l = l.replace("［＃ここで太字終わり］", "</b>")
+                l = l.replace(Regex("［＃(?:여기서 태그 끝 |ここで太字終わり|太字終わり)］"), "</b>")
             }
             // If currently bold and no close tag on this line, or if just opened, wrap/ensure validity?
             // HTML parsers (browsers) are lenient, but if we have <div><b>...</div><div>...</b></div> it might break.
@@ -128,7 +144,7 @@ object AozoraParser {
             <html>
             <head>
                 <meta charset="utf-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&family=Sawarabi+Gothic&display=swap');
                     body {
@@ -158,14 +174,24 @@ object AozoraParser {
                         text-align: center;
                     }
                     img {
-                        width: 100% !important;
+                        max-width: 100% !important;
                         height: auto !important;
                         display: block;
-                        margin: 0 auto;
+                        margin: 1em auto;
+                        vertical-align: middle;
                     }
+                    h1.aozora-title { font-size: 1.3em; }
+                    h2.aozora-title { font-size: 1.15em; }
+                    h3.aozora-title { font-size: 1.05em; }
+                    
                     h1, h2, h3 {
                         text-align: center;
-                        margin: 2em 0;
+                        margin: 1.5em 0;
+                    }
+                    rt.ruby-3 {
+                        display: inline-block;
+                        transform: scaleX(0.75);
+                        transform-origin: center;
                     }
                     /* Support for Vertical text centering and padding */
                     body.vertical {

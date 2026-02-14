@@ -29,6 +29,11 @@ class UserPreferencesRepository(context: Context) {
     )
     val docBackgroundColor: StateFlow<String> = _docBackgroundColor.asStateFlow()
 
+    private val _docTextColor = MutableStateFlow(
+        sharedPreferences.getString("doc_text_color", "black") ?: "black"
+    )
+    val docTextColor: StateFlow<String> = _docTextColor.asStateFlow()
+
     private val _language = MutableStateFlow(
         sharedPreferences.getString("language", "system") ?: "system"
     )
@@ -88,6 +93,13 @@ class UserPreferencesRepository(context: Context) {
         _docBackgroundColor.value = color
     }
 
+    fun setDocTextColor(color: String) {
+        sharedPreferences.edit {
+            putString("doc_text_color", color)
+        }
+        _docTextColor.value = color
+    }
+
     fun setLanguage(lang: String) {
         sharedPreferences.edit {
             putString("language", lang)
@@ -131,6 +143,31 @@ class UserPreferencesRepository(context: Context) {
         _subtitleEnabled.value = enabled
     }
 
+
+    fun setLastLibraryPath(path: String) {
+        sharedPreferences.edit().putString("last_library_path", path).apply()
+    }
+    fun getLastLibraryPath(): String? = sharedPreferences.getString("last_library_path", null)
+
+    fun setLastLocalPath(path: String) {
+        sharedPreferences.edit().putString("last_local_path", path).apply()
+    }
+    fun getLastLocalPath(): String? = sharedPreferences.getString("last_local_path", null)
+
+    fun setLastWebDavPath(path: String) {
+        sharedPreferences.edit().putString("last_webdav_path", path).apply()
+    }
+    fun getLastWebDavPath(): String? = sharedPreferences.getString("last_webdav_path", null)
+
+    fun setLastLibraryTab(tab: Int) {
+        sharedPreferences.edit().putInt("last_library_tab", tab).apply()
+    }
+    fun getLastLibraryTab(): Int = sharedPreferences.getInt("last_library_tab", 0)
+
+    fun setLastServerId(id: Int) {
+        sharedPreferences.edit().putInt("last_server_id", id).apply()
+    }
+    fun getLastServerId(): Int = sharedPreferences.getInt("last_server_id", -1)
 
     companion object {
         const val THEME_SYSTEM = "system"

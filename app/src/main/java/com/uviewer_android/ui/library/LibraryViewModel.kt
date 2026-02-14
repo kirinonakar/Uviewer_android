@@ -8,6 +8,7 @@ import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
+import com.uviewer_android.data.repository.CredentialsManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -31,7 +32,9 @@ class LibraryViewModel(
     private val webDavRepository: WebDavRepository,
     private val favoriteDao: FavoriteDao,
     private val webDavServerDao: WebDavServerDao,
-    private val recentFileDao: com.uviewer_android.data.RecentFileDao
+    private val recentFileDao: com.uviewer_android.data.RecentFileDao,
+    private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository,
+    private val credentialsManager: CredentialsManager
 ) : ViewModel() {
 
 
@@ -42,9 +45,26 @@ class LibraryViewModel(
     private val _sortOption = MutableStateFlow(SortOption.NAME)
 
     init {
-        // Force initial load of Local root directory as soon as ViewModel is created
-        val root = android.os.Environment.getExternalStorageDirectory().absolutePath
-        loadFiles(root)
+        val lastTab = userPreferencesRepository.getLastLibraryTab()
+        val lastServerId = userPreferencesRepository.getLastServerId()
+        val isWebDav = lastTab == 1
+        
+        val path = if (isWebDav) {
+            userPreferencesRepository.getLastWebDavPath() ?: "WebDAV"
+        } else {
+            userPreferencesRepository.getLastLocalPath() ?: android.os.Environment.getExternalStorageDirectory().absolutePath
+        }
+        
+        _state.value = _state.value.copy(
+            isWebDavTab = isWebDav,
+            serverId = if (isWebDav && lastServerId != -1) lastServerId else null,
+            currentPath = path
+        )
+        if (isWebDav && (lastServerId == -1 || path == "WebDAV")) {
+            showServerList()
+        } else {
+            loadFiles(path, if (isWebDav && lastServerId != -1) lastServerId else null)
+        }
     }
 
 
@@ -57,12 +77,14 @@ class LibraryViewModel(
     ) { state, favorites, sort, mostRecent, servers ->
         var listToProcess = state.fileList
         
-        // If we are in WebDAV tab and no server selected, show server list automatically
-        if (state.isWebDavTab && state.serverId == null) {
+        // If we are in WebDAV tab and explicitly at the server list path OR no server selected
+        val isServerList = state.isWebDavTab && (state.serverId == null || state.currentPath == "WebDAV")
+        
+        if (isServerList) {
             listToProcess = servers.map { server ->
                 FileEntry(
                     name = server.name,
-                    path = "/",
+                    path = "server:${server.id}", 
                     isDirectory = true,
                     type = FileEntry.FileType.FOLDER,
                     lastModified = 0L,
@@ -72,7 +94,7 @@ class LibraryViewModel(
                 )
             }
         }
-
+        
         val sortedList = when (sort) {
             SortOption.NAME -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
             SortOption.DATE_ASC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.lastModified }))
@@ -135,26 +157,40 @@ class LibraryViewModel(
     }
     
     fun loadInitialPath(isWebDav: Boolean) {
+        val path = if (isWebDav) {
+             val lastWebDavPath = userPreferencesRepository.getLastWebDavPath()
+             val lastServerId = userPreferencesRepository.getLastServerId()
+             if (lastServerId != -1) lastWebDavPath ?: "/" else "WebDAV"
+        } else {
+             userPreferencesRepository.getLastLocalPath() ?: android.os.Environment.getExternalStorageDirectory().absolutePath
+        }
+
+        val lastServerId = if (isWebDav) userPreferencesRepository.getLastServerId() else -1
+
         _state.value = _state.value.copy(
             isWebDavTab = isWebDav, 
-            serverId = null,
-            currentPath = if (isWebDav) "WebDAV" else android.os.Environment.getExternalStorageDirectory().absolutePath
+            serverId = if (isWebDav && lastServerId != -1) lastServerId else null,
+            currentPath = path
         )
-        if (isWebDav) {
+        userPreferencesRepository.setLastLibraryTab(if (isWebDav) 1 else 0)
+        
+        if (isWebDav && (lastServerId == -1 || path == "WebDAV")) {
             showServerList()
         } else {
-            val root = android.os.Environment.getExternalStorageDirectory().absolutePath
-            loadFiles(root)
+            loadFiles(path, _state.value.serverId)
         }
     }
 
     private fun showServerList() {
         _state.value = _state.value.copy(
             currentPath = "WebDAV",
-            fileList = emptyList(), // Will be populated by combine
+            fileList = emptyList(), 
             serverId = null,
             isLoading = false
         )
+        // Persistence: save that we are at the server list
+        userPreferencesRepository.setLastServerId(-1)
+        userPreferencesRepository.setLastWebDavPath("WebDAV")
     }
 
     private fun loadFiles(path: String, serverId: Int? = _state.value.serverId) {
@@ -172,6 +208,16 @@ class LibraryViewModel(
                     serverId = serverId,
                     isLoading = false
                 )
+                
+                // Save path specifically for the current tab
+                if (_state.value.isWebDavTab) {
+                    userPreferencesRepository.setLastWebDavPath(path)
+                    serverId?.let { userPreferencesRepository.setLastServerId(it) }
+                } else {
+                    userPreferencesRepository.setLastLocalPath(path)
+                }
+                userPreferencesRepository.setLastLibraryPath(path)
+                userPreferencesRepository.setLastLibraryTab(if (_state.value.isWebDavTab) 1 else 0)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -183,7 +229,8 @@ class LibraryViewModel(
 
     fun toggleFavorite(entry: FileEntry) {
         viewModelScope.launch {
-            val existing = favoriteDao.getAllFavorites().first().find { it.path == entry.path }
+            val favorites = favoriteDao.getAllFavorites().first()
+            val existing = favorites.find { it.path == entry.path }
             if (existing != null) {
                 favoriteDao.deleteFavorite(existing)
             } else {
@@ -203,7 +250,8 @@ class LibraryViewModel(
 
     fun togglePin(entry: FileEntry) {
         viewModelScope.launch {
-            val existing = favoriteDao.getAllFavorites().first().find { it.path == entry.path }
+            val favorites = favoriteDao.getAllFavorites().first()
+            val existing = favorites.find { it.path == entry.path }
             if (existing != null) {
                 // Update existing favorite
                 favoriteDao.updateFavorite(existing.copy(isPinned = !existing.isPinned))
@@ -238,7 +286,7 @@ class LibraryViewModel(
         if (_state.value.isWebDavTab && serverId != null && currentPath == "/") {
             showServerList()
             _state.value = _state.value.copy(serverId = null)
-        } else if (currentPath != rootPath && currentPath != "/") {
+        } else if (currentPath != rootPath && currentPath != "/" && currentPath != "WebDAV") {
             val parentPath = currentPath.trimEnd('/').substringBeforeLast('/', "/")
             loadFiles(if(parentPath.isEmpty()) "/" else parentPath)
         }
@@ -258,5 +306,22 @@ class LibraryViewModel(
         val isWebDav = serverId != null && serverId != -1
         _state.value = _state.value.copy(isWebDavTab = isWebDav, serverId = serverId)
         loadFiles(path, serverId)
+    }
+
+    fun addServer(name: String, url: String, username: String, pass: String) {
+        viewModelScope.launch {
+            val id = webDavServerDao.insertServer(com.uviewer_android.data.WebDavServer(name = name, url = url)).toInt()
+            credentialsManager.saveCredentials(id, username, pass)
+        }
+    }
+
+    fun deleteServer(server: com.uviewer_android.data.WebDavServer) {
+        viewModelScope.launch {
+            webDavServerDao.deleteServer(server)
+            credentialsManager.clearCredentials(server.id)
+            if (_state.value.serverId == server.id) {
+                showServerList()
+            }
+        }
     }
 }

@@ -77,31 +77,36 @@ fun DocumentViewerScreen(
     // Status Bar Logic
     val context = androidx.compose.ui.platform.LocalContext.current
     val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-    // Determine if we need light status bar (black text) or dark status bar (white text)
-    // Based on docBackgroundColor. If Sepia/White -> Light Status Bar (Black Text). If Dark -> Dark Status Bar (White Text).
-    // But if system is in Dark Theme, and we use White background, we might want Light Status Bar?
-    // Let's stick to the document background.
-    val useLightStatusBar = uiState.docBackgroundColor != com.uviewer_android.data.repository.UserPreferencesRepository.DOC_BG_DARK
     
-    DisposableEffect(useLightStatusBar, isFullScreen) {
-        val window = (context as? android.app.Activity)?.window
-        if (window != null) {
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            if (isFullScreen) {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = useLightStatusBar
-            }
-        }
+    // When UI is shown (!isFullScreen), icons follow the system/app theme.
+    // When UI is hidden (isFullScreen), icons follow the document background.
+    val useLightStatusBar = if (!isFullScreen) {
+        !systemInDarkTheme
+    } else {
+        uiState.docBackgroundColor != com.uviewer_android.data.repository.UserPreferencesRepository.DOC_BG_DARK
+    }
+    
+    DisposableEffect(Unit) {
         onDispose {
             val window = (context as? android.app.Activity)?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                 // Restore based on system theme
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
+            }
+        }
+    }
+
+    LaunchedEffect(useLightStatusBar, isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = useLightStatusBar
+            if (isFullScreen) {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
     }
@@ -185,7 +190,7 @@ fun DocumentViewerScreen(
                 }
             }
         },
-        gesturesEnabled = false // Custom gesture implementation below
+        gesturesEnabled = true
     ) {
         Scaffold(
             topBar = {
@@ -291,25 +296,6 @@ fun DocumentViewerScreen(
                                 Text("${if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines) else 0}%", style = MaterialTheme.typography.bodySmall)
                             }
                             
-                            // Chunk Navigation for Large Files
-                            if (uiState.hasMoreContent || uiState.currentChunkIndex > 0) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    TextButton(onClick = { 
-                                        isNavigating = true
-                                        isPageLoading = true
-                                        viewModel.prevChunk() 
-                                    }, enabled = uiState.currentChunkIndex > 0) { Text("Prev Seg") }
-                                    TextButton(onClick = { 
-                                        isNavigating = true
-                                        isPageLoading = true
-                                        viewModel.nextChunk() 
-                                    }, enabled = uiState.hasMoreContent) { Text("Next Seg") }
-                                }
-                            }
-                            
                             Slider(
                                  value = currentLine.toFloat(),
                                  onValueChange = { 
@@ -340,46 +326,6 @@ fun DocumentViewerScreen(
                                  interactionSource = sliderInteractionSource,
                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
-                         }
- 
-                         // Text Chunk Navigation
-                         if (type == FileEntry.FileType.TEXT && (uiState.currentChunkIndex > 0 || uiState.hasMoreContent)) {
-                             Row(
-                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                 verticalAlignment = Alignment.CenterVertically
-                             ) {
-                                 TextButton(
-                                     onClick = { 
-                                         isNavigating = true
-                                         isPageLoading = true
-                                         viewModel.prevChunk() 
-                                     },
-                                     enabled = uiState.currentChunkIndex > 0
-                                 ) {
-                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                     Spacer(Modifier.width(8.dp))
-                                     Text("Prev Seg")
-                                 }
- 
-                                 Text(
-                                     "Segment ${uiState.currentChunkIndex + 1}",
-                                     style = MaterialTheme.typography.bodyMedium
-                                 )
- 
-                                 TextButton(
-                                     onClick = { 
-                                         isNavigating = true
-                                         isPageLoading = true
-                                         viewModel.nextChunk() 
-                                     },
-                                     enabled = uiState.hasMoreContent
-                                 ) {
-                                     Text("Next Seg")
-                                     Spacer(Modifier.width(8.dp))
-                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                                 }
-                             }
                          }
                          if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
                              Row(
@@ -492,6 +438,9 @@ fun DocumentViewerScreen(
                                 settings.allowFileAccess = true 
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
+                                settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                                settings.useWideViewPort = true
+                                settings.loadWithOverviewMode = true
                                 
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -506,6 +455,13 @@ fun DocumentViewerScreen(
                                             } else if ($targetLine === 1) {
                                                 window.scrollTo(0, 0);
                                             }
+                                            
+                                            // 1.5. Dynamic tagging for 3-character ruby
+                                            document.querySelectorAll('rt').forEach(function(el) {
+                                                if (el.textContent.trim().length === 3) {
+                                                    el.classList.add('ruby-3');
+                                                }
+                                            });
                                             
                                             // 2. 정확한 JS 기반 페이지 넘김 함수 생성
                                             window.pageDown = function() {

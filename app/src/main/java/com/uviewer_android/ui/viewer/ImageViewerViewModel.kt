@@ -62,6 +62,12 @@ data class ImageViewerUiState(
         }
     }
 
+    fun setInvertImageControl(invert: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setInvertImageControl(invert)
+        }
+    }
+
 
     fun setDualPageOrder(order: Int) {
         viewModelScope.launch {
@@ -137,7 +143,7 @@ data class ImageViewerUiState(
                 var savedIndex = 0
                 try {
                     val existing = recentFileDao.getFile(filePath)
-                    val savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
+                    savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
                     val savedImageName = existing?.positionTitle
                     
                     val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")

@@ -43,6 +43,9 @@ class SettingsViewModel(
     val language: StateFlow<String> = userPreferencesRepository.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.LANG_SYSTEM)
 
+    val docTextColor: StateFlow<String> = userPreferencesRepository.docTextColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "black")
+
     val invertImageControl: StateFlow<Boolean> = userPreferencesRepository.invertImageControl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -74,6 +77,10 @@ class SettingsViewModel(
 
     fun setLanguage(lang: String) {
         userPreferencesRepository.setLanguage(lang)
+    }
+
+    fun setDocTextColor(color: String) {
+        userPreferencesRepository.setDocTextColor(color)
     }
 
     fun setInvertImageControl(invert: Boolean) {

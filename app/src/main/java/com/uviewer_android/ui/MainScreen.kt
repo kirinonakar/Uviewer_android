@@ -79,39 +79,12 @@ fun MainScreen(activity: com.uviewer_android.MainActivity? = null) {
                                         }
                                     }
                                 } else if (screen is Screen.Library) {
-                                    val currentEntry = navController.currentBackStackEntry
-                                    val currentRoute = currentEntry?.destination?.route
-                                    if (currentRoute?.startsWith("viewer") == true) {
-                                        val filePath = currentEntry.arguments?.getString("path")
-                                        val serverId = currentEntry.arguments?.getInt("serverId") ?: -1
-                                        if (filePath != null) {
-                                            val parentPath = filePath.substringBeforeLast('/', "")
-                                            val encodedParentPath = android.net.Uri.encode(parentPath, null)
-                                            val route = "library?path=$encodedParentPath&serverId=$serverId"
-                                            navController.navigate(route) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
-                                        } else {
-                                            navController.navigate(screen.route) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState = true
-                                                }
-                                                launchSingleTop = true
-                                                restoreState = true
-                                            }
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
                                         }
-                                    } else {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
                                 } else {
                                     navController.navigate(screen.route) {

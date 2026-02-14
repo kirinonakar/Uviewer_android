@@ -3,6 +3,7 @@ package com.uviewer_android.ui.viewer
 import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
 import android.util.Log
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -22,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -90,26 +92,39 @@ fun ImageViewerScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // Ensure status bar icons are visible (white) on dark background even in light theme
-    val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
-    DisposableEffect(isFullScreen) {
-        val window = (context as? android.app.Activity)?.window
-        if (window != null) {
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = false // White icons
-            if (isFullScreen) {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-            }
-        }
+    // Status Bar Logic
+    val isLightAppTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    
+    // When UI is shown (!isFullScreen), icons follow the app's current theme (Light/Dark).
+    // When UI is hidden (isFullScreen), icons follow the viewer background (always black for images).
+    val useLightStatusBar = if (!isFullScreen) {
+        isLightAppTheme
+    } else {
+        false // PDF full screen background is black
+    }
+    
+    DisposableEffect(Unit) {
         onDispose {
             val window = (context as? android.app.Activity)?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
+                insetsController.isAppearanceLightStatusBars = isLightAppTheme
+            }
+        }
+    }
+
+    LaunchedEffect(useLightStatusBar, isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            insetsController.isAppearanceLightStatusBars = useLightStatusBar
+            if (isFullScreen) {
+                // Hide navigation, keep status
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
     }
@@ -208,50 +223,151 @@ fun ImageViewerScreen(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .pointerInput(pagerState, isDualPage) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            scope.launch {
-                                val screenWidth = size.width
-                                val screenHeight = size.height
-                                val thirdOfWidth = screenWidth / 3
-                                val isLeftTap = offset.x < thirdOfWidth
-                                val isRightTap = offset.x > thirdOfWidth * 2
-                                val isTopTap = offset.y < screenHeight / 4 // Top 25%
-                                
-                                val goPrev = if (invertImageControl) isRightTap else isLeftTap
-                                val goNext = if (invertImageControl) isLeftTap else isRightTap
+        Scaffold(
+            containerColor = if (isFullScreen) Color.Black else MaterialTheme.colorScheme.background,
+            topBar = {
+                if (!isFullScreen) {
+                    val title = if (isDualPage) {
+                        val p = pagerState.currentPage * 2
+                        val img1 = uiState.images[p].name
+                        val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
+                        val pageTitle = if (img2 != null) "$img1 / $img2" else img1
+                        if (uiState.containerName != null) "${uiState.containerName} - $pageTitle" else pageTitle
+                    } else {
+                        if (pagerState.currentPage < uiState.images.size) {
+                            val imgName = uiState.images[pagerState.currentPage].name
+                            if (uiState.containerName != null) "${uiState.containerName} - $imgName" else imgName
+                        } else ""
+                    }
+                    
+                    var showSettingsDialog by remember { mutableStateOf(false) }
 
-                                when {
-                                    isTopTap -> {
-                                        onToggleFullScreen()
-                                    }
-                                    goPrev && !isTopTap -> {
-                                        val current = pagerState.currentPage
-                                        if (current > 0) {
-                                            pagerState.scrollToPage(current - 1)
+                    Column {
+                        TopAppBar(
+                            title = { Text(title, maxLines = 1) }, 
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                                }
+                            },
+                            actions = {
+                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                                val currentImageIndex = if (isDualPage) (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1) else pagerState.currentPage
+                                IconButton(onClick = { 
+                                    viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
+                                    android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                                }
+                                IconButton(onClick = { isDualPage = !isDualPage }) {
+                                    Icon(
+                                        if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
+                                        contentDescription = "Toggle Dual Page"
+                                    )
+                                }
+                                IconButton(onClick = { showSettingsDialog = true }) {
+                                    Icon(Icons.Default.Settings, contentDescription = "Settings")
+                                }
+                            }
+                        )
+                        HorizontalDivider()
+                        
+                        if (showSettingsDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showSettingsDialog = false },
+                                title = { Text(stringResource(R.string.section_image_viewer)) },
+                                text = {
+                                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { viewModel.setInvertImageControl(!invertImageControl) }.padding(vertical = 4.dp)) {
+                                            Checkbox(checked = invertImageControl, onCheckedChange = { viewModel.setInvertImageControl(it) })
+                                            Column {
+                                                Text(stringResource(R.string.invert_image_control))
+                                                Text(stringResource(R.string.invert_image_control_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.setPersistZoom(!uiState.persistZoom) }) {
+                                            Checkbox(checked = uiState.persistZoom, onCheckedChange = { viewModel.setPersistZoom(it) })
+                                            Text(stringResource(R.string.persist_zoom))
+                                        }
+                                        Column {
+                                            Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}")
+                                            Slider(
+                                                value = uiState.sharpeningAmount.toFloat(),
+                                                onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
+                                                valueRange = 0f..10f,
+                                                steps = 9
+                                            )
+                                        }
+                                        Column {
+                                            Text(stringResource(R.string.dual_page_order))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                FilterChip(
+                                                    selected = dualPageOrder == 0,
+                                                    onClick = { viewModel.setDualPageOrder(0) },
+                                                    label = { Text(stringResource(R.string.dual_page_ltr)) }
+                                                )
+                                                FilterChip(
+                                                    selected = dualPageOrder == 1,
+                                                    onClick = { viewModel.setDualPageOrder(1) },
+                                                    label = { Text(stringResource(R.string.dual_page_rtl)) }
+                                                )
+                                            }
                                         }
                                     }
-                                    goNext && !isTopTap -> {
-                                        val current = pagerState.currentPage
-                                        if (current < pageCount - 1) {
-                                            pagerState.scrollToPage(current + 1)
+                                },
+                                confirmButton = {
+                                    Button(onClick = { showSettingsDialog = false }) { Text("Close") }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+                    .background(Color.Black)
+                    .pointerInput(pagerState, isDualPage) {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                scope.launch {
+                                    val screenWidth = size.width
+                                    val screenHeight = size.height
+                                    val thirdOfWidth = screenWidth / 3
+                                    val isLeftTap = offset.x < thirdOfWidth
+                                    val isRightTap = offset.x > thirdOfWidth * 2
+                                    val isTopTap = offset.y < screenHeight / 4 // Top 25%
+                                    
+                                    val goPrev = if (invertImageControl) isRightTap else isLeftTap
+                                    val goNext = if (invertImageControl) isLeftTap else isRightTap
+
+                                    when {
+                                        isTopTap -> {
+                                            onToggleFullScreen()
                                         }
-                                    }
-                                    else -> {
-                                        // Center tap - do nothing or toggle UI if preferred
+                                        goPrev && !isTopTap -> {
+                                            val current = pagerState.currentPage
+                                            if (current > 0) {
+                                                pagerState.scrollToPage(current - 1)
+                                            }
+                                        }
+                                        goNext && !isTopTap -> {
+                                            val current = pagerState.currentPage
+                                            if (current < pageCount - 1) {
+                                                pagerState.scrollToPage(current + 1)
+                                            }
+                                        }
+                                        else -> {
+                                            // Center tap - do nothing or toggle UI if preferred
+                                        }
                                     }
                                 }
                             }
-                        }
-                    )
-                }
-        ) {
-                Log.d("ImageViewer", "Pager state: currentPage=${pagerState.currentPage}, pageCount=$pageCount")
+                        )
+                    }
+            ) {
                 val currentScale = if (uiState.persistZoom) globalScale else (scales[pagerState.currentPage] ?: 1f)
                 HorizontalPager(
                     state = pagerState,
@@ -259,8 +375,6 @@ fun ImageViewerScreen(
                     userScrollEnabled = currentScale <= 1.1f,
                     beyondViewportPageCount = 1
                 ) { page ->
-                    Log.d("ImageViewer", "Rendering Pager item for page $page")
-                    
                     val (firstIdx, secondIdx) = if (isDualPage) {
                         val p1 = page * 2
                         val p2 = page * 2 + 1
@@ -269,142 +383,43 @@ fun ImageViewerScreen(
                         Pair(page, -1)
                     }
 
-                Box(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    val firstImage = if (firstIdx >= 0 && firstIdx < uiState.images.size) uiState.images[firstIdx] else null
-                    val secondImage = if (isDualPage && secondIdx >= 0 && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        val firstImage = if (firstIdx >= 0 && firstIdx < uiState.images.size) uiState.images[firstIdx] else null
+                        val secondImage = if (isDualPage && secondIdx >= 0 && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
 
-                    if (firstImage != null) {
-                        Log.d("ImageViewer", "Page $page: Showing image $firstIdx: ${firstImage.name}")
-                    }
-
-                    key(firstIdx) {
-                        if (isDualPage) {
-                            ZoomableDualImage(
-                                firstImageUrl = firstImage?.path,
-                                secondImageUrl = secondImage?.path,
-                                isWebDav = uiState.isContentLoadedFromWebDav,
-                                authHeader = uiState.authHeader,
-                                serverUrl = uiState.serverUrl,
-                                scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
-                                sharpeningAmount = uiState.sharpeningAmount,
-                                onScaleChanged = { newScale -> 
-                                    if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
-                                }
-                            )
-                        } else if (firstImage != null) {
-                            val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
-                             ZoomableImage(
-                                imageUrl = firstImage.path,
-                                isWebDav = uiState.isContentLoadedFromWebDav,
-                                authHeader = uiState.authHeader,
-                                serverUrl = uiState.serverUrl,
-                                scale = currentScale,
-                                sharpeningAmount = uiState.sharpeningAmount,
-                                
-                                onScaleChanged = { newScale -> 
-                                    if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Top Bar
-            if (!isFullScreen) {
-                // Determine title
-                val title = if (isDualPage) {
-                     val p = pagerState.currentPage * 2
-                     val img1 = uiState.images[p].name
-                     val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
-                     val pageTitle = if (img2 != null) "$img1 / $img2" else img1
-                     if (uiState.containerName != null) "${uiState.containerName} - $pageTitle" else pageTitle
-                } else {
-                    if (pagerState.currentPage < uiState.images.size) {
-                        val imgName = uiState.images[pagerState.currentPage].name
-                        if (uiState.containerName != null) "${uiState.containerName} - $imgName" else imgName
-                    } else ""
-                }
-                
-                var showSettingsDialog by remember { mutableStateOf(false) }
-
-                Column(modifier = Modifier.align(Alignment.TopCenter)) {
-                    TopAppBar(
-                        title = { Text(title, color = Color.White, maxLines = 1) }, 
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
-                            }
-                        },
-                        actions = {
-                            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
-                            val currentImageIndex = if (isDualPage) (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1) else pagerState.currentPage
-                            IconButton(onClick = { 
-                                viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
-                                android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
-                            }
-                            IconButton(onClick = { isDualPage = !isDualPage }) {
-                                Icon(
-                                    if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
-                                    contentDescription = "Toggle Dual Page",
-                                    tint = Color.White
+                        key(firstIdx) {
+                            if (isDualPage) {
+                                ZoomableDualImage(
+                                    firstImageUrl = firstImage?.path,
+                                    secondImageUrl = secondImage?.path,
+                                    isWebDav = uiState.isContentLoadedFromWebDav,
+                                    authHeader = uiState.authHeader,
+                                    serverUrl = uiState.serverUrl,
+                                    scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
+                                    sharpeningAmount = uiState.sharpeningAmount,
+                                    onScaleChanged = { newScale -> 
+                                        if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                                    }
+                                )
+                            } else if (firstImage != null) {
+                                val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
+                                 ZoomableImage(
+                                    imageUrl = firstImage.path,
+                                    isWebDav = uiState.isContentLoadedFromWebDav,
+                                    authHeader = uiState.authHeader,
+                                    serverUrl = uiState.serverUrl,
+                                    scale = currentScale,
+                                    sharpeningAmount = uiState.sharpeningAmount,
+                                    onScaleChanged = { newScale -> 
+                                        if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
+                                    }
                                 )
                             }
-                            IconButton(onClick = { showSettingsDialog = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Black.copy(alpha = 0.5f)
-                        )
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
-                }
-
-                if (showSettingsDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showSettingsDialog = false },
-                        title = { Text(stringResource(R.string.section_image_viewer)) },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = uiState.persistZoom, onCheckedChange = { viewModel.setPersistZoom(it) })
-                                    Text(stringResource(R.string.persist_zoom))
-                                }
-                                Column {
-                                    Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}")
-                                    Slider(
-                                        value = uiState.sharpeningAmount.toFloat(),
-                                        onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
-                                        valueRange = 0f..10f,
-                                        steps = 9
-                                    )
-                                }
-                                Column {
-                                    Text(stringResource(R.string.dual_page_order))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        FilterChip(
-                                            selected = dualPageOrder == 0,
-                                            onClick = { viewModel.setDualPageOrder(0) },
-                                            label = { Text(stringResource(R.string.dual_page_ltr)) }
-                                        )
-                                        FilterChip(
-                                            selected = dualPageOrder == 1,
-                                            onClick = { viewModel.setDualPageOrder(1) },
-                                            label = { Text(stringResource(R.string.dual_page_rtl)) }
-                                        )
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            Button(onClick = { showSettingsDialog = false }) { Text("Close") }
                         }
-                    )
+                    }
                 }
             }
         }

@@ -16,7 +16,9 @@ object AppViewModelProvider {
                 webDavRepository = app.container.webDavRepository,
                 favoriteDao = app.container.database.favoriteDao(),
                 webDavServerDao = app.container.database.webDavServerDao(),
-                recentFileDao = app.container.database.recentFileDao()
+                recentFileDao = app.container.database.recentFileDao(),
+                userPreferencesRepository = app.container.userPreferencesRepository,
+                credentialsManager = app.container.credentialsManager
             )
         }
         initializer {

@@ -265,11 +265,90 @@ class DocumentViewerViewModel(
             val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
             val globalLineOffset = startLine - 1
             
-            val processed = if (currentFileType == FileEntry.FileType.HTML || currentFilePath.endsWith(".html")) {
-                chunkText
+            val processed = if (currentFileType == FileEntry.FileType.HTML || currentFilePath.endsWith(".html", ignoreCase = true)) {
+                val colors = getColors()
+                val fontFamily = when(_uiState.value.fontFamily) {
+                    "serif" -> "'Sawarabi Mincho', serif"
+                    "sans-serif" -> "'Sawarabi Gothic', sans-serif"
+                    else -> "serif"
+                }
+                val resetCss = """
+                    <style>
+                        /* Ignore fixed layout constraints aggressively, but spare ruby elements */
+                        *:not(ruby):not(rt):not(rp) { 
+                            max-width: 100% !important; 
+                            box-sizing: border-box !important; 
+                            overflow-wrap: break-word !important; 
+                            width: auto !important; 
+                            height: auto !important; 
+                            float: none !important; 
+                            position: static !important; 
+                            margin-left: 0 !important;
+                            margin-right: 0 !important;
+                            padding-left: 0 !important;
+                            padding-right: 0 !important;
+                            text-indent: 0 !important;
+                        }
+                        html, body {
+                            width: 100% !important;
+                            height: auto !important;
+                            overflow-x: hidden !important;
+                            margin: 0 !important;
+                            padding: 0 !important;
+                        }
+                        body { 
+                            background-color: ${colors.first} !important; 
+                            color: ${colors.second} !important; 
+                            font-family: $fontFamily !important;
+                            font-size: ${_uiState.value.fontSize}px !important;
+                            padding: 1.2em !important;
+                            display: block !important;
+                            line-height: 1.8 !important;
+                        }
+                        p, div, article, section, h1, h2, h3, h4, h5, h6 {
+                            width: 100% !important;
+                            display: block !important;
+                            margin-top: 0.5em !important;
+                            margin-bottom: 0.5em !important;
+                        }
+                        img { 
+                            max-width: 100% !important; 
+                            height: auto !important; 
+                            display: block !important; 
+                            margin: 1em auto !important; 
+                        }
+                        /* Support for tables in small screens */
+                        table {
+                            display: block !important;
+                            overflow-x: auto !important;
+                            width: 100% !important;
+                        }
+                        rt.ruby-3 {                            
+                            transform: scaleX(0.75) !important;
+                            transform-origin: center !important;
+                            white-space: nowrap !important;
+                            font-size: 0.5em !important; 
+                            text-align: center !important;
+                        }
+                        /* Hide potentially problematic layout elements */
+                        iframe, script, noscript, style:not([data-app-style]) { display: none !important; }
+                    </style>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                """.trimIndent()
+                resetCss + chunkText
             } else {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    val htmlBody = AozoraParser.parse(chunkText, globalLineOffset)
+                    var htmlBody = if (currentFilePath.endsWith(".md", ignoreCase = true)) {
+                        convertMarkdownToHtml(chunkText)
+                    } else {
+                        AozoraParser.parse(chunkText, globalLineOffset)
+                    }
+                    
+                    if (!isWebDavContext) {
+                        val parentDir = java.io.File(currentFilePath).parentFile
+                        htmlBody = resolveLocalImages(htmlBody, parentDir)
+                    }
+
                     val colors = getColors()
                     AozoraParser.wrapInHtml(
                         htmlBody, 
@@ -389,12 +468,57 @@ class DocumentViewerViewModel(
                         "Error reading chapter: ${e.message}"
                     }
 
+                    val colors = getColors()
+                    val fontFamily = when(_uiState.value.fontFamily) {
+                        "serif" -> "'Sawarabi Mincho', serif"
+                        "sans-serif" -> "'Sawarabi Gothic', sans-serif"
+                        else -> "serif"
+                    }
+                    val resetCss = """
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                        <style data-app-style="true">
+                            *:not(ruby):not(rt):not(rp) { 
+                                max-width: 100% !important; 
+                                box-sizing: border-box !important; 
+                                overflow-wrap: break-word !important; 
+                            }
+                            html, body {
+                                width: 100% !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                background-color: ${colors.first} !important;
+                                color: ${colors.second} !important;
+                            }
+                            body { 
+                                font-family: $fontFamily !important;
+                                font-size: ${_uiState.value.fontSize}px !important;
+                                padding: 1.2em !important;
+                                line-height: 1.8 !important;
+                            }
+                            rt.ruby-3 {                                
+                                transform: scaleX(0.75) !important;
+                                transform-origin: center !important;
+                                white-space: nowrap !important;
+                                font-size: 0.5em !important;
+                                text-align: center !important;
+                            }
+                            /* Layout ignore fixes */
+                            [style*="width"]:not(ruby):not(rt):not(rp), 
+                            [style*="margin-left"]:not(ruby):not(rt):not(rp), 
+                            [style*="margin-right"]:not(ruby):not(rt):not(rp) {
+                                width: auto !important;
+                                margin-left: 0 !important;
+                                margin-right: 0 !important;
+                            }
+                        </style>
+                    """.trimIndent()
+
                     val baseUrl = "file://${chapterFile.parent}/"
                     
                     _uiState.value = _uiState.value.copy(
                         url = null, 
                         baseUrl = baseUrl,
-                        content = rawContent, 
+                        content = resetCss + rawContent, 
                         currentChapterIndex = index,
                         isLoading = false,
                         currentLine = 1,
@@ -459,5 +583,57 @@ class DocumentViewerViewModel(
              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
              else -> "#ffffff" to "#000000"
         }
+    }
+
+    private fun convertMarkdownToHtml(md: String): String {
+        var html = md
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        
+        // Headers
+        html = html.replace(Regex("^# (.*)$", RegexOption.MULTILINE), "<h1>$1</h1>")
+        html = html.replace(Regex("^## (.*)$", RegexOption.MULTILINE), "<h2>$1</h2>")
+        html = html.replace(Regex("^### (.*)$", RegexOption.MULTILINE), "<h3>$1</h3>")
+        
+        // Bold
+        html = html.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
+        html = html.replace(Regex("__(.*?)__"), "<b>$1</b>")
+        
+        // Italic
+        html = html.replace(Regex("\\*(.*?)\\*"), "<i>$1</i>")
+        html = html.replace(Regex("_(.*?)_"), "<i>$1</i>")
+        
+        // Links
+        html = html.replace(Regex("\\[(.*?)\\]\\((.*?)\\)"), "<a href=\"$2\">$1</a>")
+        
+        // Images handled by resolveLocalImages later
+        html = html.replace(Regex("!\\[(.*?)\\]\\((.*?)\\)"), "<img src=\"$2\" alt=\"$1\" />")
+        
+        // Paragraphs
+        html = html.split(Regex("\\n\\n+")).joinToString("") { p ->
+            if (p.startsWith("<h") || p.startsWith("<img")) p else "<p>${p.replace("\n", " ")}</p>"
+        }
+        
+        return html
+    }
+
+    private fun resolveLocalImages(content: String, parentDir: java.io.File?): String {
+        if (parentDir == null) return content
+        var result = content
+        val imgRegex = Regex("<img\\s+[^>]*src=\"([^\"]+)\"[^>]*>")
+        imgRegex.findAll(content).forEach { match ->
+            val originalSrc = match.groups[1]?.value ?: return@forEach
+            if (originalSrc.startsWith("http") || originalSrc.startsWith("data:")) return@forEach
+            
+            val imgFile = java.io.File(parentDir, originalSrc)
+            if (imgFile.exists()) {
+                result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
+            } else {
+                // Hide missing image tag as requested
+                result = result.replace(match.value, "")
+            }
+        }
+        return result
     }
 }

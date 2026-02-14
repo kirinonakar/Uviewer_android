@@ -33,7 +33,7 @@ class WebDavClient(
         val contentType: String?
     )
 
-    private fun buildUrl(path: String): String {
+    fun buildUrl(path: String): String {
         val baseHttpUrl = server.url.trimEnd('/').toHttpUrl()
         val builder = baseHttpUrl.newBuilder()
         

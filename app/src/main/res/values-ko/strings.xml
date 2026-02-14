@@ -47,7 +47,7 @@
     <string name="font_size_fmt">글자 크기: %d sp</string>
     <string name="font_default">기본값</string>
     <string name="section_image_viewer">이미지 뷰어</string>
-    <string name="invert_image_control">조작 반전</string>
+    <string name="invert_image_control">컨트롤 방향 반전</string>
     <string name="invert_image_control_desc">이전/다음 이미지 전환 터치 방향 반전</string>
     <string name="dual_page_order">두 페이지 보기 순서</string>
     <string name="dual_page_ltr">왼쪽에서 오른쪽</string>

@@ -134,26 +134,40 @@ fun MediaPlayerScreen(
         }
     }
 
-    LaunchedEffect(uiState.mediaUrl, uiState.authHeader, mediaController) {
+    LaunchedEffect(uiState.mediaUrl, uiState.playlist, uiState.authHeader, mediaController) {
         val controller = mediaController ?: return@LaunchedEffect
-        if (uiState.mediaUrl != null) {
-            val uri = if (isWebDav) {
-                android.net.Uri.parse(uiState.mediaUrl!!)
-            } else {
-                android.net.Uri.fromFile(java.io.File(uiState.mediaUrl!!))
+        if (uiState.mediaUrl != null && uiState.playlist.isNotEmpty()) {
+            val mediaItems = uiState.playlist.mapIndexed { index, file ->
+                val uriString = uiState.playlistUrls.getOrNull(index) ?: file.path
+                val uri = if (isWebDav) {
+                    android.net.Uri.parse(uriString)
+                } else {
+                    android.net.Uri.fromFile(java.io.File(file.path))
+                }
+                
+                MediaItem.Builder()
+                    .setUri(uri)
+                    .setMediaId(file.path)
+                    .setRequestMetadata(
+                        androidx.media3.common.MediaItem.RequestMetadata.Builder()
+                            .setExtras(android.os.Bundle().apply {
+                                uiState.authHeader.forEach { (k, v) -> putString(k, v) }
+                            })
+                            .build()
+                    )
+                    .build()
             }
             
-            val mediaItem = MediaItem.fromUri(uri)
-            if (isWebDav) {
-                val dataSourceFactory = DefaultHttpDataSource.Factory()
-                dataSourceFactory.setDefaultRequestProperties(uiState.authHeader)
-                // Note: Simple MediaController.setMediaItem might not work for WebDAV without custom MediaSource in Service
-                // But if the Service is in the same process, we can share the player or handle it.
-                // For now, let's assume service handles basic URIs. 
-                // WebDAV might need the service to use the right DataSourceFactory.
-                controller.setMediaItem(mediaItem)
-            } else {
-                controller.setMediaItem(mediaItem)
+            val currentIndex = uiState.currentIndex.coerceAtLeast(0)
+            
+            // If the controller has a different playlist or ID, update it.
+            // Check if current ID is in the set of new items
+            val currentMediaId = controller.currentMediaItem?.mediaId
+            val isCurrentInNew = mediaItems.any { it.mediaId == currentMediaId }
+            
+            if (!isCurrentInNew || controller.mediaItemCount != mediaItems.size) {
+                 controller.setMediaItems(mediaItems, currentIndex, uiState.savedPosition)
+                 controller.prepare()
             }
             
             controller.trackSelectionParameters = controller.trackSelectionParameters
@@ -161,10 +175,6 @@ fun MediaPlayerScreen(
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, !subtitleEnabled)
                 .build()
 
-            if (uiState.savedPosition > 0) {
-                controller.seekTo(uiState.savedPosition)
-            }
-            controller.prepare()
             controller.playWhenReady = true
         }
     }

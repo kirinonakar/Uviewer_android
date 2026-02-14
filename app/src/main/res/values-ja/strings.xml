@@ -47,7 +47,7 @@
     <string name="font_size_fmt">文字サイズ: %d sp</string>
     <string name="font_default">デフォルト</string>
     <string name="section_image_viewer">画像ビューア</string>
-    <string name="invert_image_control">操作を反転</string>
+    <string name="invert_image_control">コントロール方向を反転</string>
     <string name="invert_image_control_desc">前後のページ送りを反転させる</string>
     <string name="dual_page_order">見開きページ順</string>
     <string name="dual_page_ltr">左から右 (LTR)</string>

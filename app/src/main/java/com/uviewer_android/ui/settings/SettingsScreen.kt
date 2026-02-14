@@ -10,6 +10,10 @@ import com.uviewer_android.data.repository.UserPreferencesRepository
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -108,6 +112,71 @@ fun SettingsScreen(
                     supportingContent = { Text(docBgLabel) },
                     modifier = Modifier.clickable { showDocBgDialog = true }
                 )
+
+                var showCustomColorDialog by remember { mutableStateOf(false) }
+                ListItem(
+                    headlineContent = { Text("Manual Color Picker") },
+                    supportingContent = { Text("Set hex colors for background and text") },
+                    trailingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
+                    modifier = Modifier.clickable { showCustomColorDialog = true }
+                )
+                
+                if (showCustomColorDialog) {
+                    val docTextColor by viewModel.docTextColor.collectAsState()
+                    var bgHex by remember { mutableStateOf(docBackgroundColor) }
+                    var textHex by remember { mutableStateOf(docTextColor) }
+                    
+                    AlertDialog(
+                        onDismissRequest = { showCustomColorDialog = false },
+                        title = { Text("Manual Color Picker") },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = bgHex,
+                                    onValueChange = { bgHex = it },
+                                    label = { Text("Background Color (Hex)") },
+                                    placeholder = { Text("#FFFFFF") },
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = textHex,
+                                    onValueChange = { textHex = it },
+                                    label = { Text("Text Color (Hex)") },
+                                    placeholder = { Text("#000000") },
+                                    singleLine = true
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text("Preview:", style = MaterialTheme.typography.labelMedium)
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(60.dp)
+                                        .background(
+                                            try { Color(android.graphics.Color.parseColor(if (bgHex.startsWith("#")) bgHex else "#$bgHex")) } catch (e: Exception) { Color.White },
+                                            shape = MaterialTheme.shapes.small
+                                        )
+                                        .padding(8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        "Sample Text",
+                                        color = try { Color(android.graphics.Color.parseColor(if (textHex.startsWith("#")) textHex else "#$textHex")) } catch (e: Exception) { Color.Black }
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                viewModel.setDocBackgroundColor(if (bgHex.startsWith("#")) bgHex else "#$bgHex")
+                                viewModel.setDocTextColor(if (textHex.startsWith("#")) textHex else "#$textHex")
+                                showCustomColorDialog = false
+                            }) { Text(stringResource(R.string.confirm)) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showCustomColorDialog = false }) { Text(stringResource(R.string.cancel)) }
+                        }
+                    )
+                }
             }
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -186,6 +255,9 @@ fun SettingsScreen(
             }
             item { HorizontalDivider() }
             item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.section_webdav), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary) }
+                )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
                     modifier = Modifier.clickable { showAddDialog = true }
