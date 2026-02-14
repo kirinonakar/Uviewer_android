@@ -2,6 +2,12 @@
 .gradle/
 build/
 
+# Baseline Profiles (Generated metadata)
+*.dm
+*.prof
+*.profraw
+**/baselineProfiles/
+
 # Local configuration file (sdk path, etc)
 local.properties
 

@@ -55,9 +55,6 @@
     <string name="select_dual_page_order">ページ順を選択</string>
     <string name="persist_zoom">拡大率固定</string>
     <string name="persist_zoom_desc">ページが変わっても拡大率を維持する</string>
-    <string name="upscale_filter">高画質フィルタ</string>
-    <string name="upscale_filter_desc">大きな画像にシャープネスフィルタを適用する</string>
-
 
     <!-- Settings: WebDAV -->
     <string name="section_webdav">WebDAV サーバー</string>
@@ -82,4 +79,5 @@
     <string name="encoding_sjis">Shift_JIS (日本語)</string>
     <string name="encoding_euckr">EUC-KR (韓国語)</string>
     <string name="encoding_w1252">Windows-1252</string>
+    <string name="sharpening_amount">シャープネスの強さ</string>
 </resources>
