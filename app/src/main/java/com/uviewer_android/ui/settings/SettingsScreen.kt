@@ -39,8 +39,13 @@ fun SettingsScreen(
     val language by viewModel.language.collectAsState()
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
+    val customDocBackgroundColor by viewModel.customDocBackgroundColor.collectAsState()
+    val customDocTextColor by viewModel.customDocTextColor.collectAsState()
+
     val persistZoom by viewModel.persistZoom.collectAsState()
     val sharpeningAmount by viewModel.sharpeningAmount.collectAsState()
+    val imageViewMode by viewModel.imageViewMode.collectAsState()
+
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -48,6 +53,8 @@ fun SettingsScreen(
     var showDocBgDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDualPageOrderDialog by remember { mutableStateOf(false) }
+    var showImageViewModeDialog by remember { mutableStateOf(false) }
+
 
     Scaffold(
         topBar = {
@@ -105,8 +112,10 @@ fun SettingsScreen(
                     UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
                     UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
                     UserPreferencesRepository.DOC_BG_DARK -> stringResource(R.string.doc_bg_dark)
+                    UserPreferencesRepository.DOC_BG_CUSTOM -> stringResource(R.string.doc_bg_custom)
                     else -> stringResource(R.string.doc_bg_white)
                 }
+
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.document_background)) },
                     supportingContent = { Text(docBgLabel) },
@@ -115,33 +124,32 @@ fun SettingsScreen(
 
                 var showCustomColorDialog by remember { mutableStateOf(false) }
                 ListItem(
-                    headlineContent = { Text("Manual Color Picker") },
-                    supportingContent = { Text("Set hex colors for background and text") },
+                    headlineContent = { Text(stringResource(R.string.manual_color_picker)) },
+                    supportingContent = { Text("${stringResource(R.string.background_color)}: $customDocBackgroundColor, ${stringResource(R.string.text_color)}: $customDocTextColor") },
                     trailingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
                     modifier = Modifier.clickable { showCustomColorDialog = true }
                 )
                 
                 if (showCustomColorDialog) {
-                    val docTextColor by viewModel.docTextColor.collectAsState()
-                    var bgHex by remember { mutableStateOf(docBackgroundColor) }
-                    var textHex by remember { mutableStateOf(docTextColor) }
+                    var bgHex by remember { mutableStateOf(customDocBackgroundColor) }
+                    var textHex by remember { mutableStateOf(customDocTextColor) }
                     
                     AlertDialog(
                         onDismissRequest = { showCustomColorDialog = false },
-                        title = { Text("Manual Color Picker") },
+                        title = { Text(stringResource(R.string.manual_color_picker)) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 OutlinedTextField(
                                     value = bgHex,
                                     onValueChange = { bgHex = it },
-                                    label = { Text("Background Color (Hex)") },
+                                    label = { Text(stringResource(R.string.background_color) + " (Hex)") },
                                     placeholder = { Text("#FFFFFF") },
                                     singleLine = true
                                 )
                                 OutlinedTextField(
                                     value = textHex,
                                     onValueChange = { textHex = it },
-                                    label = { Text("Text Color (Hex)") },
+                                    label = { Text(stringResource(R.string.text_color) + " (Hex)") },
                                     placeholder = { Text("#000000") },
                                     singleLine = true
                                 )
@@ -167,8 +175,10 @@ fun SettingsScreen(
                         },
                         confirmButton = {
                             TextButton(onClick = {
-                                viewModel.setDocBackgroundColor(if (bgHex.startsWith("#")) bgHex else "#$bgHex")
-                                viewModel.setDocTextColor(if (textHex.startsWith("#")) textHex else "#$textHex")
+                                val finalBg = if (bgHex.startsWith("#")) bgHex.uppercase() else "#${bgHex.uppercase()}"
+                                val finalLines = if (textHex.startsWith("#")) textHex.uppercase() else "#${textHex.uppercase()}"
+                                viewModel.setCustomDocBackgroundColor(finalBg)
+                                viewModel.setCustomDocTextColor(finalLines)
                                 showCustomColorDialog = false
                             }) { Text(stringResource(R.string.confirm)) }
                         },
@@ -177,6 +187,7 @@ fun SettingsScreen(
                         }
                     )
                 }
+
             }
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -253,6 +264,20 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showDualPageOrderDialog = true }
                 )
             }
+            item {
+                val modeLabel = when(imageViewMode) {
+                    0 -> stringResource(R.string.image_view_single)
+                    1 -> stringResource(R.string.image_view_dual)
+                    2 -> stringResource(R.string.image_view_split)
+                    else -> stringResource(R.string.image_view_single)
+                }
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.image_view_mode)) },
+                    supportingContent = { Text(modeLabel) },
+                    modifier = Modifier.clickable { showImageViewModeDialog = true }
+                )
+            }
+
             item { HorizontalDivider() }
             item {
                 ListItem(
@@ -335,6 +360,17 @@ fun SettingsScreen(
                 }
             )
         }
+
+        if (showImageViewModeDialog) {
+            ImageViewModeSelectionDialog(
+                currentMode = imageViewMode,
+                onDismiss = { showImageViewModeDialog = false },
+                onSelect = { mode ->
+                    viewModel.setImageViewMode(mode)
+                    showImageViewModeDialog = false
+                }
+            )
+        }
     }
 }
 
@@ -351,6 +387,30 @@ fun DualPageOrderSelectionDialog(
             Column {
                 ThemeOptionRow(stringResource(R.string.dual_page_ltr), "0", currentOrder.toString(), { onSelect(0) })
                 ThemeOptionRow(stringResource(R.string.dual_page_rtl), "1", currentOrder.toString(), { onSelect(1) })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun ImageViewModeSelectionDialog(
+    currentMode: Int,
+    onDismiss: () -> Unit,
+    onSelect: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.image_view_mode)) },
+        text = {
+            Column {
+                ThemeOptionRow(stringResource(R.string.image_view_single), "0", currentMode.toString(), { onSelect(0) })
+                ThemeOptionRow(stringResource(R.string.image_view_dual), "1", currentMode.toString(), { onSelect(1) })
+                ThemeOptionRow(stringResource(R.string.image_view_split), "2", currentMode.toString(), { onSelect(2) })
             }
         },
         confirmButton = {
@@ -400,7 +460,9 @@ fun DocBgSelectionDialog(
                 ThemeOptionRow(stringResource(R.string.doc_bg_white), UserPreferencesRepository.DOC_BG_WHITE, currentBg, onSelect)
                 ThemeOptionRow(stringResource(R.string.doc_bg_sepia), UserPreferencesRepository.DOC_BG_SEPIA, currentBg, onSelect)
                 ThemeOptionRow(stringResource(R.string.doc_bg_dark), UserPreferencesRepository.DOC_BG_DARK, currentBg, onSelect)
+                ThemeOptionRow(stringResource(R.string.doc_bg_custom), UserPreferencesRepository.DOC_BG_CUSTOM, currentBg, onSelect)
             }
+
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {

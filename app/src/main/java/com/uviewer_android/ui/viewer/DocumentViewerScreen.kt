@@ -78,39 +78,45 @@ fun DocumentViewerScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     
-    // When UI is shown (!isFullScreen), icons follow the system/app theme.
-    // When UI is hidden (isFullScreen), icons follow the document background.
+    val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
+    
+    // Expose status bar appearance based on document background if it's "dark" or "custom" (if custom is dark enough)
+    // Simple heuristic for custom: if bg is dark, icons should be white.
+    fun isColorDark(colorHex: String): Boolean {
+        return try {
+            val color = android.graphics.Color.parseColor(colorHex)
+            val grey = 0.2126 * android.graphics.Color.red(color) + 
+                       0.7152 * android.graphics.Color.green(color) + 
+                       0.0722 * android.graphics.Color.blue(color)
+            grey < 128
+        } catch (e: Exception) { false }
+    }
+
     val useLightStatusBar = if (!isFullScreen) {
         !systemInDarkTheme
     } else {
-        uiState.docBackgroundColor != com.uviewer_android.data.repository.UserPreferencesRepository.DOC_BG_DARK
-    }
-    
-    DisposableEffect(Unit) {
-        onDispose {
-            val window = (context as? android.app.Activity)?.window
-            if (window != null) {
-                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
-            }
+        when (docBackgroundColor) {
+            UserPreferencesRepository.DOC_BG_DARK -> false
+            UserPreferencesRepository.DOC_BG_CUSTOM -> !isColorDark(uiState.customDocBackgroundColor)
+            else -> true
         }
     }
 
-    LaunchedEffect(useLightStatusBar, isFullScreen) {
+
+    DisposableEffect(isFullScreen, useLightStatusBar) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = useLightStatusBar
             if (isFullScreen) {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
+        onDispose { }
     }
-
     // Update current line from UI state if needed, or maintain local state from scroll
     LaunchedEffect(uiState.currentLine) {
         if (uiState.currentLine > 0) currentLine = uiState.currentLine
@@ -382,6 +388,7 @@ fun DocumentViewerScreen(
                         Button(onClick = onBack) {
                             Text(stringResource(R.string.back))
                         }
+
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
@@ -573,10 +580,11 @@ fun DocumentViewerScreen(
                             val previousHash = (wv.tag as? Int) ?: 0
                              
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-                                  UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
-                                  UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
-                                  else -> "#ffffff" to "#000000"
-                             }
+            UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+            UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
+            UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
+            else -> "#ffffff" to "#000000"
+        }
                                   val style = """
                                   <style>
                                       html, body {

@@ -44,6 +44,7 @@
     <string name="doc_bg_white">White</string>
     <string name="doc_bg_sepia">Sepia</string>
     <string name="doc_bg_dark">Dark</string>
+    <string name="doc_bg_custom">Custom</string>
     <string name="select_doc_bg">Select Document Background</string>
 
     <!-- Settings: Reading -->
@@ -67,6 +68,15 @@
     <string name="sharpening_amount">Sharpening Intensity</string>
     <string name="sharpening_amount_fmt">Sharpening Intensity: %d</string>
     <string name="sharpening_amount_desc">Adjust sharpness for images (0-10)</string>
+
+    <string name="manual_color_picker">Manual Color Picker</string>
+    <string name="text_color">Text Color</string>
+    <string name="background_color">Background Color</string>
+
+    <string name="image_view_mode">Image View Mode</string>
+    <string name="image_view_single">Single Image</string>
+    <string name="image_view_dual">Dual Page</string>
+    <string name="image_view_split">Split View</string>
 
     <string name="language">Language</string>
     <string name="lang_system">System Default</string>

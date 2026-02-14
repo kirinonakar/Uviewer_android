@@ -40,6 +40,7 @@
     <string name="doc_bg_white">白</string>
     <string name="doc_bg_sepia">セピア</string>
     <string name="doc_bg_dark">ダーク</string>
+    <string name="doc_bg_custom">カスタム</string>
     <string name="select_doc_bg">文書の背景色を選択</string>
 
     <!-- Settings: Reading -->
@@ -83,4 +84,13 @@
     <string name="sharpening_amount">シャープネスの強さ</string>
     <string name="sharpening_amount_fmt">シャープネスの強さ: %d</string>
     <string name="sharpening_amount_desc">シャープネスの強さ 調整 (0-10)</string>
+
+    <string name="manual_color_picker">手動カラー設定</string>
+    <string name="text_color">文字色</string>
+    <string name="background_color">背景色</string>
+
+    <string name="image_view_mode">画像表示モード</string>
+    <string name="image_view_single">1枚表示</string>
+    <string name="image_view_dual">2枚表示</string>
+    <string name="image_view_split">左右分割表示</string>
 </resources>

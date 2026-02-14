@@ -37,8 +37,11 @@ data class DocumentViewerUiState(
     val currentChunkIndex: Int = 0,
     val hasMoreContent: Boolean = false,
     val manualEncoding: String? = null,
-    val loadProgress: Float = 1f
+    val loadProgress: Float = 1f,
+    val customDocBackgroundColor: String = "#FFFFFF",
+    val customDocTextColor: String = "#000000"
 )
+
 
 class DocumentViewerViewModel(
     application: Application,
@@ -73,17 +76,22 @@ class DocumentViewerViewModel(
             combine(
                 userPreferencesRepository.fontSize,
                 userPreferencesRepository.fontFamily,
-                userPreferencesRepository.docBackgroundColor
-            ) { size, family, color ->
+                userPreferencesRepository.docBackgroundColor,
+                userPreferencesRepository.customDocBackgroundColor,
+                userPreferencesRepository.customDocTextColor
+            ) { size, family, color, customBg, customText ->
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
                     fontFamily = family,
-                    docBackgroundColor = color
+                    docBackgroundColor = color,
+                    customDocBackgroundColor = customBg,
+                    customDocTextColor = customText
                 )
                 if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
                 }
             }.collect {}
+
         }
     }
 
@@ -349,8 +357,12 @@ class DocumentViewerViewModel(
                     
                     if (!isWebDavContext) {
                         val parentDir = java.io.File(currentFilePath).parentFile
-                        htmlBody = resolveLocalImages(htmlBody, parentDir)
+                        htmlBody = resolveLocalImages(htmlBody, parentDir, null)
+                    } else if (serverIdContext != null) {
+                        val parentPath = if (currentFilePath.contains("/")) currentFilePath.substringBeforeLast("/") else ""
+                        htmlBody = resolveLocalImages(htmlBody, null, serverIdContext, parentPath)
                     }
+
 
                     val colors = getColors()
                     AozoraParser.wrapInHtml(
@@ -587,9 +599,11 @@ class DocumentViewerViewModel(
         return when (_uiState.value.docBackgroundColor) {
              UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
+             UserPreferencesRepository.DOC_BG_CUSTOM -> _uiState.value.customDocBackgroundColor to _uiState.value.customDocTextColor
              else -> "#ffffff" to "#000000"
         }
     }
+
 
     private fun convertMarkdownToHtml(md: String): String {
         var html = md
@@ -624,22 +638,49 @@ class DocumentViewerViewModel(
         return html
     }
 
-    private fun resolveLocalImages(content: String, parentDir: java.io.File?): String {
-        if (parentDir == null) return content
+    private suspend fun resolveLocalImages(content: String, parentDir: java.io.File?, serverId: Int?, parentPath: String? = null): String {
         var result = content
         val imgRegex = Regex("<img\\s+[^>]*src=\"([^\"]+)\"[^>]*>")
-        imgRegex.findAll(content).forEach { match ->
-            val originalSrc = match.groups[1]?.value ?: return@forEach
-            if (originalSrc.startsWith("http") || originalSrc.startsWith("data:")) return@forEach
+        val matches = imgRegex.findAll(content).toList()
+        
+        for (match in matches) {
+            val originalSrc = match.groups[1]?.value ?: continue
+            if (originalSrc.startsWith("http") || originalSrc.startsWith("data:")) continue
             
-            val imgFile = java.io.File(parentDir, originalSrc)
-            if (imgFile.exists()) {
-                result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
-            } else {
-                // Hide missing image tag as requested
-                result = result.replace(match.value, "")
+            if (serverId != null && parentPath != null) {
+                // WebDAV resolution
+                val context = getApplication<Application>()
+                val cacheBase = File(context.cacheDir, "webdav_img_cache/$serverId")
+                if (!cacheBase.exists()) cacheBase.mkdirs()
+                
+                val webDavPath = if (parentPath.isEmpty()) originalSrc else "$parentPath/$originalSrc"
+                // Simple hash for filename
+                val fileName = java.net.URLEncoder.encode(webDavPath, "UTF-8").takeLast(100)
+                val cachedFile = File(cacheBase, fileName)
+                
+                if (cachedFile.exists()) {
+                    result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
+                } else {
+                    try {
+                        webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
+                        result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
+                    } catch (e: Exception) {
+                        // Hide missing image
+                        result = result.replace(match.value, "")
+                    }
+                }
+            } else if (parentDir != null) {
+                // Local resolution
+                val imgFile = java.io.File(parentDir, originalSrc)
+                if (imgFile.exists()) {
+                    result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
+                } else {
+                    // Hide missing image tag as requested
+                    result = result.replace(match.value, "")
+                }
             }
         }
         return result
     }
+
 }

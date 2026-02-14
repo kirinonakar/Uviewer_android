@@ -40,6 +40,7 @@
     <string name="doc_bg_white">흰색</string>
     <string name="doc_bg_sepia">세피아</string>
     <string name="doc_bg_dark">어둡게</string>
+    <string name="doc_bg_custom">사용자 정의</string>
     <string name="select_doc_bg">문서 배경색 선택</string>
 
     <!-- Settings: Reading -->
@@ -83,4 +84,13 @@
     <string name="sharpening_amount">샤프닝 강도</string>
     <string name="sharpening_amount_fmt">샤프닝 강도: %d</string>
     <string name="sharpening_amount_desc">샤프닝 강도 조절 (0-10)</string>
+
+    <string name="manual_color_picker">수동 색상 설정</string>
+    <string name="text_color">글자색</string>
+    <string name="background_color">배경색</string>
+
+    <string name="image_view_mode">이미지 보기 모드</string>
+    <string name="image_view_single">한 장 보기</string>
+    <string name="image_view_dual">두 장 보기</string>
+    <string name="image_view_split">좌우 분할 보기</string>
 </resources>

@@ -64,9 +64,10 @@ fun MediaPlayerScreen(
             
             if (fileType == FileEntry.FileType.VIDEO) {
                  if (isFullScreen) {
-                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
                      insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                  } else {
+
                      insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                  }
             } else {

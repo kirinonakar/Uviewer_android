@@ -176,9 +176,10 @@ object AozoraParser {
                         width: ${if (isVertical) "auto" else "100%"};
                     }
                     p, div, h1, h2, h3 {
-                        padding: 0 1.2em;
+                        padding: 0 0.4em;
                         min-height: 1.2em;
                     }
+
                     div:has(img), p:has(img) {
                         padding: 0 !important;
                     }

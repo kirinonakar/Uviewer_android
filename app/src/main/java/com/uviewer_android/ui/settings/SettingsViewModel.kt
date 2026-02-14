@@ -46,6 +46,13 @@ class SettingsViewModel(
     val docTextColor: StateFlow<String> = userPreferencesRepository.docTextColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "black")
 
+    val customDocBackgroundColor: StateFlow<String> = userPreferencesRepository.customDocBackgroundColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "#FFFFFF")
+
+    val customDocTextColor: StateFlow<String> = userPreferencesRepository.customDocTextColor
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "#000000")
+
+
     val invertImageControl: StateFlow<Boolean> = userPreferencesRepository.invertImageControl
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -57,6 +64,10 @@ class SettingsViewModel(
 
     val sharpeningAmount: StateFlow<Int> = userPreferencesRepository.sharpeningAmount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val imageViewMode: StateFlow<Int> = userPreferencesRepository.imageViewMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
 
 
     fun setThemeMode(mode: String) {
@@ -98,6 +109,19 @@ class SettingsViewModel(
     fun setSharpeningAmount(amount: Int) {
         userPreferencesRepository.setSharpeningAmount(amount)
     }
+
+    fun setCustomDocBackgroundColor(color: String) {
+        userPreferencesRepository.setCustomDocBackgroundColor(color)
+    }
+
+    fun setCustomDocTextColor(color: String) {
+        userPreferencesRepository.setCustomDocTextColor(color)
+    }
+
+    fun setImageViewMode(mode: Int) {
+        userPreferencesRepository.setImageViewMode(mode)
+    }
+
 
 
     fun addServer(name: String, url: String, username: String, password: String?) {

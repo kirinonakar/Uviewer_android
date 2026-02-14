@@ -38,6 +38,16 @@ class UserPreferencesRepository(context: Context) {
         sharedPreferences.getString("language", "system") ?: "system"
     )
     val language: StateFlow<String> = _language.asStateFlow()
+    private val _customDocBackgroundColor = MutableStateFlow(
+        sharedPreferences.getString("custom_doc_background_color", "#FFFFFF") ?: "#FFFFFF"
+    )
+    val customDocBackgroundColor: StateFlow<String> = _customDocBackgroundColor.asStateFlow()
+
+    private val _customDocTextColor = MutableStateFlow(
+        sharedPreferences.getString("custom_doc_text_color", "#000000") ?: "#000000"
+    )
+    val customDocTextColor: StateFlow<String> = _customDocTextColor.asStateFlow()
+
 
     private val _invertImageControl = MutableStateFlow(
         sharedPreferences.getBoolean("invert_image_control", false)
@@ -58,6 +68,12 @@ class UserPreferencesRepository(context: Context) {
         sharedPreferences.getInt("sharpening_amount", 0)
     )
     val sharpeningAmount: StateFlow<Int> = _sharpeningAmount.asStateFlow()
+
+    private val _imageViewMode = MutableStateFlow(
+        sharedPreferences.getInt("image_view_mode", 0)
+    )
+    val imageViewMode: StateFlow<Int> = _imageViewMode.asStateFlow()
+
 
     private val _subtitleEnabled = MutableStateFlow(
         sharedPreferences.getBoolean("subtitle_enabled", true)
@@ -143,6 +159,28 @@ class UserPreferencesRepository(context: Context) {
         _subtitleEnabled.value = enabled
     }
 
+    fun setCustomDocBackgroundColor(color: String) {
+        sharedPreferences.edit {
+            putString("custom_doc_background_color", color)
+        }
+        _customDocBackgroundColor.value = color
+    }
+
+    fun setCustomDocTextColor(color: String) {
+        sharedPreferences.edit {
+            putString("custom_doc_text_color", color)
+        }
+        _customDocTextColor.value = color
+    }
+
+    fun setImageViewMode(mode: Int) {
+        sharedPreferences.edit {
+            putInt("image_view_mode", mode)
+        }
+        _imageViewMode.value = mode
+    }
+
+
 
     fun setLastLibraryPath(path: String) {
         sharedPreferences.edit().putString("last_library_path", path).apply()
@@ -177,6 +215,8 @@ class UserPreferencesRepository(context: Context) {
         const val DOC_BG_WHITE = "white"
         const val DOC_BG_SEPIA = "sepia"
         const val DOC_BG_DARK = "dark"
+        const val DOC_BG_CUSTOM = "custom"
+
 
         const val LANG_SYSTEM = "system"
         const val LANG_EN = "en"
