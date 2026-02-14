@@ -243,7 +243,7 @@ fun LibraryScreen(
                 var name by remember { mutableStateOf("") }
                 var host by remember { mutableStateOf("") }
                 var port by remember { mutableStateOf("") }
-                var useHttps by remember { mutableStateOf(false) }
+                var useHttps by remember { mutableStateOf(true) }
                 var user by remember { mutableStateOf("") }
                 var pass by remember { mutableStateOf("") }
 

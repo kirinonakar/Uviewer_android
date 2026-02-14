@@ -323,12 +323,14 @@ class DocumentViewerViewModel(
                             overflow-x: auto !important;
                             width: 100% !important;
                         }
-                        rt.ruby-3 {                            
-                            transform: scaleX(0.75) !important;
-                            transform-origin: center !important;
-                            white-space: nowrap !important;
-                            font-size: 0.5em !important; 
+                        rt {
                             text-align: center !important;
+                        }
+                        .ruby-3-inner {
+                            display: inline-block !important;
+                            transform: scaleX(0.75) !important;
+                            transform-origin: center bottom !important;
+                            white-space: nowrap !important;
                         }
                         /* Hide potentially problematic layout elements */
                         iframe, script, noscript, style:not([data-app-style]) { display: none !important; }
@@ -495,12 +497,14 @@ class DocumentViewerViewModel(
                                 padding: 1.2em !important;
                                 line-height: 1.8 !important;
                             }
-                            rt.ruby-3 {                                
-                                transform: scaleX(0.75) !important;
-                                transform-origin: center !important;
-                                white-space: nowrap !important;
-                                font-size: 0.5em !important;
+                            rt {
                                 text-align: center !important;
+                            }
+                            .ruby-3-inner {
+                                display: inline-block !important;
+                                transform: scaleX(0.75) !important;
+                                transform-origin: center bottom !important;
+                                white-space: nowrap !important;
                             }
                             /* Layout ignore fixes */
                             [style*="width"]:not(ruby):not(rt):not(rp), 

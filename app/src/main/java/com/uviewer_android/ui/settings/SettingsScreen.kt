@@ -508,10 +508,9 @@ fun AddServerDialog(
     onAdd: (String, String, String, String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var protocol by remember { mutableStateOf("https") }
-    var address by remember { mutableStateOf("") }
+    var host by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("") }
-    var path by remember { mutableStateOf("") }
+    var useHttps by remember { mutableStateOf(true) }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -519,72 +518,51 @@ fun AddServerDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.add_webdav_server)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.server_name)) },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 
-                // Protocol Selection
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Text(stringResource(R.string.protocol))
-                    Spacer(Modifier.width(8.dp))
-                    Row(
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, 
-                        modifier = Modifier.clickable { protocol = "http" }
-                    ) {
-                        RadioButton(selected = protocol == "http", onClick = { protocol = "http" })
-                        Text("http")
-                    }
-                    Spacer(Modifier.width(16.dp))
-                    Row(
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, 
-                        modifier = Modifier.clickable { protocol = "https" }
-                    ) {
-                        RadioButton(selected = protocol == "https", onClick = { protocol = "https" })
-                        Text("https")
-                    }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                    Text("Use HTTPS", modifier = Modifier.weight(1f))
+                    Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                 }
 
                 OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text(stringResource(R.string.server_address)) },
+                    value = host,
+                    onValueChange = { host = it },
+                    label = { Text("Host (e.g. example.com/dav)") },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)
                 )
-                
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = port,
-                        onValueChange = { port = it.filter { char -> char.isDigit() } },
-                        label = { Text(stringResource(R.string.server_port)) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
-                    )
-                    OutlinedTextField(
-                        value = path,
-                        onValueChange = { path = it },
-                        label = { Text(stringResource(R.string.server_path)) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
+
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = { port = it.filter { char -> char.isDigit() } },
+                    label = { Text(stringResource(R.string.server_port)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+                )
 
                 OutlinedTextField(
                     value = username,
                     onValueChange = { username = it },
                     label = { Text(stringResource(R.string.username)) },
-                    singleLine = true
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
                     label = { Text(stringResource(R.string.password)) },
                     singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
                 )
@@ -593,14 +571,13 @@ fun AddServerDialog(
         confirmButton = {
             TextButton(
                 onClick = { 
-                    val portPart = if (port.isNotBlank()) ":$port" else ""
-                    val pathPart = if (path.isNotBlank()) {
-                         if (path.startsWith("/")) path else "/$path"
-                    } else ""
-                    val fullUrl = "$protocol://$address$portPart$pathPart"
+                    val protocol = if (useHttps) "https://" else "http://"
+                    val portPart = if (port.isNotEmpty()) ":$port" else ""
+                    val cleanHost = host.removePrefix("http://").removePrefix("https://").trim('/')
+                    val fullUrl = "$protocol$cleanHost$portPart"
                     onAdd(name, fullUrl, username, password) 
                 },
-                enabled = name.isNotBlank() && address.isNotBlank()
+                enabled = name.isNotBlank() && host.isNotBlank()
             ) {
                 Text(stringResource(R.string.add))
             }

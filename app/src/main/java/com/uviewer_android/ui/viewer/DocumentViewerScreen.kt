@@ -457,11 +457,13 @@ fun DocumentViewerScreen(
                                             }
                                             
                                             // 1.5. Dynamic tagging for 3-character ruby
-                                            document.querySelectorAll('rt').forEach(function(el) {
-                                                if (el.textContent.trim().length === 3) {
-                                                    el.classList.add('ruby-3');
-                                                }
-                                            });
+                                             document.querySelectorAll('rt').forEach(function(el) {
+                                                 var text = el.textContent.trim();
+                                                 if (text.length === 3) {
+                                                     // rt 태그 안쪽에 span을 넣어 감싸줍니다.
+                                                     el.innerHTML = '<span class="ruby-3-inner">' + text + '</span>';
+                                                 }
+                                             });
                                             
                                             // 2. 정확한 JS 기반 페이지 넘김 함수 생성
                                             window.pageDown = function() {

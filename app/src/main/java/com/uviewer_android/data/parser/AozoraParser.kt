@@ -21,25 +21,37 @@ object AozoraParser {
             // Ruby pattern: ｜Kanji《Ruby》 or ｜Kanji(Ruby) or ｜Kanji（Ruby）
             l = l.replace(Regex("[｜|](.+?)《(.+?)》")) { m ->
                 val ruby = m.groupValues[2]
-                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
-                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+                if (ruby.length == 3) {
+                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
+                } else {
+                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
+                }
             }
             l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]")) { m ->
                 val ruby = m.groupValues[2]
-                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
-                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+                if (ruby.length == 3) {
+                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
+                } else {
+                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
+                }
             }
             
             // Regex for implicit Kanji《Ruby》 or Kanji(Ruby)
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》")) { m ->
                 val ruby = m.groupValues[2]
-                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
-                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+                if (ruby.length == 3) {
+                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
+                } else {
+                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
+                }
             }
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]")) { m ->
                 val ruby = m.groupValues[2]
-                val className = if (ruby.length == 3) " class=\"ruby-3\"" else ""
-                "<ruby>${m.groupValues[1]}<rt$className>$ruby</rt></ruby>"
+                if (ruby.length == 3) {
+                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
+                } else {
+                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
+                }
             }
 
             // Image tags - Case insensitive for extensions
@@ -188,10 +200,11 @@ object AozoraParser {
                         text-align: center;
                         margin: 1.5em 0;
                     }
-                    rt.ruby-3 {
+                    .ruby-3-inner {
                         display: inline-block;
                         transform: scaleX(0.75);
-                        transform-origin: center;
+                        transform-origin: center bottom;
+                        white-space: nowrap;
                     }
                     /* Support for Vertical text centering and padding */
                     body.vertical {
