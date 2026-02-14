@@ -66,6 +66,7 @@
     <string name="add_server_desc">서버 추가</string>
 
     <!-- Viewers -->
+    <string name="add_server_menu">+ 서버 추가</string>
     <string name="unsupported_type_fmt">지원하지 않는 파일 형식입니다: %1$s\n경로: %2$s</string>
     <string name="error_fmt">오류: %s</string>
     <string name="title_document_viewer">문서 뷰어</string>
@@ -80,4 +81,6 @@
     <string name="encoding_euckr">EUC-KR (한국어)</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="sharpening_amount">샤프닝 강도</string>
+    <string name="sharpening_amount_fmt">샤프닝 강도: %d</string>
+    <string name="sharpening_amount_desc">샤프닝 강도 조절 (0-10)</string>
 </resources>

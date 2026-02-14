@@ -66,6 +66,7 @@
     <string name="add_server_desc">サーバーを追加</string>
 
     <!-- Viewers -->
+    <string name="add_server_menu">+ サーバーを追加</string>
     <string name="unsupported_type_fmt">サポートされていないファイル形式です: %1$s\nパス: %2$s</string>
     <string name="error_fmt">エラー: %s</string>
     <string name="title_document_viewer">ドキュメントビューア</string>
@@ -80,4 +81,6 @@
     <string name="encoding_euckr">EUC-KR (韓国語)</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="sharpening_amount">シャープネスの強さ</string>
+    <string name="sharpening_amount_fmt">シャープネスの強さ: %d</string>
+    <string name="sharpening_amount_desc">シャープネスの強さ 調整 (0-10)</string>
 </resources>

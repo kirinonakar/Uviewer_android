@@ -190,7 +190,7 @@ fun DocumentViewerScreen(
                 }
             }
         },
-        gesturesEnabled = true
+        gesturesEnabled = false
     ) {
         Scaffold(
             topBar = {
@@ -601,8 +601,8 @@ fun DocumentViewerScreen(
                                       }
                                       /* Padding for text elements to keep them readable */
                                       p, div, h1, h2, h3, h4, h5, h6 {
-                                          padding-left: 1.2em;
-                                          padding-right: 1.2em;
+                                          padding-left: 0.4em;
+                                          padding-right: 0.4em;
                                       }
                                       /* Remove padding for images to make them edge-to-edge */
                                       div:has(img), p:has(img) {

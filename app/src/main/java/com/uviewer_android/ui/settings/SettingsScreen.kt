@@ -256,7 +256,7 @@ fun SettingsScreen(
             item { HorizontalDivider() }
             item {
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.section_webdav), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.secondary) }
+                    headlineContent = { Text(stringResource(R.string.section_webdav), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary) }
                 )
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
