@@ -36,7 +36,7 @@ fun SettingsScreen(
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val persistZoom by viewModel.persistZoom.collectAsState()
-    val upscaleFilter by viewModel.upscaleFilter.collectAsState()
+    val sharpeningAmount by viewModel.sharpeningAmount.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -48,11 +48,6 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.title_settings)) })
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.add_server_desc))
-            }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -60,6 +55,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_appearance),
@@ -158,16 +154,15 @@ fun SettingsScreen(
                 )
             }
             item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.upscale_filter)) },
-                    supportingContent = { Text(stringResource(R.string.upscale_filter_desc)) },
-                    trailingContent = {
-                        Switch(
-                            checked = upscaleFilter,
-                            onCheckedChange = { viewModel.setUpscaleFilter(it) }
-                        )
-                    }
-                )
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(stringResource(R.string.sharpening_amount_fmt, sharpeningAmount))
+                    Slider(
+                        value = sharpeningAmount.toFloat(),
+                        onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
+                        valueRange = 0f..10f,
+                        steps = 9
+                    )
+                }
             }
             item {
                 ListItem(
@@ -191,10 +186,9 @@ fun SettingsScreen(
             }
             item { HorizontalDivider() }
             item {
-                Text(
-                    text = stringResource(R.string.section_webdav),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
+                    modifier = Modifier.clickable { showAddDialog = true }
                 )
             }
             items(servers) { server ->
@@ -421,11 +415,16 @@ fun ServerItemRow(
     onDelete: () -> Unit
 ) {
     ListItem(
-        headlineContent = { Text(server.name) },
-        supportingContent = { Text(server.url) },
+        modifier = Modifier.fillMaxWidth(),
+        headlineContent = { Text(server.name, maxLines = 1) },
+        supportingContent = { Text(server.url, maxLines = 1) },
         trailingContent = {
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
+                Icon(
+                    Icons.Default.Delete, 
+                    contentDescription = stringResource(R.string.delete),
+                    tint = MaterialTheme.colorScheme.error
+                )
             }
         }
     )

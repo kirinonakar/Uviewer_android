@@ -140,24 +140,28 @@ object AozoraParser {
                         -webkit-writing-mode: $writingMode;
                         text-orientation: upright;
                         margin: 0;
-                        padding: 1.5em;
+                        padding: 0;
                         line-height: 1.8;
                         overflow-x: ${if (isVertical) "auto" else "hidden"};
                         overflow-y: ${if (isVertical) "hidden" else "auto"};
                         height: 100vh;
                         width: ${if (isVertical) "auto" else "100%"};
                     }
-                    div {
+                    p, div, h1, h2, h3 {
+                        padding: 0 1.2em;
                         min-height: 1.2em;
+                    }
+                    div:has(img), p:has(img) {
+                        padding: 0 !important;
                     }
                     .center {
                         text-align: center;
                     }
                     img {
-                        max-width: 100%;
-                        height: auto;
+                        width: 100% !important;
+                        height: auto !important;
                         display: block;
-                        margin: 1em auto;
+                        margin: 0 auto;
                     }
                     h1, h2, h3 {
                         text-align: center;

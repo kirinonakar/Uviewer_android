@@ -36,7 +36,7 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Star
 
 @Composable
-fun MainScreen() {
+fun MainScreen(activity: com.uviewer_android.MainActivity? = null) {
     val navController = rememberNavController()
     val libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.uviewer_android.ui.AppViewModelProvider.Factory)
     val libraryUiState by libraryViewModel.uiState.collectAsState()
@@ -72,10 +72,45 @@ fun MainScreen() {
                                 if (screen is Screen.Resume) {
                                     val recent = libraryUiState.mostRecentFile
                                     if (recent != null) {
-                                        val encodedPath = android.net.Uri.encode(recent.path)
+                                    val encodedPath = android.net.Uri.encode(recent.path, null)
                                         val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
                                         navController.navigate(route) {
                                             launchSingleTop = true
+                                        }
+                                    }
+                                } else if (screen is Screen.Library) {
+                                    val currentEntry = navController.currentBackStackEntry
+                                    val currentRoute = currentEntry?.destination?.route
+                                    if (currentRoute?.startsWith("viewer") == true) {
+                                        val filePath = currentEntry.arguments?.getString("path")
+                                        val serverId = currentEntry.arguments?.getInt("serverId") ?: -1
+                                        if (filePath != null) {
+                                            val parentPath = filePath.substringBeforeLast('/', "")
+                                            val encodedParentPath = android.net.Uri.encode(parentPath, null)
+                                            val route = "library?path=$encodedParentPath&serverId=$serverId"
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        } else {
+                                            navController.navigate(screen.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
+                                        }
+                                    } else {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
                                         }
                                     }
                                 } else {
@@ -126,7 +161,7 @@ fun MainScreen() {
                     initialServerId = serverId,
                     viewModel = libraryViewModel,
                     onNavigateToViewer = { entry ->
-                        val encodedPath = android.net.Uri.encode(entry.path)
+                        val encodedPath = android.net.Uri.encode(entry.path, null)
                         // Note: For library entry, we don't have pageIndex easily here unless we query DB, 
                         // but DocumentViewerViewModel will fallback to DB if position is -1.
                         val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}&position=-1"
@@ -140,11 +175,11 @@ fun MainScreen() {
                 com.uviewer_android.ui.favorites.FavoritesScreen(
                     onNavigateToViewer = { item ->
                         if (item.type.equals("FOLDER", ignoreCase = true)) {
-                            val encodedPath = android.net.Uri.encode(item.path)
+                            val encodedPath = android.net.Uri.encode(item.path, null)
                             val route = "library?path=$encodedPath&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)
                         } else {
-                            val encodedPath = android.net.Uri.encode(item.path)
+                            val encodedPath = android.net.Uri.encode(item.path, null)
                             val route = "viewer?path=$encodedPath&type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}&position=${item.position}"
                             navController.navigate(route)
                         }
@@ -156,11 +191,11 @@ fun MainScreen() {
                 com.uviewer_android.ui.recent.RecentFilesScreen(
                     onNavigateToViewer = { file ->
                         if (file.type.equals("FOLDER", ignoreCase = true)) {
-                             val encodedPath = android.net.Uri.encode(file.path)
+                             val encodedPath = android.net.Uri.encode(file.path, null)
                              val route = "library?path=$encodedPath&serverId=${file.serverId ?: -1}"
                              navController.navigate(route)
                         } else {
-                            val encodedPath = android.net.Uri.encode(file.path)
+                            val encodedPath = android.net.Uri.encode(file.path, null)
                             val route = "viewer?path=$encodedPath&type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}&position=${file.pageIndex}"
                             navController.navigate(route)
                         }
@@ -198,7 +233,7 @@ fun MainScreen() {
                     onBack = { 
                         // filePath is already decoded by Navigation
                         val parentPath = filePath.substringBeforeLast('/', "/")
-                        val encodedParentPath = android.net.Uri.encode(parentPath)
+                        val encodedParentPath = android.net.Uri.encode(parentPath, null)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id)
@@ -206,7 +241,8 @@ fun MainScreen() {
                         }
                     },
                     isFullScreen = isFullScreen,
-                    onToggleFullScreen = { isFullScreen = !isFullScreen }
+                    onToggleFullScreen = { isFullScreen = !isFullScreen },
+                    activity = activity
                 )
             }
         }

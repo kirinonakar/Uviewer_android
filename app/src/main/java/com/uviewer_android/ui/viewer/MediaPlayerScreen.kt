@@ -26,6 +26,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import com.uviewer_android.R
+import com.uviewer_android.PlaybackService
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
 import androidx.core.view.isVisible
@@ -54,11 +55,12 @@ fun MediaPlayerScreen(
     // Ensure status bar icons are visible (white) on dark background even in light theme
     // For Video: Hide status bar when isFullScreen is true
     // For Audio: Keep status bar visible
-    LaunchedEffect(isFullScreen, fileType) {
+    val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    DisposableEffect(isFullScreen, fileType) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = false
+            insetsController.isAppearanceLightStatusBars = false // White icons on dark background
             
             if (fileType == FileEntry.FileType.VIDEO) {
                  if (isFullScreen) {
@@ -69,6 +71,14 @@ fun MediaPlayerScreen(
                  }
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
             }
         }
     }
@@ -82,15 +92,6 @@ fun MediaPlayerScreen(
         }
     }
     
-    DisposableEffect(Unit) {
-        onDispose {
-            val window = (context as? android.app.Activity)?.window
-            if (window != null) {
-                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
 
     LaunchedEffect(filePath) {
         viewModel.prepareMedia(filePath, isWebDav, serverId, fileType)
@@ -98,49 +99,73 @@ fun MediaPlayerScreen(
 
     var playbackError by remember { mutableStateOf<String?>(null) }
 
-    // 15s Skip Configuration
-    val exoPlayer = remember(uiState.mediaUrl, uiState.authHeader) {
-        if (uiState.mediaUrl != null) {
-            ExoPlayer.Builder(context)
-                .setSeekBackIncrementMs(15000)
-                .setSeekForwardIncrementMs(15000)
-                .build().apply {
-                val uri = if (isWebDav) {
-                    android.net.Uri.parse(uiState.mediaUrl!!)
-                } else {
-                    android.net.Uri.fromFile(java.io.File(uiState.mediaUrl!!))
-                }
-                
-                val mediaItem = MediaItem.fromUri(uri)
-                if (isWebDav) {
-                    val dataSourceFactory = DefaultHttpDataSource.Factory()
-                    dataSourceFactory.setDefaultRequestProperties(uiState.authHeader)
-                    val mediaSource = ProgressiveMediaSource.Factory(dataSourceFactory)
-                        .createMediaSource(mediaItem)
-                    setMediaSource(mediaSource)
-                } else {
-                    setMediaItem(mediaItem)
-                }
-                
-                addListener(object : androidx.media3.common.Player.Listener {
+    // Subtitle persistence
+    val subtitleEnabled by viewModel.subtitleEnabled.collectAsState()
+
+    val sessionToken = remember {
+        androidx.media3.session.SessionToken(context, android.content.ComponentName(context, PlaybackService::class.java))
+    }
+    
+    val controllerFuture = remember(sessionToken) {
+        androidx.media3.session.MediaController.Builder(context, sessionToken).buildAsync()
+    }
+    
+    var mediaController by remember { mutableStateOf<androidx.media3.session.MediaController?>(null) }
+    
+    DisposableEffect(controllerFuture) {
+        controllerFuture.addListener({
+            mediaController = controllerFuture.get().apply {
+                // Initial setup if needed
+                 addListener(object : androidx.media3.common.Player.Listener {
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         playbackError = error.message
                     }
+                    override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+                        viewModel.updateMetadata(mediaMetadata)
+                    }
                 })
-                
-                if (uiState.savedPosition > 0) {
-                    seekTo(uiState.savedPosition)
-                }
-                prepare()
-                playWhenReady = true
             }
-        } else null
+        }, context.mainExecutor)
+        onDispose {
+            mediaController?.let {
+                viewModel.savePosition(it.currentPosition)
+            }
+            androidx.media3.session.MediaController.releaseFuture(controllerFuture)
+        }
     }
 
-    DisposableEffect(exoPlayer) {
-        onDispose {
-            viewModel.savePosition(exoPlayer?.currentPosition ?: 0L)
-            exoPlayer?.release()
+    LaunchedEffect(uiState.mediaUrl, uiState.authHeader, mediaController) {
+        val controller = mediaController ?: return@LaunchedEffect
+        if (uiState.mediaUrl != null) {
+            val uri = if (isWebDav) {
+                android.net.Uri.parse(uiState.mediaUrl!!)
+            } else {
+                android.net.Uri.fromFile(java.io.File(uiState.mediaUrl!!))
+            }
+            
+            val mediaItem = MediaItem.fromUri(uri)
+            if (isWebDav) {
+                val dataSourceFactory = DefaultHttpDataSource.Factory()
+                dataSourceFactory.setDefaultRequestProperties(uiState.authHeader)
+                // Note: Simple MediaController.setMediaItem might not work for WebDAV without custom MediaSource in Service
+                // But if the Service is in the same process, we can share the player or handle it.
+                // For now, let's assume service handles basic URIs. 
+                // WebDAV might need the service to use the right DataSourceFactory.
+                controller.setMediaItem(mediaItem)
+            } else {
+                controller.setMediaItem(mediaItem)
+            }
+            
+            controller.trackSelectionParameters = controller.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, !subtitleEnabled)
+                .build()
+
+            if (uiState.savedPosition > 0) {
+                controller.seekTo(uiState.savedPosition)
+            }
+            controller.prepare()
+            controller.playWhenReady = true
         }
     }
 
@@ -148,61 +173,72 @@ fun MediaPlayerScreen(
         containerColor = Color.Black,
         topBar = {
             if (!isFullScreen) {
-                TopAppBar(
-                    title = { Text(uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.prev(isWebDav, serverId) }) {
-                            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
-                        }
-                        IconButton(onClick = { viewModel.next(isWebDav, serverId) }) {
-                            Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
-                        }
-                        if (fileType == FileEntry.FileType.VIDEO) {
-                            var showSubtitleMenu by remember { mutableStateOf(false) }
-                            IconButton(onClick = { showSubtitleMenu = true }) {
-                                Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                Column {
+                    TopAppBar(
+                        title = { 
+                            Column {
+                                Text(uiState.title ?: uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1) 
+                                if (!uiState.artist.isNullOrBlank() || !uiState.album.isNullOrBlank()) {
+                                    val meta = listOfNotNull(uiState.artist, uiState.album).joinToString(" - ")
+                                    Text(meta, color = Color.LightGray, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                }
                             }
-                            if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
-                                DropdownMenu(
-                                    expanded = showSubtitleMenu,
-                                    onDismissRequest = { showSubtitleMenu = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text("Off") },
-                                        onClick = { 
-                                            exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters
-                                                ?.buildUpon()
-                                                ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-                                                ?.build() ?: exoPlayer!!.trackSelectionParameters
-                                            showSubtitleMenu = false 
-                                        }
-                                    )
-                                    uiState.subtitleTracks.forEach { track ->
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { viewModel.prev(isWebDav, serverId) }) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
+                            }
+                            IconButton(onClick = { viewModel.next(isWebDav, serverId) }) {
+                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
+                            }
+                            if (fileType == FileEntry.FileType.VIDEO) {
+                                var showSubtitleMenu by remember { mutableStateOf(false) }
+                                IconButton(onClick = { showSubtitleMenu = true }) {
+                                    Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                                }
+                                if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
+                                    DropdownMenu(
+                                        expanded = showSubtitleMenu,
+                                        onDismissRequest = { showSubtitleMenu = false }
+                                    ) {
                                         DropdownMenuItem(
-                                            text = { Text(track.label) },
-                                            onClick = {
-                                                exoPlayer?.trackSelectionParameters = exoPlayer?.trackSelectionParameters
+                                            text = { Text("Off") },
+                                            onClick = { 
+                                                mediaController?.trackSelectionParameters = mediaController?.trackSelectionParameters
                                                     ?.buildUpon()
-                                                    ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                                                    ?.setPreferredTextLanguage(track.language)
-                                                    ?.build() ?: exoPlayer!!.trackSelectionParameters
-                                                showSubtitleMenu = false
+                                                    ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                                                    ?.build() ?: mediaController!!.trackSelectionParameters
+                                                viewModel.toggleSubtitleEnabled(false)
+                                                showSubtitleMenu = false 
                                             }
                                         )
+                                        uiState.subtitleTracks.forEach { track ->
+                                            DropdownMenuItem(
+                                                text = { Text(track.label) },
+                                                onClick = {
+                                                    mediaController?.trackSelectionParameters = mediaController?.trackSelectionParameters
+                                                        ?.buildUpon()
+                                                        ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                                                        ?.setPreferredTextLanguage(track.language)
+                                                        ?.build() ?: mediaController!!.trackSelectionParameters
+                                                    viewModel.toggleSubtitleEnabled(true)
+                                                    showSubtitleMenu = false
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
-
-
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
-                )
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
+                }
             }
         }
     ) { paddingValues ->
@@ -229,10 +265,10 @@ fun MediaPlayerScreen(
                         Text(stringResource(R.string.back))
                     }
                 }
-            } else if (exoPlayer != null) {
+            } else if (mediaController != null) {
                 // Update subtitle tracks
-                LaunchedEffect(exoPlayer) {
-                    exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+                LaunchedEffect(mediaController) {
+                    mediaController?.addListener(object : androidx.media3.common.Player.Listener {
                         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                             val subtitleTracks = mutableListOf<SubtitleTrack>()
                             tracks.groups.forEach { group ->
@@ -263,8 +299,8 @@ fun MediaPlayerScreen(
                 var controlViewRef by remember { mutableStateOf<androidx.media3.ui.PlayerControlView?>(null) }
                 var artworkData by remember { mutableStateOf<ByteArray?>(null) }
 
-                LaunchedEffect(exoPlayer) {
-                    exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+                LaunchedEffect(mediaController) {
+                    mediaController?.addListener(object : androidx.media3.common.Player.Listener {
                         override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
                             artworkData = mediaMetadata.artworkData
                         }
@@ -274,9 +310,6 @@ fun MediaPlayerScreen(
                 Box(
                      modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            // Rotation removed
-                        }
                 ) {
                     if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
                          coil.compose.AsyncImage(
@@ -304,20 +337,10 @@ fun MediaPlayerScreen(
                             }
                         },
                         update = { playerView ->
-                             playerView.player = exoPlayer
+                             playerView.player = mediaController
                         },
                         modifier = Modifier
                             .fillMaxSize()
-                            // If Audio and we have artwork, we might want to hide the surface or keep it z-indexed below??
-                            // Actually PlayerView hides surface for audio.
-                            // But our AsyncImage should be ON TOP or INSIDE?
-                            // If we put AsyncImage BEHIND PlayerView, PlayerView might cover it with black shutter.
-                            // If we put it ON TOP, it covers visualization (if any).
-                            // Let's put it BEHIND, but ensure PlayerView is transparent? 
-                            // Easier: Put it ON TOP of PlayerView (which is empty for Audio)
-                            // But wait, PlayerView handles subtitles?
-                            // If Audio, we don't have video subtitles mostly.
-                            // Let's rely on Box order. AsyncImage last = on top.
                     )
                     
                     if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
@@ -359,7 +382,7 @@ fun MediaPlayerScreen(
                 AndroidView(
                     factory = { ctx ->
                         androidx.media3.ui.PlayerControlView(ctx).apply {
-                            player = exoPlayer
+                            player = mediaController
                             showTimeoutMs = 5000
                             setShowFastForwardButton(true)
                             setShowRewindButton(true)
@@ -368,7 +391,7 @@ fun MediaPlayerScreen(
                         }
                     },
                     update = { controlView ->
-                        controlView.player = exoPlayer
+                        controlView.player = mediaController
                         controlViewRef = controlView
                     },
                     modifier = Modifier

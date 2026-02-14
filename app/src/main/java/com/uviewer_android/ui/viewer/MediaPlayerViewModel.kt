@@ -30,18 +30,24 @@ data class MediaPlayerUiState(
     val savedPosition: Long = 0L,
     val subtitleTracks: List<SubtitleTrack> = emptyList(),
     val videoWidth: Int = 0,
-    val videoHeight: Int = 0
+    val videoHeight: Int = 0,
+    val artist: String? = null,
+    val album: String? = null,
+    val title: String? = null
 )
 
 class MediaPlayerViewModel(
     application: Application,
     private val fileRepository: com.uviewer_android.data.repository.FileRepository,
     private val webDavRepository: WebDavRepository,
-    private val recentFileDao: RecentFileDao
+    private val recentFileDao: RecentFileDao,
+    private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(MediaPlayerUiState())
     val uiState: StateFlow<MediaPlayerUiState> = _uiState.asStateFlow()
+
+    val subtitleEnabled = userPreferencesRepository.subtitleEnabled
 
     fun prepareMedia(filePath: String, isWebDav: Boolean, serverId: Int?, fileType: FileEntry.FileType) {
         viewModelScope.launch {
@@ -135,6 +141,39 @@ class MediaPlayerViewModel(
                 savedPosition = 0L // Reset position for new file
             )
         }
+        
+        // Register Recent File
+        registerRecentFile(filePath, isWebDav, serverId)
+    }
+
+    private fun registerRecentFile(path: String, isWebDav: Boolean, serverId: Int?) {
+        viewModelScope.launch {
+            val title = path.substringAfterLast("/")
+            val type = if (path.substringAfterLast(".").lowercase() in listOf("mp4", "mkv", "avi", "webm")) "VIDEO" else "AUDIO"
+            recentFileDao.insertRecent(
+                com.uviewer_android.data.RecentFile(
+                    title = title,
+                    path = path,
+                    type = type,
+                    isWebDav = isWebDav,
+                    serverId = serverId,
+                    lastAccessed = System.currentTimeMillis(),
+                    pageIndex = 0 // Not used for media in the same way as documents/images, but could be used for timestamp
+                )
+            )
+        }
+    }
+
+    fun toggleSubtitleEnabled(enabled: Boolean) {
+        userPreferencesRepository.setSubtitleEnabled(enabled)
+    }
+
+    fun updateMetadata(mediaMetadata: androidx.media3.common.MediaMetadata) {
+        _uiState.value = _uiState.value.copy(
+            artist = mediaMetadata.artist?.toString(),
+            album = mediaMetadata.albumTitle?.toString(),
+            title = mediaMetadata.title?.toString()
+        )
     }
 
     fun savePosition(position: Long) {

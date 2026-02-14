@@ -63,8 +63,9 @@
     <string name="select_dual_page_order">Select Dual Page Order</string>
     <string name="persist_zoom">Zoom lock</string>
     <string name="persist_zoom_desc">Maintain zoom level across different images</string>
-    <string name="upscale_filter">Upscale Filter</string>
-    <string name="upscale_filter_desc">Apply high-quality sharpening for large images</string>
+    <string name="sharpening_amount">Sharpening Intensity</string>
+    <string name="sharpening_amount_fmt">Sharpening Intensity: %d</string>
+    <string name="sharpening_amount_desc">Adjust sharpness for images (0-10)</string>
 
     <string name="language">Language</string>
     <string name="lang_system">System Default</string>
@@ -86,6 +87,7 @@
     <string name="username">Username</string>
     <string name="password">Password</string>
     <string name="add_server_desc">Add Server</string>
+    <string name="add_server_menu">+ Add Server</string>
 
     <!-- Viewers -->
     <string name="unsupported_type_fmt">Unsupported file type: %1$s\nPath: %2$s</string>
@@ -100,6 +102,5 @@
     <string name="encoding_auto">Auto</string>
     <string name="encoding_sjis">Shift_JIS (Japan)</string>
     <string name="encoding_euckr">EUC-KR (Korea)</string>
-    <string name="encoding_johab">Johab (Legacy Korea)</string>
     <string name="encoding_w1252">Windows-1252</string>
 </resources>

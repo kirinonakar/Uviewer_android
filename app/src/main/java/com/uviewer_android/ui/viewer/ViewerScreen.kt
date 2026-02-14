@@ -25,7 +25,8 @@ fun ViewerScreen(
     initialPosition: Int? = null,
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {}
+    onToggleFullScreen: () -> Unit = {},
+    activity: com.uviewer_android.MainActivity? = null
 ) {
     val type = try {
         fileType?.let { FileEntry.FileType.valueOf(it.uppercase()) } ?: FileEntry.FileType.UNKNOWN
@@ -53,10 +54,10 @@ fun ViewerScreen(
 
     when (resolvedType) {
         FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> {
-            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
-            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.PDF -> {

@@ -34,6 +34,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,7 +49,8 @@ fun DocumentViewerScreen(
     viewModel: DocumentViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {}
+    onToggleFullScreen: () -> Unit = {},
+    activity: com.uviewer_android.MainActivity? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -58,6 +62,13 @@ fun DocumentViewerScreen(
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var showEncodingDialog by remember { mutableStateOf(false) }
+    var isPageLoading by remember { mutableStateOf(false) }
+    var isNavigating by remember { mutableStateOf(false) }
+    
+    val sliderInteractionSource = remember { MutableInteractionSource() }
+    val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
+    val isSliderPressed by sliderInteractionSource.collectIsPressedAsState()
+    val isInteractingWithSlider = isSliderDragged || isSliderPressed
 
     LaunchedEffect(filePath) {
         viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
@@ -101,6 +112,17 @@ fun DocumentViewerScreen(
     }
 
     // Progress saving with debounce
+    LaunchedEffect(activity) {
+        activity?.keyEvents?.collect { keyCode ->
+            if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+                webViewRef?.evaluateJavascript("window.pageUp();", null)
+            } else if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+                webViewRef?.evaluateJavascript("window.pageDown();", null)
+            }
+        }
+    }
+
+    // Progress saving with debounce
     LaunchedEffect(currentLine) {
         if (currentLine > 1) {
             kotlinx.coroutines.delay(3000)
@@ -129,13 +151,30 @@ fun DocumentViewerScreen(
                         onClick = {
                             if (item.href.startsWith("line-")) {
                                 val line = item.href.replace("line-", "").toIntOrNull() ?: 1
+                                val targetChunk = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                
+                                // Set lock
+                                if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(line - currentLine) > 50) {
+                                    isNavigating = true
+                                    isPageLoading = true
+                                }
+                                
                                 viewModel.jumpToLine(line)
                                 currentLine = line
-                                if (webViewRef != null) {
-                                    val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                    webViewRef?.evaluateJavascript(js, null)
+                                
+                                // Handle same chunk scroll restoration
+                                if (webViewRef != null && targetChunk == uiState.currentChunkIndex) {
+                                    val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                    webViewRef?.evaluateJavascript(js) {
+                                        webViewRef?.postDelayed({
+                                            isNavigating = false
+                                            isPageLoading = false
+                                        }, 100)
+                                    }
                                 }
                             } else {
+                                isNavigating = true
+                                isPageLoading = true
                                 viewModel.loadChapter(index)
                             }
                             scope.launch { drawerState.close() }
@@ -202,7 +241,6 @@ fun DocumentViewerScreen(
                                     "UTF-8" to "UTF-8",
                                     stringResource(R.string.encoding_sjis) to "Shift_JIS",
                                     stringResource(R.string.encoding_euckr) to "EUC-KR",
-                                    stringResource(R.string.encoding_johab) to "x-Johab",
                                     stringResource(R.string.encoding_w1252) to "windows-1252"
                                 )
                                 encodings.forEach { (label, value) ->
@@ -259,8 +297,16 @@ fun DocumentViewerScreen(
                                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    TextButton(onClick = { viewModel.prevChunk() }, enabled = uiState.currentChunkIndex > 0) { Text("Prev Seg") }
-                                    TextButton(onClick = { viewModel.nextChunk() }, enabled = uiState.hasMoreContent) { Text("Next Seg") }
+                                    TextButton(onClick = { 
+                                        isNavigating = true
+                                        isPageLoading = true
+                                        viewModel.prevChunk() 
+                                    }, enabled = uiState.currentChunkIndex > 0) { Text("Prev Seg") }
+                                    TextButton(onClick = { 
+                                        isNavigating = true
+                                        isPageLoading = true
+                                        viewModel.nextChunk() 
+                                    }, enabled = uiState.hasMoreContent) { Text("Next Seg") }
                                 }
                             }
                             
@@ -268,15 +314,30 @@ fun DocumentViewerScreen(
                                  value = currentLine.toFloat(),
                                  onValueChange = { 
                                      currentLine = it.toInt()
-                                     if (uiState.totalLines > 0 && webViewRef != null) {
-                                         val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                         webViewRef?.evaluateJavascript(js, null)
-                                     }
                                  },
                                  onValueChangeFinished = {
+                                     val targetChunk = (currentLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                     
+                                     // Unlock navigation mode if chunk changes or jump distance is large
+                                     if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(currentLine - uiState.currentLine) > 50) {
+                                         isNavigating = true
+                                         isPageLoading = true
+                                     }
                                      viewModel.jumpToLine(currentLine)
+                                     
+                                     // If same chunk, manual scroll and release lock after delay
+                                     if (targetChunk == uiState.currentChunkIndex) {
+                                         val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                         webViewRef?.evaluateJavascript(js) {
+                                             webViewRef?.postDelayed({
+                                                 isPageLoading = false
+                                                 isNavigating = false
+                                             }, 100)
+                                         }
+                                     }
                                  },
                                  valueRange = 1f..uiState.totalLines.toFloat().coerceAtLeast(1f),
+                                 interactionSource = sliderInteractionSource,
                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                             )
                          }
@@ -289,7 +350,11 @@ fun DocumentViewerScreen(
                                  verticalAlignment = Alignment.CenterVertically
                              ) {
                                  TextButton(
-                                     onClick = { viewModel.prevChunk() },
+                                     onClick = { 
+                                         isNavigating = true
+                                         isPageLoading = true
+                                         viewModel.prevChunk() 
+                                     },
                                      enabled = uiState.currentChunkIndex > 0
                                  ) {
                                      Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -303,7 +368,11 @@ fun DocumentViewerScreen(
                                  )
  
                                  TextButton(
-                                     onClick = { viewModel.nextChunk() },
+                                     onClick = { 
+                                         isNavigating = true
+                                         isPageLoading = true
+                                         viewModel.nextChunk() 
+                                     },
                                      enabled = uiState.hasMoreContent
                                  ) {
                                      Text("Next Seg")
@@ -319,7 +388,11 @@ fun DocumentViewerScreen(
                                  verticalAlignment = Alignment.CenterVertically
                              ) {
                                  TextButton(
-                                     onClick = { viewModel.prevChapter() },
+                                     onClick = { 
+                                         isNavigating = true
+                                         isPageLoading = true
+                                         viewModel.prevChapter() 
+                                     },
                                      enabled = uiState.currentChapterIndex > 0
                                  ) {
                                      Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
@@ -333,7 +406,11 @@ fun DocumentViewerScreen(
                                  )
  
                                  TextButton(
-                                     onClick = { viewModel.nextChapter() },
+                                     onClick = { 
+                                         isNavigating = true
+                                         isPageLoading = true
+                                         viewModel.nextChapter() 
+                                     },
                                      enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
                                  ) {
                                      Text(stringResource(R.string.next_chapter))
@@ -347,25 +424,24 @@ fun DocumentViewerScreen(
             },
             snackbarHost = {} // Add snackbar host if needed
         ) { innerPadding ->
-             if (uiState.isLoading) {
-                 Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
-                     CircularProgressIndicator()
-                 }
-             } else if (uiState.error != null) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(innerPadding),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Button(onClick = onBack) {
-                        Text(stringResource(R.string.back))
+            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                if (uiState.error != null) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(stringResource(R.string.error_fmt, uiState.error ?: ""))
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = onBack) {
+                            Text(stringResource(R.string.back))
+                        }
                     }
-                }
-            } else {
-                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                     AndroidView(
+                } else {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (!isFullScreen) HorizontalDivider()
+                        Box(modifier = Modifier.weight(1f)) {
+                            AndroidView(
                          modifier = Modifier.fillMaxSize(),
                         factory = { context ->
                             object : WebView(context) {
@@ -375,6 +451,13 @@ fun DocumentViewerScreen(
                                     @android.webkit.JavascriptInterface
                                     fun onLineChanged(line: Int) {
                                         post {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
+
+                                            val reportedChunkIndex = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                            if (reportedChunkIndex != viewModel.uiState.value.currentChunkIndex) {
+                                                return@post
+                                            }
+
                                             if (line != currentLine) {
                                                 currentLine = line
                                             }
@@ -383,16 +466,24 @@ fun DocumentViewerScreen(
                                     @android.webkit.JavascriptInterface
                                     fun autoLoadNext() {
                                         post {
-                                            if (uiState.hasMoreContent) {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
+                                            
+                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
                                                 viewModel.nextChunk()
+                                            } else if (type == FileEntry.FileType.EPUB) {
+                                                viewModel.nextChapter()
                                             }
                                         }
                                     }
                                     @android.webkit.JavascriptInterface
                                     fun autoLoadPrev() {
                                         post {
-                                            if (uiState.currentChunkIndex > 0) {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
+                                            
+                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
                                                 viewModel.prevChunk()
+                                            } else if (type == FileEntry.FileType.EPUB) {
+                                                viewModel.prevChapter()
                                             }
                                         }
                                     }
@@ -405,38 +496,75 @@ fun DocumentViewerScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
-                                        val scrollJs = """
-                                            var isScrolling = false;
-                                            window.onscroll = function() {
-                                                // Current line detection
-                                                var el = document.elementFromPoint(window.innerWidth/2, 20);
-                                                while (el && (!el.id || !el.id.startsWith('line-'))) {
-                                                    el = el.parentElement;
-                                                }
-                                                if (el && el.id.startsWith('line-')) {
-                                                    var line = parseInt(el.id.replace('line-', ''));
-                                                    Android.onLineChanged(line);
-                                                }
-                                                
-                                                // Auto-load next segment
-                                                if (window.innerHeight + window.pageYOffset >= document.body.offsetHeight - 2) {
-                                                   if (!isScrolling) {
-                                                       isScrolling = true;
-                                                       Android.autoLoadNext();
-                                                   }
-                                                }
-                                                // Auto-load prev segment
-                                                if (window.pageYOffset <= 0) {
-                                                   // Android.autoLoadPrev(); // Disabled for now to prevent accidental jumps
+                                        
+                                        val targetLine = viewModel.uiState.value.currentLine
+                                        val jsScrollLogic = """
+                                            // 1. Restore scroll position
+                                            var el = document.getElementById('line-$targetLine'); 
+                                            if(el) {
+                                                el.scrollIntoView({ behavior: 'instant', block: 'start' });
+                                            } else if ($targetLine === 1) {
+                                                window.scrollTo(0, 0);
+                                            }
+                                            
+                                            // 2. 정확한 JS 기반 페이지 넘김 함수 생성
+                                            window.pageDown = function() {
+                                                var oldY = window.pageYOffset;
+                                                window.scrollBy({ top: window.innerHeight - 40, behavior: 'instant' });
+                                                // If Y didn't change, we're at the very bottom
+                                                if (window.pageYOffset === oldY) {
+                                                    Android.autoLoadNext();
                                                 }
                                             };
+                                            
+                                            window.pageUp = function() {
+                                                var oldY = window.pageYOffset;
+                                                window.scrollBy({ top: -(window.innerHeight - 40), behavior: 'instant' });
+                                                // If Y didn't change and we're at the top
+                                                if (window.pageYOffset === oldY && oldY === 0) {
+                                                    Android.autoLoadPrev();
+                                                }
+                                            };
+
+                                            // 3. Set up scroll listener with delay and accurate bottom detection
+                                            setTimeout(function() {
+                                                var isScrolling = false;
+                                                window.onscroll = function() {
+                                                    // Line detection
+                                                    var el = document.elementFromPoint(window.innerWidth/2, 20);
+                                                    while (el && (!el.id || !el.id.startsWith('line-'))) {
+                                                        el = el.parentElement;
+                                                    }
+                                                    if (el && el.id.startsWith('line-')) {
+                                                        var line = parseInt(el.id.replace('line-', ''));
+                                                        Android.onLineChanged(line);
+                                                    }
+                                                    
+                                                    // Accurate bottom detection
+                                                    var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                    var bottomPosition = document.documentElement.scrollHeight;
+                                                    
+                                                    if (scrollPosition >= bottomPosition - 5) {
+                                                       if (!isScrolling) {
+                                                           isScrolling = true;
+                                                           Android.autoLoadNext();
+                                                       }
+                                                    }
+                                                    if (window.pageYOffset <= 0) {
+                                                       if (!isScrolling) {
+                                                           isScrolling = true;
+                                                           Android.autoLoadPrev();
+                                                       }
+                                                    }
+                                                };
+                                            }, 500); 
                                         """.trimIndent()
                                         
-                                        view?.evaluateJavascript(scrollJs, null)
-                                        
-                                        if (currentLine > 1) {
-                                            val restoreJs = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                            view?.evaluateJavascript(restoreJs, null)
+                                        view?.evaluateJavascript(jsScrollLogic) {
+                                            view.postDelayed({
+                                                isPageLoading = false
+                                                isNavigating = false
+                                            }, 100)
                                         }
                                     }
                                 }
@@ -454,19 +582,11 @@ fun DocumentViewerScreen(
                                             // Left side = Prev
                                             // Right side = Next
                                             if (x < width / 3) {
-                                                // Prev Page Logic
-                                                if (canScrollVertically(-1)) {
-                                                    webViewRef?.evaluateJavascript("window.scrollBy({ top: -window.innerHeight, behavior: 'instant' });", null)
-                                                } else {
-                                                    viewModel.prevChapter()
-                                                }
+                                                // Left touch: pageUp
+                                                webViewRef?.evaluateJavascript("window.pageUp();", null)
                                             } else if (x > width * 2 / 3) {
-                                                // Next Page Logic
-                                                if (canScrollVertically(1)) {
-                                                    webViewRef?.evaluateJavascript("window.scrollBy({ top: window.innerHeight, behavior: 'instant' });", null)
-                                                } else {
-                                                    viewModel.nextChapter()
-                                                }
+                                                // Right touch: pageDown
+                                                webViewRef?.evaluateJavascript("window.pageDown();", null)
                                             } else {
                                                 onToggleFullScreen()
                                             }
@@ -496,7 +616,7 @@ fun DocumentViewerScreen(
                              
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
                                   UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
-                                  UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
+                                  UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
                                   else -> "#ffffff" to "#000000"
                              }
                                   val style = """
@@ -513,15 +633,28 @@ fun DocumentViewerScreen(
                                           font-family: ${uiState.fontFamily} !important;
                                           font-size: ${uiState.fontSize}px !important;
                                           line-height: 1.6 !important;
-                                          padding: 1.5em !important; 
+                                          padding: 0 !important; /* Remove body padding for full-width images */
                                           box-sizing: border-box !important;
                                           word-wrap: break-word !important;
                                           overflow-wrap: break-word !important;
                                           /* Ensure safe area for cutouts if needed */
-                                          padding-top: env(safe-area-inset-top, 1.5em);
-                                          padding-bottom: calc(env(safe-area-inset-bottom, 1.5em) + 50vh); /* Allow scrolling past end */
-                                          padding-left: env(safe-area-inset-left, 1.5em);
-                                          padding-right: env(safe-area-inset-right, 1.5em);
+                                          padding-top: env(safe-area-inset-top, 0);
+                                          padding-bottom: calc(env(safe-area-inset-bottom, 0) + 50vh); /* Allow scrolling past end */
+                                      }
+                                      /* Padding for text elements to keep them readable */
+                                      p, div, h1, h2, h3, h4, h5, h6 {
+                                          padding-left: 1.2em;
+                                          padding-right: 1.2em;
+                                      }
+                                      /* Remove padding for images to make them edge-to-edge */
+                                      div:has(img), p:has(img) {
+                                          padding: 0 !important;
+                                      }
+                                      img {
+                                          width: 100% !important;
+                                          height: auto !important;
+                                          display: block !important;
+                                          margin: 0 auto !important;
                                       }
                                       </style>
                                   """
@@ -534,6 +667,10 @@ fun DocumentViewerScreen(
       
                                   if (contentWithStyle.hashCode() != previousHash) {
                                       wv.tag = contentWithStyle.hashCode()
+                                      isPageLoading = true
+                                      // If navigation was triggered, ensure isNavigating lock is on
+                                      isNavigating = true 
+                                      
                                       if (uiState.url != null) {
                                           wv.loadUrl(uiState.url!!)
                                       } else {
@@ -542,10 +679,10 @@ fun DocumentViewerScreen(
                                           wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
                                       }
                                       
-                                      // Restore Scroll after load
+                                      // Restore Scroll after load (if not navigating which handles it in onPageFinished)
                                       wv.post {
-                                          if (currentLine > 1 && uiState.totalLines > 0) {
-                                              val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                          if (!isNavigating && currentLine > 1 && uiState.totalLines > 0) {
+                                              val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
                                               wv.evaluateJavascript(js, null)
                                           }
                                       }
@@ -571,11 +708,40 @@ fun DocumentViewerScreen(
                                       }
                               )
                           }
-                 }
-             }
-         }
-         
-         if (showGoToLineDialog) {
+                }
+                }
+            }
+
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                        tonalElevation = 4.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator()
+                            if (uiState.loadProgress < 1f) {
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    "Indexing: ${(uiState.loadProgress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    if (showGoToLineDialog) {
              var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
              AlertDialog(
                  onDismissRequest = { showGoToLineDialog = false },

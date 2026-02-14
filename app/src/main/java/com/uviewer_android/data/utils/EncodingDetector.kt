@@ -27,7 +27,6 @@ object EncodingDetector {
         // 4. Heuristic Scoring
         val sjisScore = getSjisScore(bytes)
         val eucKrScore = getEucKrScore(bytes)
-        val johabScore = getJohabScore(bytes)
         val utf8Score = getUtf8Score(bytes)
         val utf8Percent = if (bytes.isNotEmpty()) utf8Score.toFloat() / bytes.size else 0f
 
@@ -37,16 +36,13 @@ object EncodingDetector {
         }
 
         // Winner takes all
-        if (sjisScore > eucKrScore && sjisScore > johabScore && sjisScore > 0) {
+        if (sjisScore > eucKrScore && sjisScore > 0) {
             return try { Charset.forName("Shift_JIS") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
-        if (eucKrScore > sjisScore && eucKrScore > johabScore && eucKrScore > 0) {
+        if (eucKrScore > sjisScore && eucKrScore > 0) {
              // If UTF-8 score is decent, prefers UTF-8 over EUC-KR if EUC-KR score is just noise
              if (utf8Percent > 0.8f && eucKrScore < bytes.size * 0.1f) return StandardCharsets.UTF_8
              return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
-        }
-        if (johabScore > sjisScore && johabScore > eucKrScore && johabScore > 0) {
-            return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
 
         // Default preference if scores match
@@ -57,14 +53,7 @@ object EncodingDetector {
         if (sjisScore > 0) {
             return try { Charset.forName("Shift_JIS") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
-        if (johabScore > 0) {
-            return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
-        }
 
-        // 5. Final Johab check
-        if (containsJohabPattern(bytes)) {
-            return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
-        }
         
         // If everything failed but looks somewhat like UTF-8
         if (utf8Percent > 0.7f) return StandardCharsets.UTF_8
@@ -162,33 +151,6 @@ object EncodingDetector {
         return score
     }
 
-    private fun getJohabScore(bytes: ByteArray): Int {
-        var score = 0
-        var i = 0
-        while (i < bytes.size) {
-            val b = bytes[i].toInt() and 0xFF
-            if (b < 0x80) {
-                i++
-                continue
-            }
-            if (i + 1 >= bytes.size) break
-            val b2 = bytes[i + 1].toInt() and 0xFF
-            if (b in 0x84..0xD3) {
-                if ((b2 in 0x5B..0x60) || (b2 in 0x7B..0x7E)) {
-                    score += 3
-                    i += 2
-                    continue
-                }
-                if ((b2 in 0x41..0x7E) || (b2 in 0x81..0xFE)) {
-                    score += 1
-                    i += 2
-                    continue
-                }
-            }
-            i++
-        }
-        return score
-    }
 
     private fun getUtf8Score(bytes: ByteArray): Int {
         var score = 0
@@ -225,34 +187,12 @@ object EncodingDetector {
         return score
     }
 
-    private fun containsJohabPattern(bytes: ByteArray): Boolean {
-        var johabOnlyPairCount = 0
-        var i = 0
-        while (i < bytes.size) {
-            val b = bytes[i].toInt() and 0xFF
-            if (b < 0x80) {
-                i++
-                continue
-            }
-            if (i + 1 >= bytes.size) break
-            val b2 = bytes[i + 1].toInt() and 0xFF
-            if (b in 0x84..0xD3) {
-                val johabOnlySecond = (b2 in 0x5B..0x60) || (b2 in 0x7B..0x7E)
-                if (johabOnlySecond) {
-                    johabOnlyPairCount++
-                    i += 2
-                    if (johabOnlyPairCount >= 2) return true
-                    continue
-                }
-            }
-            if (b >= 0x81) {
-                if ((b2 in 0x41..0x7E) || (b2 in 0x81..0xFE)) {
-                    i += 2
-                    continue
-                }
-            }
-            i++
+    fun getCharset(name: String?): Charset {
+        if (name == null) return StandardCharsets.UTF_8
+        try {
+            return Charset.forName(name)
+        } catch (e: Exception) {
         }
-        return false
+        return StandardCharsets.UTF_8
     }
 }

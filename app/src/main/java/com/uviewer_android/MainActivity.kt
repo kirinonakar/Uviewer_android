@@ -20,8 +20,25 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.Manifest
+import android.view.KeyEvent
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+    private val _keyEvents = MutableSharedFlow<Int>()
+    val keyEvents = _keyEvents.asSharedFlow()
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            lifecycleScope.launch {
+                _keyEvents.emit(keyCode)
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -71,7 +88,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             UviewerTheme(darkTheme = darkTheme) {
-                MainScreen()
+                MainScreen(activity = this@MainActivity)
             }
         }
     }

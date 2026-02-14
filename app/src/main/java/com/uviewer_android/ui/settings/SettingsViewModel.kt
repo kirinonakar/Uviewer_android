@@ -52,8 +52,9 @@ class SettingsViewModel(
     val persistZoom: StateFlow<Boolean> = userPreferencesRepository.persistZoom
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
-    val upscaleFilter: StateFlow<Boolean> = userPreferencesRepository.upscaleFilter
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+    val sharpeningAmount: StateFlow<Int> = userPreferencesRepository.sharpeningAmount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
 
     fun setThemeMode(mode: String) {
         userPreferencesRepository.setThemeMode(mode)
@@ -87,9 +88,10 @@ class SettingsViewModel(
         userPreferencesRepository.setPersistZoom(persist)
     }
 
-    fun setUpscaleFilter(upscale: Boolean) {
-        userPreferencesRepository.setUpscaleFilter(upscale)
+    fun setSharpeningAmount(amount: Int) {
+        userPreferencesRepository.setSharpeningAmount(amount)
     }
+
 
     fun addServer(name: String, url: String, username: String, password: String?) {
         viewModelScope.launch {

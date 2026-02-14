@@ -55,6 +55,7 @@ fun RecentFilesScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
+                item { HorizontalDivider() }
                 items(recentFiles) { file ->
                     RecentFileItemRow(
                         file = file,

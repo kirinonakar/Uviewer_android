@@ -24,7 +24,7 @@ data class ImageViewerUiState(
     val isContentLoadedFromWebDav: Boolean = false,
     val containerName: String? = null,
     val persistZoom: Boolean = false,
-    val upscaleFilter: Boolean = false
+    val sharpeningAmount: Int = 0
 )
 
     class ImageViewerViewModel(
@@ -56,11 +56,12 @@ data class ImageViewerUiState(
         }
     }
 
-    fun setUpscaleFilter(upscale: Boolean) {
+    fun setSharpeningAmount(amount: Int) {
         viewModelScope.launch {
-            userPreferencesRepository.setUpscaleFilter(upscale)
+            userPreferencesRepository.setSharpeningAmount(amount)
         }
     }
+
 
     fun setDualPageOrder(order: Int) {
         viewModelScope.launch {
@@ -68,11 +69,12 @@ data class ImageViewerUiState(
         }
     }
 
-        fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String) {
+        fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String, currentImages: List<FileEntry>) {
             viewModelScope.launch {
                 try {
                     val title = if (path.endsWith("/")) path.dropLast(1).substringAfterLast("/") else path.substringAfterLast("/")
-                    
+                    val imageName = if (index >= 0 && index < currentImages.size) currentImages[index].name else null
+
                     // Add to Bookmarks (Page/Position)
                     bookmarkDao.insertBookmark(
                         com.uviewer_android.data.Bookmark(
@@ -82,6 +84,7 @@ data class ImageViewerUiState(
                             serverId = serverId,
                             type = type,
                             position = index,
+                            positionTitle = imageName,
                             timestamp = System.currentTimeMillis()
                         )
                     )
@@ -93,7 +96,9 @@ data class ImageViewerUiState(
                             path = path,
                             isWebDav = isWebDav,
                             serverId = serverId,
-                            type = type
+                            type = type,
+                            position = index,
+                            positionTitle = imageName
                         )
                     )
                 } catch (e: Exception) {
@@ -132,7 +137,8 @@ data class ImageViewerUiState(
                 var savedIndex = 0
                 try {
                     val existing = recentFileDao.getFile(filePath)
-                    savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
+                    val savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
+                    val savedImageName = existing?.positionTitle
                     
                     val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
                     recentFileDao.insertRecent(
@@ -143,7 +149,8 @@ data class ImageViewerUiState(
                             serverId = serverId,
                             type = if (isZip) "ZIP" else "IMAGE",
                             lastAccessed = System.currentTimeMillis(),
-                            pageIndex = savedIndex // Preserve saved index on open
+                            pageIndex = savedIndex, // Preserve saved index on open
+                            positionTitle = existing?.positionTitle
                         )
                     )
                 } catch (e: Exception) {
@@ -224,8 +231,14 @@ data class ImageViewerUiState(
 
                     // For Zip, use savedIndex. For Folder, find the file index.
                     val normalizedFilePath = filePath.trimEnd('/')
+                    val savedImageName = recentFileDao.getFile(filePath)?.positionTitle
                     val index = if (isZip) {
-                        if (images.isNotEmpty()) savedIndex.coerceIn(0, images.size - 1) else 0
+                         if (savedImageName != null) {
+                             val foundIdx = images.indexOfFirst { it.name == savedImageName }
+                             if (foundIdx != -1) foundIdx else savedIndex.coerceIn(0, images.size - 1)
+                         } else {
+                             if (images.isNotEmpty()) savedIndex.coerceIn(0, images.size - 1) else 0
+                         }
                     } else {
                         val found = images.indexOfFirst { it.path.trimEnd('/') == normalizedFilePath }
                          if (found != -1) found else 0
@@ -254,7 +267,7 @@ data class ImageViewerUiState(
                     isContentLoadedFromWebDav = contentIsWebDav,
                     containerName = if (isZip) File(filePath).name else null,
                     persistZoom = userPreferencesRepository.persistZoom.value,
-                    upscaleFilter = userPreferencesRepository.upscaleFilter.value
+                    sharpeningAmount = userPreferencesRepository.sharpeningAmount.value
                 )
                   // ... loops ...
                 viewModelScope.launch {
@@ -263,8 +276,8 @@ data class ImageViewerUiState(
                     }
                 }
                 viewModelScope.launch {
-                    userPreferencesRepository.upscaleFilter.collect {
-                        _uiState.value = _uiState.value.copy(upscaleFilter = it)
+                    userPreferencesRepository.sharpeningAmount.collect {
+                        _uiState.value = _uiState.value.copy(sharpeningAmount = it)
                     }
                 }
             } catch (e: Exception) {
@@ -279,6 +292,7 @@ data class ImageViewerUiState(
          viewModelScope.launch {
              try {
                  val title = File(path).name
+                 val imageName = if (index >= 0 && index < uiState.value.images.size) uiState.value.images[index].name else null
                  recentFileDao.insertRecent(
                      com.uviewer_android.data.RecentFile(
                          path = path,
@@ -287,7 +301,8 @@ data class ImageViewerUiState(
                          serverId = currentServerId,
                          type = if (currentIsZip) "ZIP" else "IMAGE",
                          lastAccessed = System.currentTimeMillis(),
-                         pageIndex = index
+                         pageIndex = index,
+                         positionTitle = imageName
                      )
                  )
              } catch (e: Exception) { e.printStackTrace() }

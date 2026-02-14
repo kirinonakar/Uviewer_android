@@ -49,10 +49,16 @@ class UserPreferencesRepository(context: Context) {
     )
     val persistZoom: StateFlow<Boolean> = _persistZoom.asStateFlow()
 
-    private val _upscaleFilter = MutableStateFlow(
-        sharedPreferences.getBoolean("upscale_filter", false)
+    private val _sharpeningAmount = MutableStateFlow(
+        sharedPreferences.getInt("sharpening_amount", 0)
     )
-    val upscaleFilter: StateFlow<Boolean> = _upscaleFilter.asStateFlow()
+    val sharpeningAmount: StateFlow<Int> = _sharpeningAmount.asStateFlow()
+
+    private val _subtitleEnabled = MutableStateFlow(
+        sharedPreferences.getBoolean("subtitle_enabled", true)
+    )
+    val subtitleEnabled: StateFlow<Boolean> = _subtitleEnabled.asStateFlow()
+
 
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
@@ -110,12 +116,21 @@ class UserPreferencesRepository(context: Context) {
         _persistZoom.value = persist
     }
 
-    fun setUpscaleFilter(upscale: Boolean) {
+    fun setSharpeningAmount(amount: Int) {
         sharedPreferences.edit {
-            putBoolean("upscale_filter", upscale)
+            putInt("sharpening_amount", amount)
         }
-        _upscaleFilter.value = upscale
+        _sharpeningAmount.value = amount
     }
+
+
+    fun setSubtitleEnabled(enabled: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("subtitle_enabled", enabled)
+        }
+        _subtitleEnabled.value = enabled
+    }
+
 
     companion object {
         const val THEME_SYSTEM = "system"

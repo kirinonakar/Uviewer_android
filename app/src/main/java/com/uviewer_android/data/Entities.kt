@@ -13,6 +13,7 @@ data class FavoriteItem(
     val type: String, // "image", "document", "folder"
     val isPinned: Boolean = false,
     val position: Int = 0, // Line number or page index for bookmarks
+    val positionTitle: String? = null, // Image name or chapter title
     val timestamp: Long = System.currentTimeMillis()
 )
 
@@ -25,7 +26,8 @@ data class RecentFile(
     val type: String,
     val lastAccessed: Long = System.currentTimeMillis(),
     val progress: Float = 0f, // Reading progress (0.0 to 1.0)
-    val pageIndex: Int = 0 // Page number or scroll position
+    val pageIndex: Int = 0, // Page number or scroll position
+    val positionTitle: String? = null
 )
 
 @Entity(tableName = "webdav_servers")
@@ -44,5 +46,6 @@ data class Bookmark(
     val serverId: Int? = null,
     val type: String, // "IMAGE", "DOCUMENT", "PDF", "VIDEO"
     val position: Int = 0, // Line number or page index
+    val positionTitle: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )

@@ -101,6 +101,7 @@ fun LibraryScreen(
         floatingActionButton = {}
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
+            HorizontalDivider()
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,

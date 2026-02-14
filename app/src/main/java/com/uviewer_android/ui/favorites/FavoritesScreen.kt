@@ -47,12 +47,49 @@ fun FavoritesScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                items(favorites) { item ->
-                    FavoriteItemRow(
-                        item = item,
-                        onClick = { onNavigateToViewer(item) },
-                        onDelete = { viewModel.deleteFavorite(item) }
-                    )
+                item { HorizontalDivider() }
+                
+                val folders = favorites.filter { it.type == "FOLDER" }
+                val files = favorites.filter { it.type != "FOLDER" }
+                
+                if (folders.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Folders",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(folders) { item ->
+                        FavoriteItemRow(
+                            item = item,
+                            onClick = { onNavigateToViewer(item) },
+                            onDelete = { viewModel.deleteFavorite(item) }
+                        )
+                    }
+                }
+                
+                if (folders.isNotEmpty() && files.isNotEmpty()) {
+                    item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
+                }
+                
+                if (files.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Files",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(16.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    items(files) { item ->
+                        FavoriteItemRow(
+                            item = item,
+                            onClick = { onNavigateToViewer(item) },
+                            onDelete = { viewModel.deleteFavorite(item) }
+                        )
+                    }
                 }
             }
         }

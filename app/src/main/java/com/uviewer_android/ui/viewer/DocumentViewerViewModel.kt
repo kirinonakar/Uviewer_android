@@ -36,7 +36,8 @@ data class DocumentViewerUiState(
     val fileName: String? = null,
     val currentChunkIndex: Int = 0,
     val hasMoreContent: Boolean = false,
-    val manualEncoding: String? = null
+    val manualEncoding: String? = null,
+    val loadProgress: Float = 1f
 )
 
 class DocumentViewerViewModel(
@@ -58,14 +59,14 @@ class DocumentViewerViewModel(
     val docBackgroundColor = userPreferencesRepository.docBackgroundColor
 
     // Cache for raw content to re-process (e.g. toggle vertical)
-    private var rawContentCache: String? = null
-    private var lineOffsets = listOf<Int>()
-    private var currentFileType: FileEntry.FileType? = null
+    private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
+    companion object {
+        const val LINES_PER_CHUNK = 2000
+    }
     private var currentFilePath: String = ""
+    private var currentFileType: FileEntry.FileType? = null
     private var isWebDavContext: Boolean = false
     private var serverIdContext: Int? = null
-
-    private val CHUNK_SIZE = 100000 // Increased chunk size for better scrolling 100k chars ~ 200kb
 
     init {
         viewModelScope.launch {
@@ -74,19 +75,15 @@ class DocumentViewerViewModel(
                 userPreferencesRepository.fontFamily,
                 userPreferencesRepository.docBackgroundColor
             ) { size, family, color ->
-                Triple(size, family, color)
-            }.collect { (size, family, color) ->
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
                     fontFamily = family,
                     docBackgroundColor = color
                 )
-                // If we have content and it's Aozora, re-wrap needed?
-                // AozoraParser.wrapInHtml uses these values.
-                if (rawContentCache != null && currentFileType == FileEntry.FileType.TEXT) {
-                    processTextContent(rawContentCache!!)
+                if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
+                    loadTextChunk(_uiState.value.currentChunkIndex)
                 }
-            }
+            }.collect {}
         }
     }
 
@@ -159,39 +156,46 @@ class DocumentViewerViewModel(
                     loadChapter(0) // Load first chapter
                 } else {
                     // Text / HTML / CSV
-                     val rawBytes = if (isWebDav && serverId != null) {
-                         // For large files, we should stream, but for now download full
-                         // TODO: Implement proper streaming or partial read
+                    val file = if (isWebDav && serverId != null) {
                          val context = getApplication<Application>()
                          val cacheDir = context.cacheDir
                          val tempFile = File(cacheDir, "temp_" + File(filePath).name)
                          webDavRepository.downloadFile(serverId, filePath, tempFile)
-                         tempFile.readBytes()
+                         tempFile
                     } else {
-                        File(filePath).readBytes()
+                        File(filePath)
                     }
-                    
-                    val contentString = decodeBytes(rawBytes, _uiState.value.manualEncoding)
-                    rawContentCache = contentString
 
-                    // Calculate line offsets for global navigation
-                    lineOffsets = mutableListOf<Int>().apply {
-                        add(0)
-                        var pos = contentString.indexOf('\n')
-                        while (pos != -1) {
-                            add(pos + 1)
-                            pos = contentString.indexOf('\n', pos + 1)
-                        }
+                    val reader = com.uviewer_android.data.utils.LargeTextReader(file)
+                    largeTextReader = reader
+                    reader.indexFile(_uiState.value.manualEncoding) { progress ->
+                        _uiState.value = _uiState.value.copy(loadProgress = progress)
                     }
+
+                    val totalLines = reader.getTotalLines()
                     
+                    // Background pass to extract titles for TOC
+                    viewModelScope.launch {
+                        val sampleText = reader.readLines(1, 5000) // Scan first 5000 lines for headers
+                        val chapters = AozoraParser.extractTitles(sampleText).map { (title, line) ->
+                            com.uviewer_android.data.model.EpubSpineItem(
+                                title = title,
+                                href = "line-$line",
+                                id = "line-$line"
+                            )
+                        }
+                        _uiState.value = _uiState.value.copy(epubChapters = chapters)
+                    }
+
                     if (type == FileEntry.FileType.CSV || (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv"))) {
-                        // Simple CSV to HTML Table
+                        // For CSV, just load the whole thing or large chunk for table view
+                        val contentString = reader.readLines(1, totalLines.coerceAtMost(2000))
                         val rows = contentString.lines().filter { it.isNotBlank() }
                         val sb = StringBuilder()
                         sb.append("<table>")
                         rows.forEach { row ->
                             sb.append("<tr>")
-                            val cells = row.split(",") // Basic split, regex for quotes needed for robustness
+                            val cells = row.split(",")
                             cells.forEach { cell ->
                                 sb.append("<td style='border:1px solid #ccc; padding: 4px;'>${cell.trim()}</td>")
                             }
@@ -202,50 +206,26 @@ class DocumentViewerViewModel(
                          _uiState.value = _uiState.value.copy(
                             content = sb.toString(),
                             isLoading = false,
-                            totalLines = rows.size,
+                            totalLines = totalLines,
                             currentLine = 1,
                             currentChunkIndex = 0,
-                            hasMoreContent = false
+                            hasMoreContent = totalLines > 2000
                         )
-                    } else if (type == FileEntry.FileType.HTML || filePath.lowercase().endsWith(".html") || filePath.lowercase().endsWith(".htm")) {
-                        // Direct HTML - do not Aozora parse
-                         _uiState.value = _uiState.value.copy(
-                             content = contentString,
-                             isLoading = false,
-                             totalLines = lineOffsets.size,
-                             currentLine = savedLine
-                         )
                     } else {
-                        // Text / Aozora
-                        val chapters = mutableListOf<com.uviewer_android.data.model.EpubSpineItem>()
-                        val lines = contentString.lines()
-                        lines.forEachIndexed { index, line ->
-                            val trimmed = line.trim()
-                            if (trimmed.startsWith("#") || 
-                                Regex("［＃[大中小]見出し］(.+?)［＃[大中小]見出し終わり］").containsMatchIn(trimmed) ||
-                                (trimmed.startsWith("第") && trimmed.contains("章") && trimmed.length < 50)) {
-                                
-                                val title = if (trimmed.startsWith("［＃")) {
-                                    trimmed.replace(Regex("［＃.+?見出し］"), "").replace(Regex("［＃.+?見出し終わり］"), "")
-                                } else {
-                                    trimmed.removePrefix("#").trim()
-                                }
-
-                                chapters.add(com.uviewer_android.data.model.EpubSpineItem(
-                                    title = title,
-                                    href = "line-${index + 1}",
-                                    id = "line-${index + 1}"
-                                ))
-                            }
-                        }
-
-                        processTextContent(contentString, false)
+                        // Text / Aozora / HTML
+                        // Update TOC headers by reading the whole file in background? 
+                        // Or just first few throusand lines?
+                        // For efficiency, scan headers during indexing or in a separate pass.
+                        
+                        val startLine = savedLine
+                        val chunkIdx = (startLine - 1) / LINES_PER_CHUNK
                         
                         _uiState.value = _uiState.value.copy(
-                            epubChapters = chapters,
-                            totalLines = lineOffsets.size,
+                            currentChunkIndex = chunkIdx,
+                            totalLines = totalLines,
                             currentLine = savedLine
                         )
+                        loadTextChunk(chunkIdx)
                     }
                 }
             } catch (e: Exception) {
@@ -274,83 +254,91 @@ class DocumentViewerViewModel(
              }
         }
     }
-    private fun processTextContent(text: String, isHtml: Boolean = false) {
-        val chunkIndex = _uiState.value.currentChunkIndex
-        val startIndex = chunkIndex * CHUNK_SIZE
-        if (startIndex >= text.length) return
-        
-        val endIndex = (startIndex + CHUNK_SIZE).coerceAtMost(text.length)
-        var chunk = text.substring(startIndex, endIndex)
-        
-        if (endIndex < text.length) {
-            val lastNewline = chunk.lastIndexOf('\n')
-            if (lastNewline > 0) {
-                chunk = chunk.substring(0, lastNewline)
-            }
-        }
-        
-        val hasMore = (startIndex + chunk.length) < text.length
-        
-        // Calculate global line offset for the parser
-        var globalLineOffset = 0
-        for (i in 0 until startIndex) {
-            if (text[i] == '\n') globalLineOffset++
-        }
-        
+    private fun loadTextChunk(chunkIndex: Int) {
+        val reader = largeTextReader ?: return
+        val startLine = chunkIndex * LINES_PER_CHUNK + 1
+        val totalLines = reader.getTotalLines()
+        if (startLine > totalLines) return
+
         viewModelScope.launch {
-            val processed = if (isHtml) {
-                 chunk 
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
+            val globalLineOffset = startLine - 1
+            
+            val processed = if (currentFileType == FileEntry.FileType.HTML || currentFilePath.endsWith(".html")) {
+                chunkText
             } else {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    val htmlBody = AozoraParser.parse(chunk, globalLineOffset)
+                    val htmlBody = AozoraParser.parse(chunkText, globalLineOffset)
+                    val colors = getColors()
                     AozoraParser.wrapInHtml(
                         htmlBody, 
                         false, 
                         _uiState.value.fontFamily, 
                         _uiState.value.fontSize, 
-                        _uiState.value.docBackgroundColor
+                        colors.first, 
+                        colors.second
                     )
                 }
             }
-            
+
             _uiState.value = _uiState.value.copy(
                 content = processed,
                 isLoading = false,
-                totalLines = lineOffsets.size,
-                currentLine = _uiState.value.currentLine, // Maintain or it will be 1
-                hasMoreContent = hasMore
+                currentChunkIndex = chunkIndex,
+                hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines
             )
         }
     }
-    
+
     fun nextChunk() {
         if (_uiState.value.hasMoreContent) {
-            _uiState.value = _uiState.value.copy(currentChunkIndex = _uiState.value.currentChunkIndex + 1)
-            rawContentCache?.let { processTextContent(it) }
+            val nextChunkIdx = _uiState.value.currentChunkIndex + 1
+            val targetLine = nextChunkIdx * LINES_PER_CHUNK + 1
+            
+            _uiState.value = _uiState.value.copy(currentLine = targetLine, isLoading = true)
+            loadTextChunk(nextChunkIdx)
         }
     }
     
     fun prevChunk() {
         if (_uiState.value.currentChunkIndex > 0) {
-             _uiState.value = _uiState.value.copy(currentChunkIndex = _uiState.value.currentChunkIndex - 1)
-             rawContentCache?.let { processTextContent(it) }
+            val prevChunkIdx = _uiState.value.currentChunkIndex - 1
+            val totalLines = largeTextReader?.getTotalLines() ?: 0
+            // When going back, we want to go to the LAST line of the previous chunk
+            val targetLine = (prevChunkIdx + 1) * LINES_PER_CHUNK 
+            val clampedLine = targetLine.coerceAtMost(totalLines)
+            
+            _uiState.value = _uiState.value.copy(currentLine = clampedLine, isLoading = true)
+            loadTextChunk(prevChunkIdx)
         }
     }
 
     fun jumpToLine(line: Int) {
-        if (line < 1 || lineOffsets.isEmpty()) return
-        val offset = lineOffsets.getOrNull(line - 1) ?: return
-        val targetChunk = offset / CHUNK_SIZE
+        val reader = largeTextReader ?: return
+        if (line < 1 || line > reader.getTotalLines()) return
         
+        val targetChunk = (line - 1) / LINES_PER_CHUNK
+        
+        // TOC synchronization logic
+        val chapterIdx = _uiState.value.epubChapters.indexOfLast { 
+            it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
+        }.coerceAtLeast(0)
+
         if (targetChunk != _uiState.value.currentChunkIndex) {
+            // [Modified] Set isLoading to true immediately to signal UI to lock reporters
             _uiState.value = _uiState.value.copy(
-                currentChunkIndex = targetChunk,
-                currentLine = line,
-                isLoading = true
+                currentLine = line, 
+                currentChapterIndex = chapterIdx,
+                isLoading = true 
             )
-            rawContentCache?.let { processTextContent(it, false) }
+            loadTextChunk(targetChunk)
         } else {
-            _uiState.value = _uiState.value.copy(currentLine = line)
+            // Even if same chunk, update currentLine to target
+            _uiState.value = _uiState.value.copy(
+                currentLine = line, 
+                currentChapterIndex = chapterIdx
+            )
         }
     }
 
@@ -414,13 +402,10 @@ class DocumentViewerViewModel(
                     )
                 }
             } else {
-                // For Text files, "Next Chapter" means jump to the line of the next header
+                // For Text files
                 if (chapter.href.startsWith("line-")) {
                     val line = chapter.href.removePrefix("line-").toIntOrNull() ?: 1
-                    _uiState.value = _uiState.value.copy(
-                        currentChapterIndex = index,
-                        currentLine = line
-                    )
+                    jumpToLine(line)
                 }
             }
         }
@@ -468,24 +453,10 @@ class DocumentViewerViewModel(
         }
     }
 
-    private fun decodeBytes(bytes: ByteArray, manualEncoding: String?): String {
-        val decoded = if (manualEncoding != null) {
-            try {
-                String(bytes, java.nio.charset.Charset.forName(manualEncoding))
-            } catch (e: Exception) {
-                String(bytes, com.uviewer_android.data.utils.EncodingDetector.detectEncoding(bytes))
-            }
-        } else {
-            String(bytes, com.uviewer_android.data.utils.EncodingDetector.detectEncoding(bytes))
-        }
-        // Normalize to NFC to fix "Jobi-hyeong" (Separated Jamo) issues
-        return java.text.Normalizer.normalize(decoded, java.text.Normalizer.Form.NFC)
-    }
-    
     private fun getColors(): Pair<String, String> {
         return when (_uiState.value.docBackgroundColor) {
              UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
-             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
+             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
              else -> "#ffffff" to "#000000"
         }
     }

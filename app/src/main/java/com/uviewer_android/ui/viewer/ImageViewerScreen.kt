@@ -29,9 +29,47 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import androidx.compose.ui.draw.clipToBounds
 import com.uviewer_android.ui.AppViewModelProvider
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
+
+class SharpenTransformation(private val intensity: Int) : coil.transform.Transformation {
+    override val cacheKey: String = "sharpen_$intensity"
+    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
+        if (intensity <= 0) return input
+        val width = input.width
+        val height = input.height
+        val pixels = IntArray(width * height)
+        input.getPixels(pixels, 0, width, 0, 0, width, height)
+        val outputPixels = IntArray(width * height)
+        val alpha = intensity.toFloat() / 20f
+        val center = 1f + 4f * alpha
+        val neighbor = -alpha
+        for (y in 1 until height - 1) {
+            for (x in 1 until width - 1) {
+                val idx = y * width + x
+                val p = pixels[idx]
+                val pl = pixels[idx - 1]
+                val pr = pixels[idx + 1]
+                val pt = pixels[idx - width]
+                val pb = pixels[idx + width]
+                
+                var r = (((p shr 16) and 0xFF) * center + (((pl shr 16) and 0xFF) + ((pr shr 16) and 0xFF) + ((pt shr 16) and 0xFF) + ((pb shr 16) and 0xFF)) * neighbor).toInt()
+                var g = (((p shr 8) and 0xFF) * center + (((pl shr 8) and 0xFF) + ((pr shr 8) and 0xFF) + ((pt shr 8) and 0xFF) + ((pb shr 8) and 0xFF)) * neighbor).toInt()
+                var b = ((p and 0xFF) * center + ((pl and 0xFF) + (pr and 0xFF) + (pt and 0xFF) + (pb and 0xFF)) * neighbor).toInt()
+                
+                r = r.coerceIn(0, 255)
+                g = g.coerceIn(0, 255)
+                b = b.coerceIn(0, 255)
+                outputPixels[idx] = (0xFF shl 24) or (r shl 16) or (g shl 8) or b
+            }
+        }
+        val output = android.graphics.Bitmap.createBitmap(width, height, input.config ?: android.graphics.Bitmap.Config.ARGB_8888)
+        output.setPixels(outputPixels, 0, width, 0, 0, width, height)
+        return output
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,7 +81,8 @@ fun ImageViewerScreen(
     viewModel: ImageViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {}
+    onToggleFullScreen: () -> Unit = {},
+    activity: com.uviewer_android.MainActivity? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val invertImageControl by viewModel.invertImageControl.collectAsState()
@@ -57,13 +96,19 @@ fun ImageViewerScreen(
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = false
+            insetsController.isAppearanceLightStatusBars = false // White icons
+            if (isFullScreen) {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
         }
         onDispose {
             val window = (context as? android.app.Activity)?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                // Restore based on system theme
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
             }
         }
@@ -147,6 +192,22 @@ fun ImageViewerScreen(
              viewModel.updateProgress(currentPageIndex)
         }
 
+        LaunchedEffect(activity) {
+            activity?.keyEvents?.collect { keyCode ->
+                if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
+                    // Previous image
+                    if (pagerState.currentPage > 0) {
+                        pagerState.scrollToPage(pagerState.currentPage - 1)
+                    }
+                } else if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
+                    // Next image
+                    if (pagerState.currentPage < pageCount - 1) {
+                        pagerState.scrollToPage(pagerState.currentPage + 1)
+                    }
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -227,7 +288,7 @@ fun ImageViewerScreen(
                                 authHeader = uiState.authHeader,
                                 serverUrl = uiState.serverUrl,
                                 scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
-                                upscaleFilter = uiState.upscaleFilter,
+                                sharpeningAmount = uiState.sharpeningAmount,
                                 onScaleChanged = { newScale -> 
                                     if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
                                 }
@@ -240,7 +301,8 @@ fun ImageViewerScreen(
                                 authHeader = uiState.authHeader,
                                 serverUrl = uiState.serverUrl,
                                 scale = currentScale,
-                                upscaleFilter = uiState.upscaleFilter,
+                                sharpeningAmount = uiState.sharpeningAmount,
+                                
                                 onScaleChanged = { newScale -> 
                                     if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
                                 }
@@ -268,37 +330,40 @@ fun ImageViewerScreen(
                 
                 var showSettingsDialog by remember { mutableStateOf(false) }
 
-                TopAppBar(
-                    title = { Text(title, color = Color.White, maxLines = 1) }, 
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = {
-                            val type = if (filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }) "IMAGE_ZIP" else "IMAGE"
-                            viewModel.toggleBookmark(filePath, pagerState.currentPage, isWebDav, serverId, type)
-                            android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
-                        }
-                        IconButton(onClick = { isDualPage = !isDualPage }) {
-                            Icon(
-                                if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
-                                contentDescription = "Toggle Dual Page",
-                                tint = Color.White
-                            )
-                        }
-                        IconButton(onClick = { showSettingsDialog = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = Color.Black.copy(alpha = 0.5f)
-                    ),
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
+                Column(modifier = Modifier.align(Alignment.TopCenter)) {
+                    TopAppBar(
+                        title = { Text(title, color = Color.White, maxLines = 1) }, 
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
+                            }
+                        },
+                        actions = {
+                            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                            val currentImageIndex = if (isDualPage) (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1) else pagerState.currentPage
+                            IconButton(onClick = { 
+                                viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
+                                android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", tint = Color.White)
+                            }
+                            IconButton(onClick = { isDualPage = !isDualPage }) {
+                                Icon(
+                                    if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
+                                    contentDescription = "Toggle Dual Page",
+                                    tint = Color.White
+                                )
+                            }
+                            IconButton(onClick = { showSettingsDialog = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = Color.White)
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Black.copy(alpha = 0.5f)
+                        )
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
+                }
 
                 if (showSettingsDialog) {
                     AlertDialog(
@@ -310,9 +375,14 @@ fun ImageViewerScreen(
                                     Checkbox(checked = uiState.persistZoom, onCheckedChange = { viewModel.setPersistZoom(it) })
                                     Text(stringResource(R.string.persist_zoom))
                                 }
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(checked = uiState.upscaleFilter, onCheckedChange = { viewModel.setUpscaleFilter(it) })
-                                    Text(stringResource(R.string.upscale_filter))
+                                Column {
+                                    Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}")
+                                    Slider(
+                                        value = uiState.sharpeningAmount.toFloat(),
+                                        onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
+                                        valueRange = 0f..10f,
+                                        steps = 9
+                                    )
                                 }
                                 Column {
                                     Text(stringResource(R.string.dual_page_order))
@@ -348,7 +418,7 @@ fun ZoomableImage(
     authHeader: String?,
     serverUrl: String?,
     scale: Float,
-    upscaleFilter: Boolean,
+    sharpeningAmount: Int,
     onScaleChanged: (Float) -> Unit,
     secondImageUrl: String? = null // For dual page
 ) {
@@ -365,6 +435,7 @@ fun ZoomableImage(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds() // Prevent overlap when zoomed
             .pointerInput(imageUrl) {
                 awaitEachGesture {
                     var zoom = 1f
@@ -475,6 +546,11 @@ fun ZoomableImage(
                 
                 return loaderBuilder
                     .crossfade(true)
+                    .apply {
+                        if (sharpeningAmount > 0) {
+                            transformations(SharpenTransformation(sharpeningAmount))
+                        }
+                    }
                     .allowHardware(false) // Disable hardware bitmaps to prevent potential black screen issues
                     .build()
             }
@@ -496,7 +572,7 @@ fun ZoomableImage(
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 imageLoader = imageLoader,
-                filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
+                filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                 loading = {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(strokeWidth = 2.dp)
@@ -527,7 +603,7 @@ fun ZoomableDualImage(
     authHeader: String?,
     serverUrl: String?,
     scale: Float,
-    upscaleFilter: Boolean,
+    sharpeningAmount: Int,
     onScaleChanged: (Float) -> Unit
 ) {
     val currentScale by rememberUpdatedState(scale)
@@ -542,6 +618,7 @@ fun ZoomableDualImage(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds() // Prevent overlap when zoomed
             .pointerInput(firstImageUrl, secondImageUrl) {
                awaitEachGesture {
                     var zoom = 1f
@@ -649,6 +726,11 @@ fun ZoomableDualImage(
 
                 return loaderBuilder
                     .crossfade(true)
+                    .apply {
+                        if (sharpeningAmount > 0) {
+                            transformations(SharpenTransformation(sharpeningAmount))
+                        }
+                    }
                     .allowHardware(false)
                     .build()
             }
@@ -672,7 +754,7 @@ fun ZoomableDualImage(
                     contentScale = ContentScale.Fit,
                     imageLoader = imageLoader,
                     alignment = Alignment.CenterEnd,
-                    filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
+                    filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(strokeWidth = 2.dp)
@@ -703,7 +785,7 @@ fun ZoomableDualImage(
                     contentScale = ContentScale.Fit,
                     imageLoader = imageLoader,
                     alignment = Alignment.CenterStart,
-                    filterQuality = if (upscaleFilter) FilterQuality.High else FilterQuality.Low,
+                    filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(strokeWidth = 2.dp)

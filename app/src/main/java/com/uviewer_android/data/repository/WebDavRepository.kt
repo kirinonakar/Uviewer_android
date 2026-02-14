@@ -9,7 +9,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
 
 class WebDavRepository(
-    private val webDavServerDao: WebDavServerDao, // For server info
+    private val webDavServerDao: WebDavServerDao,
     private val credentialsManager: CredentialsManager
 ) {
 
@@ -17,27 +17,27 @@ class WebDavRepository(
 
     suspend fun listFiles(serverId: Int, path: String): List<FileEntry> = withContext(Dispatchers.IO) {
         val client = getClient(serverId) ?: return@withContext emptyList()
+        val password = credentialsManager.getPassword(serverId) ?: return@withContext emptyList()
         val server = webDavServerDao.getById(serverId) ?: return@withContext emptyList()
-        val webDavFiles = client.listFiles(path)
+        val webDavFiles = client.listFiles(password, path)
 
-        val serverPath = java.net.URL(server.url).path.trimEnd('/')
+        val serverPath = try { java.net.URL(server.url).path.trimEnd('/') } catch (e: Exception) { "" }
         
-        // Normalize requested path for filtering
         val requestedPath = if (path.endsWith("/")) path.dropLast(1) else path
 
         webDavFiles.mapNotNull { file ->
-            // file.href can be a full URL (https://...) or an absolute path (/...) or even a relative path (file.txt)
             var decodedPath = file.href
-            while (decodedPath.contains("%")) {
+            // Robust path decoding: only decode if it looks like it's percent-encoded.
+            // Avoid java.net.URLDecoder for raw paths as it turns '+' into ' '.
+            if (decodedPath.contains("%")) {
                 try {
-                    val next = java.net.URLDecoder.decode(decodedPath, "UTF-8")
-                    if (next == decodedPath) break
-                    decodedPath = next
-                } catch (e: Exception) { break }
+                    // Replace '+' with '%2B' before decoding to preserve '+' if it was literal
+                    val safeForDecoder = decodedPath.replace("+", "%2B")
+                    decodedPath = java.net.URLDecoder.decode(safeForDecoder, "UTF-8")
+                } catch (e: Exception) { }
             }
             val decodedHref = decodedPath
             
-            // Extract path part if it's a full URL
             var cleanPath = if (decodedHref.startsWith("http://", true) || decodedHref.startsWith("https://", true)) {
                 try {
                     java.net.URL(decodedHref).path
@@ -50,16 +50,12 @@ class WebDavRepository(
 
             if (!cleanPath.startsWith("/")) cleanPath = "/" + cleanPath
             
-            // Calculate relative path from server root
             var relativePath = cleanPath
             if (serverPath.isNotEmpty() && relativePath.startsWith(serverPath, ignoreCase = true)) {
                 relativePath = relativePath.substring(serverPath.length)
             }
             if (!relativePath.startsWith("/")) relativePath = "/" + relativePath
 
-            // Filter out the directory itself
-            // Normalized comparison
-            // Normalize: ensure both start with / and end without / (except root)
             var normRelative = relativePath
             if (!normRelative.startsWith("/")) normRelative = "/$normRelative"
             if (normRelative.length > 1) normRelative = normRelative.trimEnd('/')
@@ -68,21 +64,10 @@ class WebDavRepository(
             if (!normRequested.startsWith("/")) normRequested = "/$normRequested"
             if (normRequested.length > 1) normRequested = normRequested.trimEnd('/')
 
-            // Filter out the directory itself (exact match)
             if (normRelative == normRequested) {
                 return@mapNotNull null
             }
 
-            // Also ensure it is a direct child if we don't assume depth 1 response only?
-            // WebDav Depth 1 returns children. So we should be fine.
-            // But if relativePath is unrelated?
-            // Typically relative path should start with requested path
-            if (!normRelative.startsWith(normRequested)) {
-                 // Should not happen with Depth 1 unless URL logic is weird
-                 // return@mapNotNull null
-            }
-
-            // Determine FileType
             val type = when {
                 file.isDirectory -> FileEntry.FileType.FOLDER
                 file.name.endsWith(".jpg", true) || file.name.endsWith(".jpeg", true) || 
@@ -106,7 +91,7 @@ class WebDavRepository(
 
             FileEntry(
                 name = file.name,
-                path = relativePath, // This path is relative to server root, ready for next listFiles call
+                path = relativePath,
                 isDirectory = file.isDirectory,
                 type = type,
                 lastModified = file.lastModified,
@@ -132,10 +117,8 @@ class WebDavRepository(
 
     suspend fun createClientFor(serverId: Int, serverName: String, serverUrl: String): WebDavClient? {
         val username = credentialsManager.getUsername(serverId) ?: return null
-        val password = credentialsManager.getPassword(serverId) ?: return null
-        // Reconstruct basic server object for client
         val server = com.uviewer_android.data.WebDavServer(id = serverId, name = serverName, url = serverUrl)
-        return WebDavClient(server, username, password)
+        return WebDavClient(server, username)
     }
 
     suspend fun getAuthHeader(serverId: Int): String? {
@@ -152,14 +135,16 @@ class WebDavRepository(
     suspend fun readFileContent(serverId: Int, path: String): ByteArray {
         return withContext(Dispatchers.IO) {
             val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
-            client.downloadContent(path)
+            val password = credentialsManager.getPassword(serverId) ?: throw Exception("Password not found")
+            client.downloadContent(password, path)
         }
     }
 
     suspend fun downloadFile(serverId: Int, path: String, targetFile: java.io.File) {
         withContext(Dispatchers.IO) {
             val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
-            client.downloadToFile(path, targetFile)
+            val password = credentialsManager.getPassword(serverId) ?: throw Exception("Password not found")
+            client.downloadToFile(password, path, targetFile)
         }
     }
 }

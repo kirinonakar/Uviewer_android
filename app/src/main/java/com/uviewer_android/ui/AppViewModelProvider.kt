@@ -49,7 +49,8 @@ object AppViewModelProvider {
                 application = app,
                 fileRepository = app.container.fileRepository,
                 webDavRepository = app.container.webDavRepository,
-                recentFileDao = app.container.database.recentFileDao()
+                recentFileDao = app.container.database.recentFileDao(),
+                userPreferencesRepository = app.container.userPreferencesRepository
             )
         }
         initializer {
