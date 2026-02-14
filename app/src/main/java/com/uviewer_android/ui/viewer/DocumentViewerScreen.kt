@@ -35,6 +35,7 @@ import com.uviewer_android.ui.AppViewModelProvider
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.foundation.gestures.detectTapGestures
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,15 +64,57 @@ fun DocumentViewerScreen(
         viewModel.loadDocument(filePath, type, isWebDav, serverId)
     }
 
+    // Status Bar Logic
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    // Determine if we need light status bar (black text) or dark status bar (white text)
+    // Based on docBackgroundColor. If Sepia/White -> Light Status Bar (Black Text). If Dark -> Dark Status Bar (White Text).
+    // But if system is in Dark Theme, and we use White background, we might want Light Status Bar?
+    // Let's stick to the document background.
+    val useLightStatusBar = uiState.docBackgroundColor != com.uviewer_android.data.repository.UserPreferencesRepository.DOC_BG_DARK
+    
+    DisposableEffect(useLightStatusBar, isFullScreen) {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            if (isFullScreen) {
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            } else {
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.isAppearanceLightStatusBars = useLightStatusBar
+            }
+        }
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                 // Restore based on system theme
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
+            }
+        }
+    }
+
     // Update current line from UI state if needed, or maintain local state from scroll
     LaunchedEffect(uiState.currentLine) {
         if (uiState.currentLine > 0) currentLine = uiState.currentLine
     }
 
+    // Progress saving with debounce
+    LaunchedEffect(currentLine) {
+        if (currentLine > 1) {
+            kotlinx.coroutines.delay(3000)
+            viewModel.updateProgress(currentLine)
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
-            ModalDrawerSheet {
+            ModalDrawerSheet(
+                modifier = Modifier.width(300.dp) // Limit width
+            ) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     stringResource(R.string.table_of_contents),
@@ -82,7 +125,7 @@ fun DocumentViewerScreen(
                 LazyColumn {
                     itemsIndexed(uiState.epubChapters) { index, item ->
                         NavigationDrawerItem(
-                            label = { Text(item.title ?: "Chapter ${index + 1}") },
+                            label = { Text(item.title ?: "Chapter ${index + 1}", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
                             selected = index == uiState.currentChapterIndex,
                         onClick = {
                             if (item.href.startsWith("line-")) {
@@ -216,7 +259,7 @@ fun DocumentViewerScreen(
                                  modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                              )
                          }
-
+ 
                          // Text Chunk Navigation
                          if (type == FileEntry.FileType.TEXT && (uiState.currentChunkIndex > 0 || uiState.hasMoreContent)) {
                              Row(
@@ -232,12 +275,12 @@ fun DocumentViewerScreen(
                                      Spacer(Modifier.width(8.dp))
                                      Text("Prev Seg")
                                  }
-
+ 
                                  Text(
                                      "Segment ${uiState.currentChunkIndex + 1}",
                                      style = MaterialTheme.typography.bodyMedium
                                  )
-
+ 
                                  TextButton(
                                      onClick = { viewModel.nextChunk() },
                                      enabled = uiState.hasMoreContent
@@ -267,7 +310,7 @@ fun DocumentViewerScreen(
                                      "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
                                      style = MaterialTheme.typography.bodyMedium
                                  )
-
+ 
                                  TextButton(
                                      onClick = { viewModel.nextChapter() },
                                      enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
@@ -280,7 +323,8 @@ fun DocumentViewerScreen(
                          }
                     }
                 }
-            }
+            },
+            snackbarHost = {} // Add snackbar host if needed
         ) { innerPadding ->
              if (uiState.isLoading) {
                  Box(modifier = Modifier.fillMaxSize().padding(innerPadding), contentAlignment = Alignment.Center) {
@@ -299,229 +343,234 @@ fun DocumentViewerScreen(
                     }
                 }
             } else {
-                 AndroidView(
-                     modifier = Modifier
-                         .fillMaxSize()
-                         .padding(innerPadding),
-                    factory = { context ->
-                        object : WebView(context) {
-                            fun getHorizontalScrollRangePublic(): Int = computeHorizontalScrollRange()
-                        }.apply {
-                            addJavascriptInterface(object {
-                                @android.webkit.JavascriptInterface
-                                fun onLineChanged(line: Int) {
-                                    post {
-                                        if (line != currentLine) {
-                                            currentLine = line
+                Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                     AndroidView(
+                         modifier = Modifier.fillMaxSize(),
+                        factory = { context ->
+                            object : WebView(context) {
+                                fun getHorizontalScrollRangePublic(): Int = computeHorizontalScrollRange()
+                            }.apply {
+                                addJavascriptInterface(object {
+                                    @android.webkit.JavascriptInterface
+                                    fun onLineChanged(line: Int) {
+                                        post {
+                                            if (line != currentLine) {
+                                                currentLine = line
+                                            }
+                                        }
+                                    }
+                                }, "Android")
+ 
+                                settings.allowFileAccess = true 
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        super.onPageFinished(view, url)
+                                        val js = """
+                                            window.onscroll = function() {
+                                                var el = document.elementFromPoint(window.innerWidth/2, 20);
+                                                while (el && (!el.id || !el.id.startsWith('line-'))) {
+                                                    el = el.parentElement;
+                                                }
+                                                if (el && el.id.startsWith('line-')) {
+                                                    var line = parseInt(el.id.replace('line-', ''));
+                                                    Android.onLineChanged(line);
+                                                }
+                                            };
+                                        """.trimIndent()
+                                        
+                                        val jsVertical = """
+                                            window.onscroll = function() {
+                                                // For vertical: Right side
+                                                var el = document.elementFromPoint(window.innerWidth - 50, window.innerHeight / 2);
+                                                 while (el && (!el.id || !el.id.startsWith('line-'))) {
+                                                    el = el.parentElement;
+                                                }
+                                                if (el && el.id.startsWith('line-')) {
+                                                    var line = parseInt(el.id.replace('line-', ''));
+                                                    Android.onLineChanged(line);
+                                                }
+                                            };
+                                        """.trimIndent()
+                                        
+                                        val finalJs = if (uiState.isVertical) jsVertical else js 
+                                        view?.evaluateJavascript(finalJs, null)
+                                        
+                                        if (currentLine > 1) {
+                                            val restoreJs = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                            view?.evaluateJavascript(restoreJs, null)
                                         }
                                     }
                                 }
-                            }, "Android")
-
-                            settings.allowFileAccess = true 
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    super.onPageFinished(view, url)
-                                    val js = """
-                                        window.onscroll = function() {
-                                            var el = document.elementFromPoint(window.innerWidth/2, 20);
-                                            while (el && (!el.id || !el.id.startsWith('line-'))) {
-                                                el = el.parentElement;
-                                            }
-                                            if (el && el.id.startsWith('line-')) {
-                                                var line = parseInt(el.id.replace('line-', ''));
-                                                Android.onLineChanged(line);
-                                            }
-                                        };
-                                    """.trimIndent()
-                                    
-                                    val jsVertical = """
-                                        window.onscroll = function() {
-                                            // For vertical: Right side
-                                            var el = document.elementFromPoint(window.innerWidth - 50, window.innerHeight / 2);
-                                             while (el && (!el.id || !el.id.startsWith('line-'))) {
-                                                el = el.parentElement;
-                                            }
-                                            if (el && el.id.startsWith('line-')) {
-                                                var line = parseInt(el.id.replace('line-', ''));
-                                                Android.onLineChanged(line);
-                                            }
-                                        };
-                                    """.trimIndent()
-                                    
-                                    val finalJs = if (uiState.isVertical) jsVertical else js 
-                                    view?.evaluateJavascript(finalJs, null)
-                                    
-                                    if (currentLine > 1) {
-                                        val restoreJs = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                        view?.evaluateJavascript(restoreJs, null)
-                                    }
-                                }
-                            }
-                            webViewRef = this
-                            
-                            val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
-                                override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
-                                    val width = width
-                                    val x = e.x
-                                    // Custom instant scrolling via JS to avoid animation
-                                    if (uiState.isVertical) {
-                                        // Vertical Text (Horizontal Scroll, RTL)
-                                        // Left side = Next (Scroll Negative/Left)
-                                        // Right side = Prev (Scroll Positive/Right)
-                                        if (x < width / 3) {
-                                            // Next Page Logic
-                                            if (canScrollHorizontally(-1)) {
-                                                webViewRef?.evaluateJavascript("window.scrollBy({ left: -window.innerWidth, behavior: 'instant' });", null)
+                                webViewRef = this
+                                
+                                val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+                                    override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
+                                        val width = width
+                                        val x = e.x
+                                        // Custom instant scrolling via JS to avoid animation
+                                        if (uiState.isVertical) {
+                                            // Vertical Text (Horizontal Scroll, RTL)
+                                            // Left side = Next (Scroll Negative/Left)
+                                            // Right side = Prev (Scroll Positive/Right)
+                                            if (x < width / 3) {
+                                                // Next Page Logic
+                                                if (canScrollHorizontally(-1)) {
+                                                    webViewRef?.evaluateJavascript("window.scrollBy({ left: -window.innerWidth, behavior: 'instant' });", null)
+                                                } else {
+                                                    viewModel.nextChapter()
+                                                }
+                                            } else if (x > width * 2 / 3) {
+                                                // Prev Page Logic
+                                                if (canScrollHorizontally(1)) {
+                                                    webViewRef?.evaluateJavascript("window.scrollBy({ left: window.innerWidth, behavior: 'instant' });", null)
+                                                } else {
+                                                    viewModel.prevChapter()
+                                                }
                                             } else {
-                                                viewModel.nextChapter()
-                                            }
-                                        } else if (x > width * 2 / 3) {
-                                            // Prev Page Logic
-                                            if (canScrollHorizontally(1)) {
-                                                webViewRef?.evaluateJavascript("window.scrollBy({ left: window.innerWidth, behavior: 'instant' });", null)
-                                            } else {
-                                                viewModel.prevChapter()
+                                                onToggleFullScreen()
                                             }
                                         } else {
-                                            onToggleFullScreen()
-                                        }
-                                    } else {
-                                        // Standard Text (Vertical Scroll)
-                                        // Left side = Prev
-                                        // Right side = Next
-                                        if (x < width / 3) {
-                                            // Prev Page Logic
-                                            if (canScrollVertically(-1)) {
-                                                webViewRef?.evaluateJavascript("window.scrollBy({ top: -window.innerHeight, behavior: 'instant' });", null)
+                                            // Standard Text (Vertical Scroll)
+                                            // Left side = Prev
+                                            // Right side = Next
+                                            if (x < width / 3) {
+                                                // Prev Page Logic
+                                                if (canScrollVertically(-1)) {
+                                                    webViewRef?.evaluateJavascript("window.scrollBy({ top: -window.innerHeight, behavior: 'instant' });", null)
+                                                } else {
+                                                    viewModel.prevChapter()
+                                                }
+                                            } else if (x > width * 2 / 3) {
+                                                // Next Page Logic
+                                                if (canScrollVertically(1)) {
+                                                    webViewRef?.evaluateJavascript("window.scrollBy({ top: window.innerHeight, behavior: 'instant' });", null)
+                                                } else {
+                                                    viewModel.nextChapter()
+                                                }
                                             } else {
-                                                viewModel.prevChapter()
+                                                onToggleFullScreen()
                                             }
-                                        } else if (x > width * 2 / 3) {
-                                            // Next Page Logic
-                                            if (canScrollVertically(1)) {
-                                                webViewRef?.evaluateJavascript("window.scrollBy({ top: window.innerHeight, behavior: 'instant' });", null)
-                                            } else {
-                                                viewModel.nextChapter()
-                                            }
-                                        } else {
-                                            onToggleFullScreen()
                                         }
+                                        return true
                                     }
-                                    return true
+                                    
+                                    override fun onDown(e: android.view.MotionEvent): Boolean {
+                                        return true
+                                    }
+                                })
+                                
+                                setOnTouchListener { _, event ->
+                                    gestureDetector.onTouchEvent(event) 
+                                    false
                                 }
                                 
-                                override fun onDown(e: android.view.MotionEvent): Boolean {
-                                    return true
+                                setOnScrollChangeListener { _, scrollX, scrollY, _, _ ->
+                                     // Only use this for very rough estimation or if JS fails? 
+                                     // User reported "Line increases by 1 pixel", which is likely due to this calculation.
+                                     // Disabling local calculation to rely on JS for line number accuracy.
                                 }
-                            })
-                            
-                            setOnTouchListener { _, event ->
-                                gestureDetector.onTouchEvent(event) 
-                                false
-                            }
-                            
-                            setOnScrollChangeListener { _, scrollX, scrollY, _, _ ->
-                                 // Only use this for very rough estimation or if JS fails? 
-                                 // User reported "Line increases by 1 pixel", which is likely due to this calculation.
-                                 // Disabling local calculation to rely on JS for line number accuracy.
-                            }
-                                 if (uiState.isVertical) {
-                                     val range = getHorizontalScrollRangePublic()
-                                     val maxScroll = (range - width).coerceAtLeast(1)
-                                     val rawProgress = 1.0f - (scrollX.toFloat() / maxScroll)
-                                     val p = rawProgress.coerceIn(0f, 1f)
-                                     val line = (p * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
-                                     if (kotlin.math.abs(line - currentLine) > 0) {
-                                         currentLine = line
+                                     if (uiState.isVertical) {
+                                         val range = getHorizontalScrollRangePublic()
+                                         val maxScroll = (range - width).coerceAtLeast(1)
+                                         val rawProgress = 1.0f - (scrollX.toFloat() / maxScroll)
+                                         val p = rawProgress.coerceIn(0f, 1f)
+                                         val line = (p * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
+                                         if (kotlin.math.abs(line - currentLine) > 0) {
+                                             currentLine = line
+                                         }
+                                     } else {
+                                         if (uiState.totalLines > 0 && contentHeight > 0) {
+                                              val progress = scrollY.toFloat() / (contentHeight - height).coerceAtLeast(1)
+                                              val line = (progress * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
+                                              currentLine = line
+                                         }
                                      }
-                                 } else {
-                                     if (uiState.totalLines > 0 && contentHeight > 0) {
-                                          val progress = scrollY.toFloat() / (contentHeight - height).coerceAtLeast(1)
-                                          val line = (progress * uiState.totalLines).toInt().coerceIn(1, uiState.totalLines)
-                                          currentLine = line
-                                     }
-                                 }
-                         }
-                     },
-                     update = { webView ->
-                         val customWebView = webView as? WebView // It's already a WebView
-                         val currentHash = uiState.content.hashCode()
-                         val previousHash = (webView.tag as? Int) ?: 0
-                         
-                         val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-                              UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
-                              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
-                              else -> "#ffffff" to "#000000"
-                         }
- 
-                          val style = """
-                              <style>
-                              body {
-                                  background-color: $bgColor !important;
-                                  color: $textColor !important;
-                                  font-family: ${uiState.fontFamily} !important;
-                                  font-size: ${uiState.fontSize}px !important;
-                                  line-height: 1.6 !important;
-                                  padding: 1em;
-                                  height: 100vh;
-                                  width: auto;
-                              }
-                              </style>
-                          """
-                          val contentWithStyle = "$style${uiState.content}"
-                          val jsWritingMode = "document.body.style.writingMode = '${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"}';"
- 
-                          if (contentWithStyle.hashCode() != previousHash) {
-                              webView.tag = contentWithStyle.hashCode()
-                              if (uiState.url != null) {
-                                  webView.loadUrl(uiState.url!!)
-                              } else {
-                                  // Use provided baseUrl or fallback to parent directory of filePath
-                                  val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
-                                  webView.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
-                              }
-                              
-                              // Restore Scroll after load
-                              // Since load is async, we can't do it here directly for the *content check*.
-                              // But we can post a runnable?
-                              webView.postDelayed({
-                                  webView.evaluateJavascript(jsWritingMode, null)
-                                  // Restore position
-                                  if (currentLine > 1 && uiState.totalLines > 0) {
-                                      val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
-                                      webView.evaluateJavascript(js, null)
-                                  }
-                              }, 500) // Delay to ensure render. 500ms is heuristic.
-                          } else {
-                              // Just update writing mode if needed (though hash check covers it usually)
-                              webView.evaluateJavascript(jsWritingMode, null)
-                          }
-                     }
-                  )
-                  
-                  // Custom Swipe Detection for TOC
-                  if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
-                      Box(
-                          modifier = Modifier
-                              .fillMaxSize()
-                              .pointerInput(Unit) {
-                                  var startX = 0f
-                                  detectHorizontalDragGestures(
-                                      onDragStart = { offset -> startX = offset.x },
-                                      onDragEnd = { },
-                                      onHorizontalDrag = { change: PointerInputChange, dragAmount: Float ->
-                                          if (startX < size.width.toFloat() / 3 && dragAmount > 20) {
-                                              scope.launch { drawerState.open() }
-                                          }
+                             }
+                         },
+                         update = { webView ->
+                             val customWebView = webView as? WebView // It's already a WebView
+                             val currentHash = uiState.content.hashCode()
+                             val previousHash = (webView.tag as? Int) ?: 0
+                             
+                             val (bgColor, textColor) = when (uiState.docBackgroundColor) {
+                                  UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+                                  UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#e0e0e0"
+                                  else -> "#ffffff" to "#000000"
+                             }
+                                  val style = """
+                                  <style>
+                                      html, body {
+                                          height: 100%;
+                                          margin: 0;
+                                          padding: 0;
+                                          overflow: auto; /* Allow scrolling in direction needed */
                                       }
-                                  )
-                              }
-                      )
-                  }
+                                      body {
+                                          background-color: $bgColor !important;
+                                          color: $textColor !important;
+                                          font-family: ${uiState.fontFamily} !important;
+                                          font-size: ${uiState.fontSize}px !important;
+                                          line-height: 1.6 !important;
+                                          padding: 1.5em !important; 
+                                          box-sizing: border-box !important;
+                                          /* Ensure safe area for cutouts if needed */
+                                          padding-top: env(safe-area-inset-top, 1.5em);
+                                          padding-bottom: env(safe-area-inset-bottom, 1.5em);
+                                          padding-left: env(safe-area-inset-left, 1.5em);
+                                          padding-right: env(safe-area-inset-right, 1.5em);
+                                      }
+                                      </style>
+                                  """
+                                  val contentWithStyle = "$style${uiState.content}"
+                                  val jsWritingMode = "document.body.style.writingMode = '${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"}';"
+      
+                                  if (contentWithStyle.hashCode() != previousHash) {
+                                      webView.tag = contentWithStyle.hashCode()
+                                      if (uiState.url != null) {
+                                          webView.loadUrl(uiState.url!!)
+                                      } else {
+                                          // Use provided baseUrl or fallback to parent directory of filePath
+                                          val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
+                                          webView.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
+                                      }
+                                      
+                                      // Restore Scroll after load
+                                      webView.postDelayed({
+                                          webView.evaluateJavascript(jsWritingMode, null)
+                                          // Restore position
+                                          if (currentLine > 1 && uiState.totalLines > 0) {
+                                              val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"
+                                              webView.evaluateJavascript(js, null)
+                                          }
+                                      }, 500) 
+                                  } else {
+                                      webView.evaluateJavascript(jsWritingMode, null)
+                                  }
+                             }
+                          )
+                          
+                          // Custom Swipe Detection for TOC (Left Edge Only)
+                          if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
+                              Box(
+                                  modifier = Modifier
+                                      .fillMaxHeight()
+                                      .width(40.dp) // Only active on left edge
+                                      .align(Alignment.CenterStart)
+                                      .pointerInput(Unit) {
+                                          detectHorizontalDragGestures(
+                                              onHorizontalDrag = { _, dragAmount ->
+                                                  if (dragAmount > 20) {
+                                                      scope.launch { drawerState.open() }
+                                                  }
+                                              }
+                                          )
+                                      }
+                              )
+                          }
+                 }
              }
          }
          

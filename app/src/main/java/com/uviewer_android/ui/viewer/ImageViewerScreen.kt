@@ -131,6 +131,7 @@ fun ImageViewerScreen(
         // Track current page to sync back
         LaunchedEffect(pagerState.currentPage) {
              currentPageIndex = if (isDualPage) pagerState.currentPage * 2 else pagerState.currentPage
+             viewModel.updateProgress(currentPageIndex)
         }
 
         Box(
@@ -176,31 +177,28 @@ fun ImageViewerScreen(
                     )
                 }
         ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-                // pageCount might be a property in newer APIs or a lambda
-                // For androidx.compose.foundation.pager.HorizontalPager if pageCount is not a parameter then it is state.pageCount
-                // But we used rememberPagerState { uiState.images.size } which sets the count.
-                // Wait, if we change the mode (Single/Dual), the effective page count changes.
-                // In Compose 1.5+ HorizontalPager(state = pagerState). The count is in the state lambda.
-                // If we want dynamic count, we need to recreate state or check API.
-                // Ah, the state lambda is `pageCount: () -> Int`.
-                // So rememberPagerState { pageCount } where pageCount is our dynamic variable.
-                
-                userScrollEnabled = (scales[pagerState.currentPage] ?: 1f) == 1f
-            ) { page ->
-                // Calculate indices based on order
-                val p1 = page * 2
-                val p2 = page * 2 + 1
-                
-                val (firstIdx, secondIdx) = if (dualPageOrder == 1) { // RTL: Second index on Left, First on Right
-                    p2 to p1
-                } else { // LTR: First on Left, Second on Right
-                    p1 to p2
-                }
+                val currentScale = if (uiState.persistZoom) globalScale else (scales[pagerState.currentPage] ?: 1f)
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = currentScale <= 1.1f
+                ) { page ->
+                    // Calculate indices based on order
+                    val p1 = page * 2
+                    val p2 = page * 2 + 1
+                    
+                    val indices = if (dualPageOrder == 1) { // RTL
+                        Pair(p2, p1)
+                    } else { // LTR
+                        Pair(p1, p2)
+                    }
+                    val firstIdx = indices.first
+                    val secondIdx = indices.second
 
-                Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        // Ensure this box catches gestures if Pager is disabled
+                ) {
                     val firstImage = if (firstIdx < uiState.images.size) uiState.images[firstIdx] else null
                     val secondImage = if (isDualPage && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
 
@@ -218,12 +216,13 @@ fun ImageViewerScreen(
                             }
                         )
                     } else if (firstImage != null) {
+                        val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
                          ZoomableImage(
                             imageUrl = firstImage.path,
                             isWebDav = uiState.isContentLoadedFromWebDav,
                             authHeader = uiState.authHeader,
                             serverUrl = uiState.serverUrl,
-                            scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
+                            scale = currentScale,
                             upscaleFilter = uiState.upscaleFilter,
                             onScaleChanged = { newScale -> 
                                 if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 

@@ -27,6 +27,7 @@ object AppViewModelProvider {
                 webDavRepository = app.container.webDavRepository,
                 recentFileDao = app.container.database.recentFileDao(),
                 bookmarkDao = app.container.database.bookmarkDao(),
+                favoriteDao = app.container.database.favoriteDao(),
                 userPreferencesRepository = app.container.userPreferencesRepository
             )
         }
@@ -38,6 +39,7 @@ object AppViewModelProvider {
                 webDavRepository = app.container.webDavRepository,
                 recentFileDao = app.container.database.recentFileDao(),
                 bookmarkDao = app.container.database.bookmarkDao(),
+                favoriteDao = app.container.database.favoriteDao(),
                 userPreferencesRepository = app.container.userPreferencesRepository
             )
         }

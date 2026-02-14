@@ -72,7 +72,7 @@ fun MainScreen() {
                                 if (screen is Screen.Resume) {
                                     val recent = libraryUiState.mostRecentFile
                                     if (recent != null) {
-                                        val encodedPath = URLEncoder.encode(recent.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                                        val encodedPath = android.net.Uri.encode(recent.path)
                                         val route = "viewer/$encodedPath?type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}"
                                         navController.navigate(route)
                                     }
@@ -124,7 +124,7 @@ fun MainScreen() {
                     initialServerId = serverId,
                     viewModel = libraryViewModel,
                     onNavigateToViewer = { entry ->
-                        val encodedPath = URLEncoder.encode(entry.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                        val encodedPath = android.net.Uri.encode(entry.path)
                         val route = "viewer/$encodedPath?type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}"
                         navController.navigate(route)
                     }
@@ -136,11 +136,11 @@ fun MainScreen() {
                 com.uviewer_android.ui.favorites.FavoritesScreen(
                     onNavigateToViewer = { item ->
                         if (item.type == "FOLDER") {
-                            val encodedPath = URLEncoder.encode(item.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                            val encodedPath = android.net.Uri.encode(item.path)
                             val route = "library?path=$encodedPath&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)
                         } else {
-                            val encodedPath = URLEncoder.encode(item.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                            val encodedPath = android.net.Uri.encode(item.path)
                             val route = "viewer/$encodedPath?type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)
                         }
@@ -152,11 +152,11 @@ fun MainScreen() {
                 com.uviewer_android.ui.recent.RecentFilesScreen(
                     onNavigateToViewer = { file ->
                         if (file.type == "FOLDER") {
-                             val encodedPath = URLEncoder.encode(file.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                             val encodedPath = android.net.Uri.encode(file.path)
                              val route = "library?path=$encodedPath&serverId=${file.serverId ?: -1}"
                              navController.navigate(route)
                         } else {
-                            val encodedPath = URLEncoder.encode(file.path, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                            val encodedPath = android.net.Uri.encode(file.path)
                             val route = "viewer/$encodedPath?type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}"
                             navController.navigate(route)
                         }
@@ -189,9 +189,9 @@ fun MainScreen() {
                     isWebDav = isWebDav,
                     serverId = serverId,
                     onBack = { 
-                        val decodedPath = java.net.URLDecoder.decode(filePath, StandardCharsets.UTF_8.toString())
-                        val parentPath = decodedPath.substringBeforeLast('/', "/")
-                        val encodedParentPath = URLEncoder.encode(parentPath, StandardCharsets.UTF_8.toString()).replace("+", "%20")
+                        // filePath is already decoded by Navigation
+                        val parentPath = filePath.substringBeforeLast('/', "/")
+                        val encodedParentPath = android.net.Uri.encode(parentPath)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id)

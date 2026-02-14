@@ -11,6 +11,7 @@ object AozoraParser {
     
     fun parse(text: String): String {
         val lines = text.split(Regex("\\r?\\n|\\r"))
+        var isBold = false
         val parsedLines = lines.mapIndexed { index, line ->
             var l = line
                 .replace("&", "&amp;")
@@ -25,51 +26,76 @@ object AozoraParser {
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》"), "<ruby>$1<rt>$2</rt></ruby>")
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]"), "<ruby>$1<rt>$2</rt></ruby>")
 
-            // Image tags
+            // Image tags - Case insensitive for extensions
             l = l.replace(Regex("［＃挿絵（(.+?)）入る］"), "<img src=\"$1\" />") // Specific format with "入る"
             l = l.replace(Regex("［＃.+?（(.+?)）］"), "<img src=\"$1\" />")
-            l = l.replace(Regex("［＃(.+?\\.(?:jpg|jpeg|png|gif|webp))］"), "<img src=\"$1\" />")
+            l = l.replace(Regex("(?i)［＃(.+?\\.(?:jpg|jpeg|png|gif|webp))］"), "<img src=\"$1\" />")
 
             // Headers - Adding id for TOC navigation
             l = l.replace(Regex("［＃大見出し］(.+?)［＃大見出し終わり］"), "<h1 class=\"aozora-title\">$1</h1>")
             l = l.replace(Regex("［＃中見出し］(.+?)［＃中見出し終わり］"), "<h2 class=\"aozora-title\">$1</h2>")
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
             
-            // Bold
-            l = l.replace("［＃ここから太字］", "<b>")
-            l = l.replace("［＃ここで太字終わり］", "</b>")
+            // Bold - Maintain state across lines
+            if (l.contains("［＃ここから太字］")) {
+                isBold = true
+                l = l.replace("［＃ここから太字］", "<b>")
+            }
+            if (l.contains("［＃ここで太字終わり］")) {
+                isBold = false
+                l = l.replace("［＃ここで太字終わり］", "</b>")
+            }
+            // If currently bold and no close tag on this line, or if just opened, wrap/ensure validity?
+            // HTML parsers (browsers) are lenient, but if we have <div><b>...</div><div>...</b></div> it might break.
+            // Valid HTML approach: Close </b> at end of div if bold is active, open <b> at start of next div.
+            
+            // However, Aozora "bold block" might span lines.
+            // Simple approach: Replace tags with span/b.
+            // If the browser closes <b> automatically at block end (div), we need to re-open it.
+            
+            // Implementation:
+            // If isBold was true at start of line, prepend <b>
+            // If isBold is true at end of line, append </b>
+            
+            var lineContent = l
+            if (isBold && !lineContent.startsWith("<b>") && !lineContent.contains("［＃ここから太字］")) {
+                 lineContent = "<b>$lineContent"
+            }
+            if (isBold && !lineContent.endsWith("</b>") && !lineContent.contains("［＃ここで太字終わり］")) {
+                 lineContent = "$lineContent</b>"
+            }
 
             // Page Break
-            l = l.replace(Regex("［＃改ページ］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
-            l = l.replace(Regex("［＃改頁］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            lineContent = lineContent.replace(Regex("［＃改ページ］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            lineContent = lineContent.replace(Regex("［＃改頁］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
             
             // Indent
-            l = l.replace(Regex("［＃ここから(\\d+)字下げ］"), "<div style=\"margin-inline-start: $1em;\">")
-            l = l.replace("［＃ここで字下げ終わり］", "</div>")
+            lineContent = lineContent.replace(Regex("［＃ここから(\\d+)字下げ］"), "<div style=\"margin-inline-start: $1em;\">")
+            lineContent = lineContent.replace("［＃ここで字下げ終わり］", "</div>")
 
             // Center tag
             var classes = mutableListOf<String>()
             var styles = mutableListOf<String>()
             
-            if (l.contains("［＃センター］")) {
-                l = l.replace("［＃センター］", "").replace("［＃センター終わり］", "")
+            if (lineContent.contains("［＃センター］")) {
+                lineContent = lineContent.replace("［＃センター］", "").replace("［＃センター終わり］", "")
                 classes.add("center")
             }
             
-            val indentMatch = Regex("［＃地から(\\d+)字上げ］").find(l)
+            val indentMatch = Regex("［＃地から(\\d+)字上げ］").find(lineContent)
             if (indentMatch != null) {
                 val n = indentMatch.groupValues[1]
-                l = l.replace(Regex("［＃地から(\\d+)字上げ］"), "")
+                lineContent = lineContent.replace(Regex("［＃地から(\\d+)字上げ］"), "")
                 styles.add("padding-bottom: ${n}em")
             }
 
             val classAttr = if (classes.isNotEmpty()) " class=\"${classes.joinToString(" ")}\"" else ""
             val styleAttr = if (styles.isNotEmpty()) " style=\"${styles.joinToString("; ")}\"" else ""
             
-            if (l.isBlank()) {
+            if (lineContent.isBlank()) {
                 "<div id=\"line-${index + 1}\" $classAttr $styleAttr>&nbsp;</div>"
             } else {
-                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>$l</div>"
+                "<div id=\"line-${index + 1}\" $classAttr $styleAttr>$lineContent</div>"
             }
         }
 

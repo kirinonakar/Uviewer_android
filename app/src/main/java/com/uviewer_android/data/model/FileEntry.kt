@@ -12,6 +12,6 @@ data class FileEntry(
     val isPinned: Boolean = false
 ) {
     enum class FileType {
-        FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV
+        FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV, IMAGE_ZIP
     }
 }

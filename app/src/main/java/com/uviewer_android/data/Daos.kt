@@ -29,6 +29,9 @@ interface RecentFileDao {
     @Query("SELECT * FROM recent_files ORDER BY lastAccessed DESC LIMIT 1")
     fun getMostRecentFile(): Flow<RecentFile?>
 
+    @Query("SELECT * FROM recent_files WHERE path = :path")
+    suspend fun getFile(path: String): RecentFile?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRecent(file: RecentFile)
 

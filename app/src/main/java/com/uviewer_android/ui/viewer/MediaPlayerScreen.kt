@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.graphicsLayer
@@ -13,14 +15,6 @@ import androidx.compose.runtime.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.material3.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -34,6 +28,13 @@ import androidx.media3.ui.PlayerView
 import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
+import androidx.core.view.isVisible
+import androidx.compose.material3.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
 
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -71,6 +72,15 @@ fun MediaPlayerScreen(
             }
         }
     }
+
+    // Keep Screen On
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
     
     DisposableEffect(Unit) {
         onDispose {
@@ -88,9 +98,13 @@ fun MediaPlayerScreen(
 
     var playbackError by remember { mutableStateOf<String?>(null) }
 
+    // 15s Skip Configuration
     val exoPlayer = remember(uiState.mediaUrl, uiState.authHeader) {
         if (uiState.mediaUrl != null) {
-            ExoPlayer.Builder(context).build().apply {
+            ExoPlayer.Builder(context)
+                .setSeekBackIncrementMs(15000)
+                .setSeekForwardIncrementMs(15000)
+                .build().apply {
                 val uri = if (isWebDav) {
                     android.net.Uri.parse(uiState.mediaUrl!!)
                 } else {
@@ -131,7 +145,7 @@ fun MediaPlayerScreen(
         topBar = {
             if (!isFullScreen) {
                 TopAppBar(
-                    title = { Text(uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White) },
+                    title = { Text(uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
@@ -200,8 +214,6 @@ fun MediaPlayerScreen(
                 .padding(paddingValues),
             contentAlignment = Alignment.Center
         ) {
-            val screenWidth = maxWidth.value
-            val screenHeight = maxHeight.value
             
             if (uiState.isLoading) {
                 CircularProgressIndicator()
@@ -219,7 +231,7 @@ fun MediaPlayerScreen(
                     }
                 }
             } else if (exoPlayer != null) {
-                // Update subtitle tracks and video size
+                // Update subtitle tracks
                 LaunchedEffect(exoPlayer) {
                     exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
                         override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
@@ -243,64 +255,146 @@ fun MediaPlayerScreen(
                         }
 
                         override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                            // Video size handled by PlayerView now
                             viewModel.setVideoSize(videoSize.width, videoSize.height)
                         }
                     })
                 }
 
-                val isRotated = uiState.rotation % 180f != 0f
-                val scale = if (isRotated && screenWidth > 0f && screenHeight > 0f) {
-                    // When rotated 90/270, the view's width becomes height and height becomes width.
-                    // To fit the screen perfectly, we want the new width (old height) to be maxWidth
-                    // and new height (old width) to be maxHeight.
-                    // So scale = maxWidth / screenHeight (if we want to match width) 
-                    // or scale = maxHeight / screenWidth (if we want to match height)
-                    // Usually we want to fit both, so min(maxWidth / screenHeight, maxHeight / screenWidth)
-                    if (screenHeight > screenWidth) screenHeight / screenWidth else screenWidth / screenHeight
-                } else 1f
+                var controlViewRef by remember { mutableStateOf<androidx.media3.ui.PlayerControlView?>(null) }
+                var artworkData by remember { mutableStateOf<ByteArray?>(null) }
 
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            player = exoPlayer
-                            useController = true
-                            if (fileType == FileEntry.FileType.AUDIO) {
-                                hideController()
+                LaunchedEffect(exoPlayer) {
+                    exoPlayer.addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+                            artworkData = mediaMetadata.artworkData
+                        }
+                    })
+                }
+
+                Box(
+                     modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            rotationZ = uiState.rotation
+                            // No manual scaling needed for rotation if we assume PlayerView handles content within bounds
+                            // But rotating the view container changes dimensions relative to screen.
+                            // If we rotate the Box, we might need to scale it to fit if aspects differ.
+                            // Keeping simple rotation for now, as PlayerView defaults to FIT.
+                            // If user rotates 90deg, we may want to scale to fill width?
+                            // Let's stick to Aspect Ratio maintenance first.
+                            val screenW = size.width
+                            val screenH = size.height
+                             if (uiState.rotation % 180f != 0f) {
+                                val scale = if (screenH > screenW) screenH / screenW else screenW / screenH
+                                scaleX = scale
+                                scaleY = scale
+                            } else {
+                                scaleX = 1f
+                                scaleY = 1f
                             }
                         }
-                    },
-                    update = { playerView ->
-                        playerView.player = exoPlayer
-                    },
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(
-                            rotationZ = uiState.rotation,
-                            scaleX = scale,
-                            scaleY = scale
-                        )
-                )
+                ) {
+                    if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
+                         coil.compose.AsyncImage(
+                             model = artworkData,
+                             contentDescription = "Album Art",
+                             modifier = Modifier.fillMaxSize(),
+                             contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                         )
+                    }
+
+                    // PlayerView handles Video + Subtitles + Aspect Ratio
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                useController = false // We use separate controls
+                                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                                layoutParams = android.view.ViewGroup.LayoutParams(
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                // Ensure background is black to avoid artifacting
+                                setShutterBackgroundColor(android.graphics.Color.BLACK)
+                                // Hide artwork if we are showing it manually or if it's video
+                                defaultArtwork = null 
+                            }
+                        },
+                        update = { playerView ->
+                             playerView.player = exoPlayer
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // If Audio and we have artwork, we might want to hide the surface or keep it z-indexed below??
+                            // Actually PlayerView hides surface for audio.
+                            // But our AsyncImage should be ON TOP or INSIDE?
+                            // If we put AsyncImage BEHIND PlayerView, PlayerView might cover it with black shutter.
+                            // If we put it ON TOP, it covers visualization (if any).
+                            // Let's put it BEHIND, but ensure PlayerView is transparent? 
+                            // Easier: Put it ON TOP of PlayerView (which is empty for Audio)
+                            // But wait, PlayerView handles subtitles?
+                            // If Audio, we don't have video subtitles mostly.
+                            // Let's rely on Box order. AsyncImage last = on top.
+                    )
+                    
+                    if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
+                         coil.compose.AsyncImage(
+                             model = artworkData,
+                             contentDescription = "Album Art",
+                             modifier = Modifier.fillMaxSize(),
+                             contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                         )
+                    }
+                }
                 
-                // Overlay for tap-to-toggle UI
+                // Overlay for tap-to-toggle UI (Invisible)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .pointerInput(Unit) {
                             detectTapGestures(
                                 onTap = { offset ->
-                                    val screenHeight = size.height
-                                    if (offset.y < screenHeight / 2) {
-                                        // Top half -> Hide UI
-                                        if (!isFullScreen) onToggleFullScreen()
+                                    val screenHeightPx = size.height
+                                    if (offset.y > screenHeightPx * 0.7f) {
+                                        // Bottom area tap -> Show Controls
+                                        controlViewRef?.show()
                                     } else {
-                                        // Bottom half -> Show UI
-                                        if (isFullScreen) onToggleFullScreen()
+                                        // Toggle Fullscreen / Controls
+                                        if (controlViewRef?.isVisible == true) {
+                                            controlViewRef?.hide()
+                                        } else {
+                                            controlViewRef?.show()
+                                        }
+                                        onToggleFullScreen()
                                     }
                                 }
                             )
                         }
                 )
+
+                // Separate Controls (Always upright)
+                AndroidView(
+                    factory = { ctx ->
+                        androidx.media3.ui.PlayerControlView(ctx).apply {
+                            player = exoPlayer
+                            showTimeoutMs = 5000
+                            setShowFastForwardButton(true)
+                            setShowRewindButton(true)
+                            setShowNextButton(false) // Handled by top bar
+                            setShowPreviousButton(false) // Handled by top bar
+                        }
+                    },
+                    update = { controlView ->
+                        controlView.player = exoPlayer
+                        controlViewRef = controlView
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .wrapContentHeight()
+                )
             }
         }
     }
 }
+

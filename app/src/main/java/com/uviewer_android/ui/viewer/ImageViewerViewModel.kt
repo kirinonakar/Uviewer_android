@@ -32,26 +32,140 @@ data class ImageViewerUiState(
         private val webDavRepository: WebDavRepository,
         private val recentFileDao: com.uviewer_android.data.RecentFileDao,
         private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
+        private val favoriteDao: com.uviewer_android.data.FavoriteDao,
         private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository
     ) : AndroidViewModel(application) {
 
-        private val _uiState = MutableStateFlow(ImageViewerUiState())
-        val uiState: StateFlow<ImageViewerUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(ImageViewerUiState())
+    val uiState: StateFlow<ImageViewerUiState> = _uiState.asStateFlow()
 
-        val invertImageControl: StateFlow<Boolean> = userPreferencesRepository.invertImageControl
-        val dualPageOrder: StateFlow<Int> = userPreferencesRepository.dualPageOrder
+    // Preferences
+    val invertImageControl = userPreferencesRepository.invertImageControl
+    val dualPageOrder = userPreferencesRepository.dualPageOrder
+
+    // Current context for progress saving
+    private var currentPath: String? = null
+    private var currentIsWebDav: Boolean = false
+    private var currentServerId: Int? = null
+    private var currentIsZip: Boolean = false
+
+    fun setPersistZoom(persist: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setPersistZoom(persist)
+        }
+    }
+
+    fun setUpscaleFilter(upscale: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setUpscaleFilter(upscale)
+        }
+    }
+
+    fun setDualPageOrder(order: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setDualPageOrder(order)
+        }
+    }
+
+        fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String) {
+            viewModelScope.launch {
+                try {
+                    val title = if (path.endsWith("/")) path.dropLast(1).substringAfterLast("/") else path.substringAfterLast("/")
+                    
+                    // Add to Bookmarks (Page/Position)
+                    bookmarkDao.insertBookmark(
+                        com.uviewer_android.data.Bookmark(
+                            title = title,
+                            path = path,
+                            isWebDav = isWebDav,
+                            serverId = serverId,
+                            type = type,
+                            position = index,
+                            timestamp = System.currentTimeMillis()
+                        )
+                    )
+
+                    // Add to Favorites (File)
+                    favoriteDao.insertFavorite(
+                        com.uviewer_android.data.FavoriteItem(
+                            title = title,
+                            path = path,
+                            isWebDav = isWebDav,
+                            serverId = serverId,
+                            type = type
+                        )
+                    )
+                } catch (e: Exception) {
+                    // Log or handle error silently to prevent crash
+                    e.printStackTrace()
+                }
+            }
+        }
 
         fun loadImages(filePath: String, isWebDav: Boolean, serverId: Int?) {
-            if (_uiState.value.images.isNotEmpty()) return
+            currentPath = filePath
+            currentIsWebDav = isWebDav
+            currentServerId = serverId
+            
+            // Check if we need to reload or just update index
+            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+            currentIsZip = isZip
+            val containerName = if (isZip) File(filePath).name else null
+            
+            // If already loaded and context matches, just update index
+            if (_uiState.value.images.isNotEmpty()) {
+                val images = _uiState.value.images
+                
+                // Case 1: Zip file - check if same container
+                if (isZip && _uiState.value.containerName == containerName) {
+                    // Same zip, just ensure index is 0... WAIT, user wants to Restore!
+                    // If we are already viewing it, we don't reset to 0. We keep as is.
+                     return
+                }
+                
+                // Case 2: Folder - check if file exists in current list (and strict mode: parent matches?)
+                if (!isZip && _uiState.value.containerName == null) {
+                    val index = images.indexOfFirst { it.path == filePath }
+                    if (index != -1) {
+                        _uiState.value = _uiState.value.copy(
+                            initialIndex = index,
+                            isLoading = false
+                        )
+                         // Update Recent "Last Accessed" time, but preserve Page Index? 
+                         // Actually if we just navigated to a file in the folder, we ARE at that file.
+                         // So pageIndex should be `index`.
+                         viewModelScope.launch {
+                             try {
+                                 val existing = recentFileDao.getFile(filePath)
+                                 recentFileDao.insertRecent(
+                                     com.uviewer_android.data.RecentFile(
+                                         path = filePath,
+                                         title = existing?.title ?: File(filePath).name,
+                                         isWebDav = isWebDav,
+                                         serverId = serverId,
+                                         type = "IMAGE",
+                                         lastAccessed = System.currentTimeMillis(),
+                                         pageIndex = index 
+                                     )
+                                 )
+                             } catch(e: Exception) {}
+                         }
+                        return
+                    }
+                    // If not found, fall through to reload (maybe folder content changed or different folder)
+                }
+            }
 
             viewModelScope.launch {
                 _uiState.value = _uiState.value.copy(isLoading = true)
 
-                // Add to Recent
+                // Add to Recent (and retrieve saved index)
+                var savedIndex = 0
                 try {
-                    val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
-                    val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                    val existing = recentFileDao.getFile(filePath)
+                    savedIndex = existing?.pageIndex ?: 0
                     
+                    val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
                     recentFileDao.insertRecent(
                         com.uviewer_android.data.RecentFile(
                             path = filePath,
@@ -59,7 +173,8 @@ data class ImageViewerUiState(
                             isWebDav = isWebDav,
                             serverId = serverId,
                             type = if (isZip) "ZIP" else "IMAGE",
-                            lastAccessed = System.currentTimeMillis()
+                            lastAccessed = System.currentTimeMillis(),
+                            pageIndex = savedIndex // Preserve saved index on open
                         )
                     )
                 } catch (e: Exception) {
@@ -67,7 +182,7 @@ data class ImageViewerUiState(
                 }
 
                 try {
-                    val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                    // ... Loading Logic ...
                     val contentIsWebDav = isWebDav && !isZip
 
                     val images = if (isZip) {
@@ -77,6 +192,13 @@ data class ImageViewerUiState(
                         val zipFile = if (isWebDav && serverId != null) {
                             val fileName = File(filePath).name
                             val tempFile = File(cacheDir, "temp_$fileName")
+                            if (!tempFile.exists() || tempFile.length() == 0L) { // optimized check?
+                                webDavRepository.downloadFile(serverId, filePath, tempFile)
+                            }
+                            // Re-download logic might be needed if forced? For now assume cache if exists? 
+                            // Actually dangerous if file changed. Let's stick to original logic: download.
+                            // But original logic didn't query existence efficiently.
+                            // Let's stick to original safe download for now.
                             webDavRepository.downloadFile(serverId, filePath, tempFile)
                             tempFile
                         } else {
@@ -84,13 +206,13 @@ data class ImageViewerUiState(
                         }
 
                         val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
+                        // Smart Unzip? If already unzipped and valid?
+                        // For now, re-unzip safely.
                         if (unzipDir.exists()) unzipDir.deleteRecursively()
                         unzipDir.mkdirs()
                         
-                        // EpubParser has a static unzip method we can use
                         EpubParser.unzip(zipFile, unzipDir)
                         
-                        // List all files in unzipDir recursively and filter for images
                         val zipImages = unzipDir.walkTopDown()
                             .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
                             .map { file ->
@@ -127,7 +249,13 @@ data class ImageViewerUiState(
                             .sortedBy { it.name.lowercase() }
                     }
 
-                    val index = if (isZip) 0 else images.indexOfFirst { it.path == filePath }
+                    // For Zip, use savedIndex. For Folder, find the file index.
+                    val index = if (isZip) {
+                        savedIndex.coerceIn(0, images.size - 1)
+                    } else {
+                        val found = images.indexOfFirst { it.path == filePath }
+                         if (found != -1) found else 0
+                    }
                     
                     val auth = if (contentIsWebDav && serverId != null) {
                         webDavRepository.getAuthHeader(serverId)
@@ -139,7 +267,7 @@ data class ImageViewerUiState(
 
                 _uiState.value = _uiState.value.copy(
                     images = images,
-                    initialIndex = if (index != -1) index else 0,
+                    initialIndex = index,
                     isLoading = false,
                     authHeader = auth,
                     serverUrl = serverUrl,
@@ -148,8 +276,7 @@ data class ImageViewerUiState(
                     persistZoom = userPreferencesRepository.persistZoom.value,
                     upscaleFilter = userPreferencesRepository.upscaleFilter.value
                 )
-
-                // Observe preferences
+                  // ... loops ...
                 viewModelScope.launch {
                     userPreferencesRepository.persistZoom.collect { 
                         _uiState.value = _uiState.value.copy(persistZoom = it)
@@ -163,35 +290,28 @@ data class ImageViewerUiState(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
-        }
-    }
-
-    fun setPersistZoom(persist: Boolean) {
-        userPreferencesRepository.setPersistZoom(persist)
-    }
-
-    fun setUpscaleFilter(upscale: Boolean) {
-        userPreferencesRepository.setUpscaleFilter(upscale)
-    }
-
-    fun setDualPageOrder(order: Int) {
-        userPreferencesRepository.setDualPageOrder(order)
-    }
-
-        fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String) {
-            viewModelScope.launch {
-                val title = if (path.endsWith("/")) path.dropLast(1).substringAfterLast("/") else path.substringAfterLast("/")
-                bookmarkDao.insertBookmark(
-                    com.uviewer_android.data.Bookmark(
-                        title = title,
-                        path = path,
-                        isWebDav = isWebDav,
-                        serverId = serverId,
-                        type = type,
-                        position = index,
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
             }
-        }
     }
+
+    fun updateProgress(index: Int) {
+         val path = currentPath ?: return
+         if (currentIsZip) { // Only save index for Zip, folders use file path
+             viewModelScope.launch {
+                 try {
+                     val title = File(path).name
+                     recentFileDao.insertRecent(
+                         com.uviewer_android.data.RecentFile(
+                             path = path,
+                             title = title,
+                             isWebDav = currentIsWebDav,
+                             serverId = currentServerId,
+                             type = "ZIP",
+                             lastAccessed = System.currentTimeMillis(),
+                             pageIndex = index
+                         )
+                     )
+                 } catch (e: Exception) { e.printStackTrace() }
+             }
+         }
+    }
+}
