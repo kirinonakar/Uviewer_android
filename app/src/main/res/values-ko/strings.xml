@@ -53,7 +53,7 @@
     <string name="dual_page_ltr">왼쪽에서 오른쪽</string>
     <string name="dual_page_rtl">오른쪽에서 왼쪽</string>
     <string name="select_dual_page_order">페이지 순서 선택</string>
-    <string name="persist_zoom">확률 고정</string>
+    <string name="persist_zoom">확대배율 고정</string>
     <string name="persist_zoom_desc">이미지가 바뀌어도 확대 수준 유지</string>
     <string name="upscale_filter">업스케일 필터</string>
     <string name="upscale_filter_desc">고해상도 이미지에 선명도 필터 적용</string>

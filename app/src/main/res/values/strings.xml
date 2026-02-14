@@ -61,7 +61,7 @@
     <string name="dual_page_ltr">Left to Right</string>
     <string name="dual_page_rtl">Right to Left</string>
     <string name="select_dual_page_order">Select Dual Page Order</string>
-    <string name="persist_zoom">Persistent Zoom</string>
+    <string name="persist_zoom">Zoom lock</string>
     <string name="persist_zoom_desc">Maintain zoom level across different images</string>
     <string name="upscale_filter">Upscale Filter</string>
     <string name="upscale_filter_desc">Apply high-quality sharpening for large images</string>
