@@ -17,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,6 +39,7 @@ fun ImageViewerScreen(
     filePath: String,
     isWebDav: Boolean,
     serverId: Int?,
+    initialIndex: Int? = null,
     viewModel: ImageViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
@@ -69,7 +71,7 @@ fun ImageViewerScreen(
 
     // Load images on start
     LaunchedEffect(filePath) {
-        viewModel.loadImages(filePath, isWebDav, serverId)
+        viewModel.loadImages(filePath, isWebDav, serverId, initialIndex)
     }
 
     if (uiState.isLoading) {
@@ -350,14 +352,20 @@ fun ZoomableImage(
     onScaleChanged: (Float) -> Unit,
     secondImageUrl: String? = null // For dual page
 ) {
-    Log.d("ImageViewer", "ZoomableImage: url=$imageUrl, isWebDav=$isWebDav, serverUrl=$serverUrl")
+    val currentScale by rememberUpdatedState(scale)
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+
+    // Reset offsets when image changes
+    LaunchedEffect(imageUrl) {
+        offsetX = 0f
+        offsetY = 0f
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(imageUrl) {
                 awaitEachGesture {
                     var zoom = 1f
                     var panX = 0f
@@ -393,40 +401,28 @@ fun ZoomableImage(
                             if (pastTouchSlop) {
                                 val centroid = event.calculateCentroid(useCurrent = false)
                                 
-                                // Zoom Logic
-                                if (zoomChange != 1f) {
-                                    val oldScale = scale
-                                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                                // Pan/Zoom Logic combined
+                                if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
+                                    val oldScale = currentScale
+                                    val newScale = (oldScale * zoomChange).coerceIn(1f, 5f)
                                     onScaleChanged(newScale)
                                     
                                     val scaleChange = newScale / oldScale
                                     val width = size.width
                                     val height = size.height
                                     
-                                     offsetX = (panChange.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
-                                     offsetY = (panChange.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
-                                     
-                                     val maxOffsetX = (width * (newScale - 1)) / 2
-                                     val maxOffsetY = (height * (newScale - 1)) / 2
-                                     offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
-                                     offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
-                                } else {
-                                     // Pan Logic
-                                     val width = size.width
-                                     val height = size.height
-                                     val maxOffsetX = (width * (scale - 1)) / 2
-                                     val maxOffsetY = (height * (scale - 1)) / 2
-                                     
-                                     offsetX = (offsetX + panChange.x).coerceIn(-maxOffsetX, maxOffsetX)
-                                     offsetY = (offsetY + panChange.y).coerceIn(-maxOffsetY, maxOffsetY)
-                                }
-                                
-                                // CONSUME EVENTS if we are zoomed in or strictly panning/zooming
-                                if (scale > 1f || zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
-                                    event.changes.forEach { 
-                                        if (it.positionChange() != androidx.compose.ui.geometry.Offset.Zero) {
-                                            it.consume() 
-                                        }
+                                    // Adjust offsets to keep centroid stable during zoom
+                                    offsetX = (panChange.x + (offsetX - (centroid.x - width / 2)) * scaleChange + (centroid.x - width / 2))
+                                    offsetY = (panChange.y + (offsetY - (centroid.y - height / 2)) * scaleChange + (centroid.y - height / 2))
+                                    
+                                    val maxOffsetX = (width * (newScale - 1)) / 2
+                                    val maxOffsetY = (height * (newScale - 1)) / 2
+                                    offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                                    offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
+                                    
+                                    // Consume events ONLY IF we are zoomed or performing a transform
+                                    if (newScale > 1f || zoomChange != 1f) {
+                                        event.changes.forEach { it.consume() }
                                     }
                                 }
                             }
@@ -534,13 +530,19 @@ fun ZoomableDualImage(
     upscaleFilter: Boolean,
     onScaleChanged: (Float) -> Unit
 ) {
+    val currentScale by rememberUpdatedState(scale)
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(firstImageUrl, secondImageUrl) {
+        offsetX = 0f
+        offsetY = 0f
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
+            .pointerInput(firstImageUrl, secondImageUrl) {
                awaitEachGesture {
                     var zoom = 1f
                     var panX = 0f
@@ -577,8 +579,8 @@ fun ZoomableDualImage(
                                 val centroid = event.calculateCentroid(useCurrent = false)
                                 
                                 if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
-                                    val oldScale = scale
-                                    val newScale = (scale * zoomChange).coerceIn(1f, 5f)
+                                    val oldScale = currentScale
+                                    val newScale = (oldScale * zoomChange).coerceIn(1f, 5f)
                                     onScaleChanged(newScale)
                                     
                                     val scaleChange = newScale / oldScale
@@ -593,10 +595,8 @@ fun ZoomableDualImage(
                                      offsetX = offsetX.coerceIn(-maxOffsetX, maxOffsetX)
                                      offsetY = offsetY.coerceIn(-maxOffsetY, maxOffsetY)
                                      
-                                     event.changes.forEach { 
-                                        if (it.positionChange() != androidx.compose.ui.geometry.Offset.Zero) {
-                                            it.consume() 
-                                        }
+                                    if (newScale > 1f || zoomChange != 1f) {
+                                        event.changes.forEach { it.consume() }
                                     }
                                 }
                             }

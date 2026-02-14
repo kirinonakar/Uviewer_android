@@ -42,6 +42,7 @@ fun DocumentViewerScreen(
     type: FileEntry.FileType,
     isWebDav: Boolean,
     serverId: Int?,
+    initialLine: Int? = null,
     viewModel: DocumentViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
@@ -59,7 +60,7 @@ fun DocumentViewerScreen(
     var showEncodingDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(filePath) {
-        viewModel.loadDocument(filePath, type, isWebDav, serverId)
+        viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
     }
 
     // Status Bar Logic
@@ -379,6 +380,22 @@ fun DocumentViewerScreen(
                                             }
                                         }
                                     }
+                                    @android.webkit.JavascriptInterface
+                                    fun autoLoadNext() {
+                                        post {
+                                            if (uiState.hasMoreContent) {
+                                                viewModel.nextChunk()
+                                            }
+                                        }
+                                    }
+                                    @android.webkit.JavascriptInterface
+                                    fun autoLoadPrev() {
+                                        post {
+                                            if (uiState.currentChunkIndex > 0) {
+                                                viewModel.prevChunk()
+                                            }
+                                        }
+                                    }
                                 }, "Android")
 
                                 settings.allowFileAccess = true 
@@ -388,8 +405,10 @@ fun DocumentViewerScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
-                                        val js = """
+                                        val scrollJs = """
+                                            var isScrolling = false;
                                             window.onscroll = function() {
+                                                // Current line detection
                                                 var el = document.elementFromPoint(window.innerWidth/2, 20);
                                                 while (el && (!el.id || !el.id.startsWith('line-'))) {
                                                     el = el.parentElement;
@@ -398,25 +417,22 @@ fun DocumentViewerScreen(
                                                     var line = parseInt(el.id.replace('line-', ''));
                                                     Android.onLineChanged(line);
                                                 }
-                                            };
-                                        """.trimIndent()
-                                        
-                                        val jsVertical = """
-                                            window.onscroll = function() {
-                                                // For vertical: Right side
-                                                var el = document.elementFromPoint(window.innerWidth - 50, window.innerHeight / 2);
-                                                 while (el && (!el.id || !el.id.startsWith('line-'))) {
-                                                    el = el.parentElement;
+                                                
+                                                // Auto-load next segment
+                                                if (window.innerHeight + window.pageYOffset >= document.body.offsetHeight - 2) {
+                                                   if (!isScrolling) {
+                                                       isScrolling = true;
+                                                       Android.autoLoadNext();
+                                                   }
                                                 }
-                                                if (el && el.id.startsWith('line-')) {
-                                                    var line = parseInt(el.id.replace('line-', ''));
-                                                    Android.onLineChanged(line);
+                                                // Auto-load prev segment
+                                                if (window.pageYOffset <= 0) {
+                                                   // Android.autoLoadPrev(); // Disabled for now to prevent accidental jumps
                                                 }
                                             };
                                         """.trimIndent()
                                         
-                                        val finalJs = js 
-                                        view?.evaluateJavascript(finalJs, null)
+                                        view?.evaluateJavascript(scrollJs, null)
                                         
                                         if (currentLine > 1) {
                                             val restoreJs = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant' });"

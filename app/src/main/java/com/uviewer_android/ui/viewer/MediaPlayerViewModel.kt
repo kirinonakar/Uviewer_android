@@ -117,12 +117,23 @@ class MediaPlayerViewModel(
                 }
 
                 val headers = mapOf("Authorization" to authHeaderValue)
-                _uiState.value = _uiState.value.copy(mediaUrl = fullUrl, authHeader = headers, isLoading = false, currentPath = filePath)
+                _uiState.value = _uiState.value.copy(
+                    mediaUrl = fullUrl, 
+                    authHeader = headers, 
+                    isLoading = false, 
+                    currentPath = filePath,
+                    savedPosition = 0L // Reset position for new file
+                )
             } else {
                 _uiState.value = _uiState.value.copy(error = "Can't get WebDAV server details", isLoading = false)
             }
         } else {
-            _uiState.value = _uiState.value.copy(mediaUrl = filePath, isLoading = false, currentPath = filePath)
+            _uiState.value = _uiState.value.copy(
+                mediaUrl = filePath, 
+                isLoading = false, 
+                currentPath = filePath,
+                savedPosition = 0L // Reset position for new file
+            )
         }
     }
 

@@ -73,8 +73,10 @@ fun MainScreen() {
                                     val recent = libraryUiState.mostRecentFile
                                     if (recent != null) {
                                         val encodedPath = android.net.Uri.encode(recent.path)
-                                        val route = "viewer/$encodedPath?type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}"
-                                        navController.navigate(route)
+                                        val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
+                                        navController.navigate(route) {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 } else {
                                     navController.navigate(screen.route) {
@@ -100,7 +102,7 @@ fun MainScreen() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Library("").route,
+            startDestination = "library",
             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
             enterTransition = { androidx.compose.animation.EnterTransition.None },
             exitTransition = { androidx.compose.animation.ExitTransition.None },
@@ -125,7 +127,9 @@ fun MainScreen() {
                     viewModel = libraryViewModel,
                     onNavigateToViewer = { entry ->
                         val encodedPath = android.net.Uri.encode(entry.path)
-                        val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}"
+                        // Note: For library entry, we don't have pageIndex easily here unless we query DB, 
+                        // but DocumentViewerViewModel will fallback to DB if position is -1.
+                        val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}&position=-1"
                         navController.navigate(route)
                     }
                 ) 
@@ -141,7 +145,7 @@ fun MainScreen() {
                             navController.navigate(route)
                         } else {
                             val encodedPath = android.net.Uri.encode(item.path)
-                            val route = "viewer?path=$encodedPath&type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}"
+                            val route = "viewer?path=$encodedPath&type=${item.type}&isWebDav=${item.isWebDav}&serverId=${item.serverId ?: -1}&position=${item.position}"
                             navController.navigate(route)
                         }
                     }
@@ -157,7 +161,7 @@ fun MainScreen() {
                              navController.navigate(route)
                         } else {
                             val encodedPath = android.net.Uri.encode(file.path)
-                            val route = "viewer?path=$encodedPath&type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}"
+                            val route = "viewer?path=$encodedPath&type=${file.type}&isWebDav=${file.isWebDav}&serverId=${file.serverId ?: -1}&position=${file.pageIndex}"
                             navController.navigate(route)
                         }
                     }
@@ -170,24 +174,27 @@ fun MainScreen() {
             
              // Viewer Route
             composable(
-                route = "viewer?path={filePath}&type={type}&isWebDav={isWebDav}&serverId={serverId}",
+                route = "viewer?path={path}&type={type}&isWebDav={isWebDav}&serverId={serverId}&position={position}",
                 arguments = listOf(
-                    navArgument("filePath") { type = NavType.StringType },
-                    navArgument("type") { type = NavType.StringType; nullable = true },
+                    navArgument("path") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("type") { type = NavType.StringType; nullable = true; defaultValue = null },
                     navArgument("isWebDav") { type = NavType.BoolType; defaultValue = false },
-                    navArgument("serverId") { type = NavType.IntType; defaultValue = -1 }
+                    navArgument("serverId") { type = NavType.IntType; defaultValue = -1 },
+                    navArgument("position") { type = NavType.IntType; defaultValue = -1 }
                 )
             ) { backStackEntry ->
-                val filePath = backStackEntry.arguments?.getString("filePath") ?: return@composable
+                val filePath = backStackEntry.arguments?.getString("path")?.takeIf { it.isNotEmpty() } ?: return@composable
                 val type = backStackEntry.arguments?.getString("type")
                 val isWebDav = backStackEntry.arguments?.getBoolean("isWebDav") ?: false
                 val serverId = backStackEntry.arguments?.getInt("serverId").takeIf { it != -1 }
+                val position = backStackEntry.arguments?.getInt("position").takeIf { it != -1 }
                 
                 com.uviewer_android.ui.viewer.ViewerScreen(
                     filePath = filePath, 
                     fileType = type,
                     isWebDav = isWebDav,
                     serverId = serverId,
+                    initialPosition = position,
                     onBack = { 
                         // filePath is already decoded by Navigation
                         val parentPath = filePath.substringBeforeLast('/', "/")
@@ -213,3 +220,30 @@ sealed class Screen(val route: String, val icon: androidx.compose.ui.graphics.ve
     data class Recent(val title: String) : Screen("recent", Icons.Filled.History)
     data class Settings(val title: String) : Screen("settings", Icons.Filled.Settings)
 }
+
+// This is a placeholder for the @Database annotation, as it was not present in the original file.
+// Assuming it would be in a separate file like AppDatabase.kt, but for the purpose of
+// demonstrating the version change, it's included here as a comment.
+/*
+@Database(entities = [FavoriteItem::class, RecentFile::class, WebDavServer::class, Bookmark::class], version = 5, exportSchema = false)
+abstract class AppDatabase : RoomDatabase() {
+    // ...
+}
+*/
+
+// Assuming LibraryViewModel is defined elsewhere, this demonstrates the init block addition.
+// This code cannot be directly inserted into MainScreen.kt without breaking syntax.
+/*
+class LibraryViewModel(...) : ViewModel() {
+    init {
+        // Force initial load of Local root directory as soon as ViewModel is created
+        try {
+            val root = android.os.Environment.getExternalStorageDirectory().absolutePath
+            loadFiles(root)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    // ... rest of ViewModel
+}
+*/

@@ -82,18 +82,35 @@ class LibraryViewModel(
         }
         
         // Create FileEntry list from Favorites (including isPinned status)
-        val favoriteEntries = favorites.map { 
-            FileEntry(
-                name = it.title,
-                path = it.path,
-                isDirectory = it.type == "FOLDER",
-                type = if (it.type == "FOLDER") FileEntry.FileType.FOLDER else FileEntry.FileType.valueOf(it.type.uppercase()),
-                lastModified = 0L,
-                size = 0L,
-                isWebDav = it.isWebDav,
-                serverId = it.serverId,
-                isPinned = it.isPinned
-            ) 
+        val favoriteEntries = favorites.mapNotNull { 
+            try {
+                FileEntry(
+                    name = it.title,
+                    path = it.path,
+                    isDirectory = it.type == "FOLDER",
+                    type = if (it.type == "FOLDER") FileEntry.FileType.FOLDER else FileEntry.FileType.valueOf(it.type.uppercase()),
+                    lastModified = 0L,
+                    size = 0L,
+                    isWebDav = it.isWebDav,
+                    serverId = it.serverId,
+                    isPinned = it.isPinned
+                ) 
+            } catch (e: Exception) {
+                // If it's a legacy "DOCUMENT" type or invalid, map to TEXT or ignore
+                if (it.type.equals("DOCUMENT", ignoreCase = true)) {
+                    FileEntry(
+                        name = it.title,
+                        path = it.path,
+                        isDirectory = false,
+                        type = FileEntry.FileType.TEXT,
+                        lastModified = 0L,
+                        size = 0L,
+                        isWebDav = it.isWebDav,
+                        serverId = it.serverId,
+                        isPinned = it.isPinned
+                    )
+                } else null
+            }
         }
 
         state.copy(

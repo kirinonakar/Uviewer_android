@@ -65,7 +65,7 @@ class DocumentViewerViewModel(
     private var isWebDavContext: Boolean = false
     private var serverIdContext: Int? = null
 
-    private val CHUNK_SIZE = 10000 // Chars per chunk for large text files
+    private val CHUNK_SIZE = 100000 // Increased chunk size for better scrolling 100k chars ~ 200kb
 
     init {
         viewModelScope.launch {
@@ -90,7 +90,7 @@ class DocumentViewerViewModel(
         }
     }
 
-    fun loadDocument(filePath: String, type: FileEntry.FileType, isWebDav: Boolean, serverId: Int?) {
+    fun loadDocument(filePath: String, type: FileEntry.FileType, isWebDav: Boolean, serverId: Int?, initialLine: Int? = null) {
         currentFilePath = filePath
         currentFileType = type
         isWebDavContext = isWebDav
@@ -100,12 +100,15 @@ class DocumentViewerViewModel(
             _uiState.value = _uiState.value.copy(isLoading = true, error = null, fileName = File(filePath).name)
             
             // Add to Recent (and retrieve saved position)
-            var savedLine = 1
-            try {
+            var savedLine = initialLine ?: try {
                 val existing = recentFileDao.getFile(filePath)
-                savedLine = existing?.pageIndex ?: 1
-                if (savedLine < 1) savedLine = 1
-                
+                existing?.pageIndex ?: 1
+            } catch (e: Exception) {
+                1
+            }
+            if (savedLine < 1) savedLine = 1
+            
+            try {
                 val title = File(filePath).name
                 recentFileDao.insertRecent(
                     com.uviewer_android.data.RecentFile(
@@ -353,12 +356,13 @@ class DocumentViewerViewModel(
 
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {
         viewModelScope.launch {
-            val title = File(path).name
+            val fileName = File(path).name
+            val bookmarkTitle = if (type == "DOCUMENT" || type == "TEXT" || type == "PDF") "$fileName - line $line" else fileName
             
             // Bookmark (Position)
             bookmarkDao.insertBookmark(
                 com.uviewer_android.data.Bookmark(
-                    title = title,
+                    title = bookmarkTitle,
                     path = path,
                     isWebDav = isWebDav,
                     serverId = serverId,
@@ -371,11 +375,12 @@ class DocumentViewerViewModel(
             // Favorite (File)
             favoriteDao.insertFavorite(
                 com.uviewer_android.data.FavoriteItem(
-                    title = title,
+                    title = bookmarkTitle,
                     path = path,
                     isWebDav = isWebDav,
                     serverId = serverId,
-                    type = type
+                    type = type,
+                    position = line
                 )
             )
         }
@@ -464,7 +469,7 @@ class DocumentViewerViewModel(
     }
 
     private fun decodeBytes(bytes: ByteArray, manualEncoding: String?): String {
-        return if (manualEncoding != null) {
+        val decoded = if (manualEncoding != null) {
             try {
                 String(bytes, java.nio.charset.Charset.forName(manualEncoding))
             } catch (e: Exception) {
@@ -473,6 +478,8 @@ class DocumentViewerViewModel(
         } else {
             String(bytes, com.uviewer_android.data.utils.EncodingDetector.detectEncoding(bytes))
         }
+        // Normalize to NFC to fix "Jobi-hyeong" (Separated Jamo) issues
+        return java.text.Normalizer.normalize(decoded, java.text.Normalizer.Form.NFC)
     }
     
     private fun getColors(): Pair<String, String> {

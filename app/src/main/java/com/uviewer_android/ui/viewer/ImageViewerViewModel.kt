@@ -103,8 +103,8 @@ data class ImageViewerUiState(
             }
         }
 
-        fun loadImages(initialFilePath: String, isWebDav: Boolean, serverId: Int?) {
-        Log.d("ImageViewer", "loadImages: path=$initialFilePath, webDav=$isWebDav, server=$serverId")
+        fun loadImages(initialFilePath: String, isWebDav: Boolean, serverId: Int?, initialIndex: Int? = null) {
+        Log.d("ImageViewer", "loadImages: path=$initialFilePath, webDav=$isWebDav, server=$serverId, initialIndex=$initialIndex")
         
         val decodedPath = try {
             var path = initialFilePath
@@ -132,7 +132,7 @@ data class ImageViewerUiState(
                 var savedIndex = 0
                 try {
                     val existing = recentFileDao.getFile(filePath)
-                    savedIndex = existing?.pageIndex ?: 0
+                    savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
                     
                     val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
                     recentFileDao.insertRecent(
@@ -148,8 +148,8 @@ data class ImageViewerUiState(
                     )
                 } catch (e: Exception) {
                     // Ignore
+                    e.printStackTrace()
                 }
-
                 try {
                     // ... Loading Logic ...
                     val contentIsWebDav = isWebDav && !isZip

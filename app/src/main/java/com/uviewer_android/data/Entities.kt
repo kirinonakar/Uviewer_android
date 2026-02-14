@@ -12,6 +12,7 @@ data class FavoriteItem(
     val serverId: Int? = null, // Link to WebDavServer if applicable
     val type: String, // "image", "document", "folder"
     val isPinned: Boolean = false,
+    val position: Int = 0, // Line number or page index for bookmarks
     val timestamp: Long = System.currentTimeMillis()
 )
 

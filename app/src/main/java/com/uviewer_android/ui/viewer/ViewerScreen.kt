@@ -22,6 +22,7 @@ fun ViewerScreen(
     fileType: String?, 
     isWebDav: Boolean, 
     serverId: Int?,
+    initialPosition: Int? = null,
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {}
@@ -46,10 +47,17 @@ fun ViewerScreen(
             else -> FileEntry.FileType.UNKNOWN
         }
     } else type
+    
+    // Convert initialPosition to index or line
+    // For images, it's 0-based. For documents, it's 1-based (line).
 
     when (resolvedType) {
-        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> ImageViewerScreen(filePath, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
-        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> {
+            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        }
+        FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
+            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
+        }
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.PDF -> {
              PdfViewerScreen(
