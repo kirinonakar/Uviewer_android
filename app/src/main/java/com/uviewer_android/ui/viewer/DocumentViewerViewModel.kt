@@ -37,9 +37,10 @@ data class DocumentViewerUiState(
     val currentChunkIndex: Int = 0,
     val hasMoreContent: Boolean = false,
     val manualEncoding: String? = null,
-    val loadProgress: Float = 1f,
     val customDocBackgroundColor: String = "#FFFFFF",
-    val customDocTextColor: String = "#000000"
+    val customDocTextColor: String = "#000000",
+    val sideMargin: Int = 8,
+    val loadProgress: Float = 1f
 )
 
 
@@ -60,6 +61,7 @@ class DocumentViewerViewModel(
     val fontSize = userPreferencesRepository.fontSize
     val fontFamily = userPreferencesRepository.fontFamily
     val docBackgroundColor = userPreferencesRepository.docBackgroundColor
+    val sideMargin = userPreferencesRepository.sideMargin
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
@@ -74,18 +76,29 @@ class DocumentViewerViewModel(
     init {
         viewModelScope.launch {
             combine(
-                userPreferencesRepository.fontSize,
-                userPreferencesRepository.fontFamily,
-                userPreferencesRepository.docBackgroundColor,
-                userPreferencesRepository.customDocBackgroundColor,
-                userPreferencesRepository.customDocTextColor
-            ) { size, family, color, customBg, customText ->
+                listOf(
+                    userPreferencesRepository.fontSize,
+                    userPreferencesRepository.fontFamily,
+                    userPreferencesRepository.docBackgroundColor,
+                    userPreferencesRepository.customDocBackgroundColor,
+                    userPreferencesRepository.customDocTextColor,
+                    userPreferencesRepository.sideMargin
+                )
+            ) { args: Array<Any> ->
+                val size = args[0] as Int
+                val family = args[1] as String
+                val color = args[2] as String
+                val customBg = args[3] as String
+                val customText = args[4] as String
+                val margin = args[5] as Int
+                
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
                     fontFamily = family,
                     docBackgroundColor = color,
                     customDocBackgroundColor = customBg,
-                    customDocTextColor = customText
+                    customDocTextColor = customText,
+                    sideMargin = margin
                 )
                 if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -317,7 +330,7 @@ class DocumentViewerViewModel(
                             color: ${colors.second} !important; 
                             font-family: $fontFamily !important;
                             font-size: ${_uiState.value.fontSize}px !important;
-                            padding: 1.2em !important;
+                            padding: 1.2em ${_uiState.value.sideMargin / 20.0}em !important;
                             display: block !important;
                             line-height: 1.8 !important;
                         }
@@ -379,7 +392,8 @@ class DocumentViewerViewModel(
                         _uiState.value.fontFamily, 
                         _uiState.value.fontSize, 
                         colors.first, 
-                        colors.second
+                        colors.second,
+                        _uiState.value.sideMargin
                     )
                 }
             }
@@ -515,7 +529,7 @@ class DocumentViewerViewModel(
                             body { 
                                 font-family: $fontFamily !important;
                                 font-size: ${_uiState.value.fontSize}px !important;
-                                padding: 1.2em !important;
+                                padding: 1.2em ${_uiState.value.sideMargin / 20.0}em !important;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -595,6 +609,12 @@ class DocumentViewerViewModel(
         }
     }
 
+    fun setSideMargin(margin: Int) {
+        viewModelScope.launch {
+            userPreferencesRepository.setSideMargin(margin)
+        }
+    }
+
     fun setManualEncoding(encoding: String?, isWebDav: Boolean, serverId: Int?) {
         _uiState.value = _uiState.value.copy(manualEncoding = encoding)
         // Reload
@@ -605,7 +625,7 @@ class DocumentViewerViewModel(
 
     private fun getColors(): Pair<String, String> {
         return when (_uiState.value.docBackgroundColor) {
-             UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#000000"
              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
              UserPreferencesRepository.DOC_BG_CUSTOM -> _uiState.value.customDocBackgroundColor to _uiState.value.customDocTextColor
              else -> "#ffffff" to "#000000"

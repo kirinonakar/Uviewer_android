@@ -1,6 +1,8 @@
 package com.uviewer_android.data.parser
 
 import java.util.regex.Pattern
+import kotlin.text.RegexOption
+import kotlin.text.MatchResult
 
 object AozoraParser {
     
@@ -10,7 +12,16 @@ object AozoraParser {
     // Standard Aozora: 《Ruby》 after Kanji.
     
     fun parse(text: String, lineOffset: Int = 0): String {
-        val lines = text.split(Regex("\\r?\\n|\\r"))
+        // Mark paired bold blocks with internal markers to satisfy "ignore if only start tag is present"
+        val boldStartPattern = "［＃(?:ここから太字| 여기서 태그 시작 )］"
+        val boldEndPattern = "［＃(?:여기서 태그 끝 |ここで太字終わり|太字終わり)］"
+        val boldRegex = Regex("$boldStartPattern(.*?)$boldEndPattern", RegexOption.DOT_MATCHES_ALL)
+        
+        val markedText = boldRegex.replace(text) { match: MatchResult ->
+            "__BOLD_START__${match.groupValues[1]}__BOLD_END__"
+        }
+
+        val lines = markedText.split(Regex("\\r?\\n|\\r"))
         var isBold = false
         val parsedLines = lines.mapIndexed { index, line ->
             var l = line
@@ -57,7 +68,7 @@ object AozoraParser {
             // Image tags - Case insensitive for extensions
             l = l.replace(Regex("［＃挿絵（(.+?)）入る］"), "<img src=\"$1\" />") // Specific format with "入る"
             l = l.replace(Regex("［＃.+?（(.+?)）］"), "<img src=\"$1\" />")
-            l = l.replace(Regex("(?i)［＃(.+?\\.(?:jpg|jpeg|png|gif|webp))］"), "<img src=\"$1\" />")
+            l = l.replace(Regex("(?i)［＃(.+?\\.(?:jpg|jpeg|png|gif|webp|avif))］"), "<img src=\"$1\" />")
 
             // Headers - Adding id for TOC navigation
             l = l.replace(Regex("［＃大見出し］(.+?)［＃大見出し終わり］"), "<h1 class=\"aozora-title\">$1</h1>")
@@ -65,31 +76,21 @@ object AozoraParser {
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
             
             // Bold - Maintain state across lines
-            if (l.contains("［＃ここから太字］") || l.contains("［＃ 여기서 태그 시작 ］")) {
+            val wasBoldAtStart = isBold
+            if (l.contains("__BOLD_START__")) {
                 isBold = true
-                l = l.replace(Regex("［＃(?:ここから太字| 여기서 태그 시작 )］"), "<b>")
+                l = l.replace("__BOLD_START__", "<b>")
             }
-            if (l.contains("［＃ここで太字終わり］") || l.contains("［＃太字終わり］") || l.contains("［＃ 여기서 태그 끝 ］")) {
+            if (l.contains("__BOLD_END__")) {
                 isBold = false
-                l = l.replace(Regex("［＃(?:여기서 태그 끝 |ここで太字終わり|太字終わり)］"), "</b>")
+                l = l.replace("__BOLD_END__", "</b>")
             }
-            // If currently bold and no close tag on this line, or if just opened, wrap/ensure validity?
-            // HTML parsers (browsers) are lenient, but if we have <div><b>...</div><div>...</b></div> it might break.
-            // Valid HTML approach: Close </b> at end of div if bold is active, open <b> at start of next div.
-            
-            // However, Aozora "bold block" might span lines.
-            // Simple approach: Replace tags with span/b.
-            // If the browser closes <b> automatically at block end (div), we need to re-open it.
-            
-            // Implementation:
-            // If isBold was true at start of line, prepend <b>
-            // If isBold is true at end of line, append </b>
             
             var lineContent = l
-            if (isBold && !lineContent.startsWith("<b>") && !lineContent.contains("［＃ここから太字］")) {
+            if (wasBoldAtStart && !lineContent.startsWith("<b>") && !lineContent.contains("<b>")) {
                  lineContent = "<b>$lineContent"
             }
-            if (isBold && !lineContent.endsWith("</b>") && !lineContent.contains("［＃ここで太字終わり］")) {
+            if (isBold && !lineContent.endsWith("</b>") && !lineContent.contains("</b>")) {
                  lineContent = "$lineContent</b>"
             }
 
@@ -142,7 +143,7 @@ object AozoraParser {
         return titles
     }
 
-    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000"): String {
+    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8): String {
         val writingMode = "horizontal-tb"
         // Remove monospace, use standard CJK fonts
         val fontFamily = when(font) {
@@ -150,6 +151,8 @@ object AozoraParser {
             "sans-serif" -> "'Sawarabi Gothic', sans-serif"
             else -> "serif"
         }
+        
+        val marginEm = sideMargin / 20.0
         
         return """
             <!DOCTYPE html>
@@ -176,7 +179,7 @@ object AozoraParser {
                         width: ${if (isVertical) "auto" else "100%"};
                     }
                     p, div, h1, h2, h3 {
-                        padding: 0 0.4em;
+                        padding: 0 ${marginEm}em;
                         min-height: 1.2em;
                     }
 

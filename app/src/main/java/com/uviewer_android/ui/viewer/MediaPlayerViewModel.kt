@@ -180,4 +180,16 @@ class MediaPlayerViewModel(
     fun updateSubtitleTracks(tracks: List<SubtitleTrack>) {
         _uiState.value = _uiState.value.copy(subtitleTracks = tracks)
     }
+
+    fun updateCurrentIndex(index: Int) {
+        if (index >= 0 && index < _uiState.value.playlist.size) {
+            val file = _uiState.value.playlist[index]
+            val url = _uiState.value.playlistUrls[index]
+            _uiState.value = _uiState.value.copy(
+                currentIndex = index,
+                mediaUrl = url,
+                currentPath = file.path
+            )
+        }
+    }
 }

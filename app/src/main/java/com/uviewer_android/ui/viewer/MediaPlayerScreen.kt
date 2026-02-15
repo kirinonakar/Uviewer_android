@@ -12,6 +12,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -65,9 +67,9 @@ fun MediaPlayerScreen(
             if (fileType == FileEntry.FileType.VIDEO) {
                  if (isFullScreen) {
                      insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                     insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                      insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                  } else {
-
                      insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                  }
             } else {
@@ -124,6 +126,14 @@ fun MediaPlayerScreen(
                     override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
                         viewModel.updateMetadata(mediaMetadata)
                     }
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        mediaItem?.let { item ->
+                             val index = uiState.playlist.indexOfFirst { it.path == item.mediaId }
+                             if (index != -1 && index != uiState.currentIndex) {
+                                  viewModel.updateCurrentIndex(index)
+                             }
+                        }
+                    }
                 })
             }
         }, context.mainExecutor)
@@ -161,14 +171,16 @@ fun MediaPlayerScreen(
             
             val currentIndex = uiState.currentIndex.coerceAtLeast(0)
             
-            // If the controller has a different playlist or ID, update it.
-            // Check if current ID is in the set of new items
+            // If the controller has a different playlist, refresh it. 
+            // Otherwise, if just the index is different, seek to it.
             val currentMediaId = controller.currentMediaItem?.mediaId
-            val isCurrentInNew = mediaItems.any { it.mediaId == currentMediaId }
+            val expectedMediaId = uiState.playlist.getOrNull(currentIndex)?.path
             
-            if (!isCurrentInNew || controller.mediaItemCount != mediaItems.size) {
+            if (controller.mediaItemCount != mediaItems.size || controller.getMediaItemAt(0).mediaId != mediaItems[0].mediaId) {
                  controller.setMediaItems(mediaItems, currentIndex, uiState.savedPosition)
                  controller.prepare()
+            } else if (currentMediaId != expectedMediaId) {
+                controller.seekToDefaultPosition(currentIndex)
             }
             
             controller.trackSelectionParameters = controller.trackSelectionParameters
@@ -201,10 +213,16 @@ fun MediaPlayerScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { viewModel.prev(isWebDav, serverId) }) {
+                            IconButton(onClick = { 
+                                mediaController?.seekToPrevious()
+                                viewModel.prev(isWebDav, serverId) 
+                            }) {
                                 Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
                             }
-                            IconButton(onClick = { viewModel.next(isWebDav, serverId) }) {
+                            IconButton(onClick = { 
+                                mediaController?.seekToNext()
+                                viewModel.next(isWebDav, serverId) 
+                            }) {
                                 Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
                             }
                             if (fileType == FileEntry.FileType.VIDEO) {

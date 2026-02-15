@@ -21,14 +21,21 @@ class PlaybackService : MediaSessionService() {
         
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
+            .setUserAgent("Uviewer/1.0")
+        
+        val baseDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpDataSourceFactory)
         
         lateinit var player: ExoPlayer
         
         val dataSourceFactory = DataSource.Factory {
-            val delegate = httpDataSourceFactory.createDataSource()
+            val delegate = baseDataSourceFactory.createDataSource()
             object : DataSource by delegate {
                 override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
-                    val authHeader = authHeaders[dataSpec.uri.toString()]
+                    val uriStr = dataSpec.uri.toString()
+                    // Try exact match, then decoded match, then maybe host-only match if needed
+                    val authHeader = authHeaders[uriStr] 
+                        ?: authHeaders[try { java.net.URLDecoder.decode(uriStr, "UTF-8") } catch(e: Exception) { uriStr }]
+                    
                     val updatedDataSpec = if (authHeader != null) {
                         dataSpec.buildUpon()
                             .setHttpRequestHeaders(mapOf("Authorization" to authHeader))
@@ -47,6 +54,12 @@ class PlaybackService : MediaSessionService() {
             .setSeekForwardIncrementMs(15000)
             .build()
             
+        player.addListener(object : Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("PlaybackService", "ExoPlayer Error: ${error.errorCodeName} (${error.errorCode})", error)
+            }
+        })
+
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = android.app.PendingIntent.getActivity(
             this, 0, intent, 

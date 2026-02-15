@@ -75,11 +75,15 @@ class UserPreferencesRepository(context: Context) {
     val imageViewMode: StateFlow<Int> = _imageViewMode.asStateFlow()
 
 
+    private val _sideMargin = MutableStateFlow(
+        sharedPreferences.getInt("side_margin", 8)
+    )
+    val sideMargin: StateFlow<Int> = _sideMargin.asStateFlow()
+
     private val _subtitleEnabled = MutableStateFlow(
         sharedPreferences.getBoolean("subtitle_enabled", true)
     )
     val subtitleEnabled: StateFlow<Boolean> = _subtitleEnabled.asStateFlow()
-
 
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
@@ -151,6 +155,13 @@ class UserPreferencesRepository(context: Context) {
         _sharpeningAmount.value = amount
     }
 
+
+    fun setSideMargin(margin: Int) {
+        sharedPreferences.edit {
+            putInt("side_margin", margin)
+        }
+        _sideMargin.value = margin
+    }
 
     fun setSubtitleEnabled(enabled: Boolean) {
         sharedPreferences.edit {

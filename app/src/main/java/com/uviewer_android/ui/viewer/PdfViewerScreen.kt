@@ -114,7 +114,9 @@ fun PdfViewerScreen(
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = useLightStatusBar
             if (isFullScreen) {
+                // Hide navigation, keep status
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())

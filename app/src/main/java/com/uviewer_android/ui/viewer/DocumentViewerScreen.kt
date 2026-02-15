@@ -16,9 +16,12 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -77,13 +80,14 @@ fun DocumentViewerScreen(
 
     // Status Bar Logic
     val context = androidx.compose.ui.platform.LocalContext.current
-    val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
+    val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
     
     // Expose status bar appearance based on document background if it's "dark" or "custom" (if custom is dark enough)
     // Simple heuristic for custom: if bg is dark, icons should be white.
-    fun isColorDark(colorHex: String): Boolean {
+    fun isColorDark(colorHex: String?): Boolean {
+        if (colorHex == null) return false
         return try {
             val color = android.graphics.Color.parseColor(colorHex)
             val grey = 0.2126 * android.graphics.Color.red(color) + 
@@ -94,7 +98,7 @@ fun DocumentViewerScreen(
     }
 
     val useLightStatusBar = if (!isFullScreen) {
-        !systemInDarkTheme
+        !isAppDark
     } else {
         when (docBackgroundColor) {
             UserPreferencesRepository.DOC_BG_DARK -> false
@@ -103,20 +107,31 @@ fun DocumentViewerScreen(
         }
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                insetsController.isAppearanceLightStatusBars = !isAppDark
+            }
+        }
+    }
 
-    DisposableEffect(isFullScreen, useLightStatusBar) {
+    LaunchedEffect(isFullScreen, useLightStatusBar) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = useLightStatusBar
             if (isFullScreen) {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                // Hide navigation, keep status
+                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
-        onDispose { }
     }
     // Update current line from UI state if needed, or maintain local state from scroll
     LaunchedEffect(uiState.currentLine) {
@@ -588,7 +603,7 @@ fun DocumentViewerScreen(
                             val previousHash = (wv.tag as? Int) ?: 0
                              
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-            UserPreferencesRepository.DOC_BG_SEPIA -> "#f5f5dc" to "#5b4636"
+            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#000000"
             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
             UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
             else -> "#ffffff" to "#000000"
@@ -597,7 +612,7 @@ fun DocumentViewerScreen(
                                   <style>
                                       html, body {
                                           margin: 0;
-                                          padding: 0;
+                                          padding: 0 !important;
                                           background-color: $bgColor !important;
                                           color: $textColor !important;
                                           writing-mode: horizontal-tb !important;
@@ -617,8 +632,8 @@ fun DocumentViewerScreen(
                                       }
                                       /* Padding for text elements to keep them readable */
                                       p, div, h1, h2, h3, h4, h5, h6 {
-                                          padding-left: 0.4em;
-                                          padding-right: 0.4em;
+                                          padding-left: ${uiState.sideMargin / 20.0}em !important;
+                                          padding-right: ${uiState.sideMargin / 20.0}em !important;
                                       }
                                       /* Remove padding for images to make them edge-to-edge */
                                       div:has(img), p:has(img) {
@@ -792,6 +807,18 @@ fun FontSettingsDialog(
                             )
                         }
                     }
+                }
+
+                // Side Margin
+                val marginValue by viewModel.sideMargin.collectAsState()
+                Column {
+                    Text(stringResource(R.string.side_margin_fmt, marginValue))
+                    Slider(
+                        value = marginValue.toFloat(),
+                        onValueChange = { viewModel.setSideMargin(it.toInt()) },
+                        valueRange = 0f..40f,
+                        steps = 40
+                    )
                 }
             }
         },

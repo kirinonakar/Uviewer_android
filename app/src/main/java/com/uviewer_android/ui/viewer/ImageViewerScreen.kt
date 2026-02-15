@@ -123,6 +123,7 @@ fun ImageViewerScreen(
             if (isFullScreen) {
                 // Hide navigation, keep status
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -253,6 +254,13 @@ fun ImageViewerScreen(
                                         contentDescription = "Toggle Dual Page"
                                     )
                                 }
+                                IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
+                                    Icon(
+                                        Icons.Default.SwapHoriz,
+                                        contentDescription = "Invert Controls",
+                                        tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                    )
+                                }
                                 IconButton(onClick = { showSettingsDialog = true }) {
                                     Icon(Icons.Default.Settings, contentDescription = "Settings")
                                 }
@@ -361,6 +369,7 @@ fun ImageViewerScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = currentScale <= 1.1f,
+                    reverseLayout = invertImageControl,
                     beyondViewportPageCount = 1
                 ) { page ->
                     val (firstIdx, secondIdx) = if (isDualPage) {
@@ -558,23 +567,12 @@ fun ZoomableImage(
                     .build()
             }
             
-            val imageLoader = remember {
-                coil.ImageLoader.Builder(context)
-                    .components {
-                        if (android.os.Build.VERSION.SDK_INT >= 28) {
-                            add(coil.decode.ImageDecoderDecoder.Factory())
-                        } else {
-                            add(coil.decode.GifDecoder.Factory())
-                        }
-                    }
-                    .build()
-            }
+
 
             coil.compose.SubcomposeAsyncImage(
                 model = buildRequest(imageUrl),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
-                imageLoader = imageLoader,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                 loading = {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -738,24 +736,13 @@ fun ZoomableDualImage(
                     .build()
             }
 
-            val imageLoader = remember {
-                coil.ImageLoader.Builder(context)
-                    .components {
-                        if (android.os.Build.VERSION.SDK_INT >= 28) {
-                            add(coil.decode.ImageDecoderDecoder.Factory())
-                        } else {
-                            add(coil.decode.GifDecoder.Factory())
-                        }
-                    }
-                    .build()
-            }
+
 
             if (firstImageUrl != null) {
                 coil.compose.SubcomposeAsyncImage(
                     model = buildRequest(firstImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    imageLoader = imageLoader,
                     alignment = Alignment.CenterEnd,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     loading = {
@@ -786,7 +773,6 @@ fun ZoomableDualImage(
                     model = buildRequest(secondImageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
-                    imageLoader = imageLoader,
                     alignment = Alignment.CenterStart,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     loading = {
