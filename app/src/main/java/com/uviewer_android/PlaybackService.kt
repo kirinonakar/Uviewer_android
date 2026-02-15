@@ -12,6 +12,11 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.FallbackOptions
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.FallbackSelection
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.text.SubtitleParser
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -74,10 +79,39 @@ class PlaybackService : MediaSessionService() {
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
 
-        val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
+        val errorHandlingPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(3) {
+            override fun getFallbackSelectionFor(
+                fallbackOptions: FallbackOptions,
+                loadErrorInfo: LoadErrorInfo
+            ): FallbackSelection? {
+                // 오류가 발생한 데이터가 'TEXT'(자막) 타입인 경우
+                if (loadErrorInfo.mediaLoadData.trackType == androidx.media3.common.C.TRACK_TYPE_TEXT) {
+                    // 해당 트랙(자막)을 비활성화(FALLBACK_TYPE_TRACK)하고 재생을 계속하도록 설정
+                    return FallbackSelection(androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.FALLBACK_TYPE_TRACK, 3000L)
+                }
+                return super.getFallbackSelectionFor(fallbackOptions, loadErrorInfo)
+            }
+            
+            // 자막 오류 시 재시도 횟수를 최소화하여 빨리 포기하고 영상을 재생하게 함
+            override fun getMinimumLoadableRetryCount(dataType: Int): Int {
+                if (dataType == androidx.media3.common.C.TRACK_TYPE_TEXT) {
+                    return 1
+                }
+                return super.getMinimumLoadableRetryCount(dataType)
+            }
+        }
+
+        // 1. [중요] Extractor 설정: 자막 트랜스코딩(변환)을 끕니다.
+        // 이렇게 하면 소스 단계에서 파싱 에러가 발생하지 않고 원본 데이터를 그대로 넘깁니다.
+        val extractorsFactory = DefaultExtractorsFactory()
+            .setTextTrackTranscodingEnabled(false)
+
+        val mediaSourceFactory = DefaultMediaSourceFactory(this, extractorsFactory)
             .setDataSourceFactory(dataSourceFactory)
-            .setSubtitleParserFactory(androidx.media3.extractor.text.SubtitleParser.Factory.UNSUPPORTED)
-            .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(3))
+            // 레거시 모드 활성화: 파서를 끄고 나중에 Renderer가 디코딩하게 함
+            .setSubtitleParserFactory(SubtitleParser.Factory.UNSUPPORTED)
+            // ✅ 여기에 커스텀 정책 적용
+            .setLoadErrorHandlingPolicy(errorHandlingPolicy)
 
         player = ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)

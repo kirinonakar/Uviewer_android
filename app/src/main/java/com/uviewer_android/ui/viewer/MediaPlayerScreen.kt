@@ -42,6 +42,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.pointer.pointerInput
+import android.widget.Toast
+import android.util.Log
 
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
@@ -125,6 +127,38 @@ fun MediaPlayerScreen(
                 // Initial setup if needed
                  addListener(object : androidx.media3.common.Player.Listener {
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                        val controller = mediaController ?: return
+                        // 현재 자막이 켜져 있는지 확인
+                        val isSubtitleEnabled = !controller.trackSelectionParameters.disabledTrackTypes.contains(androidx.media3.common.C.TRACK_TYPE_TEXT)
+
+                        // 자막이 켜진 상태에서 에러가 났다면, 자막 문제일 확률이 매우 높음
+                        if (isSubtitleEnabled) {
+                            Log.e("MediaPlayer", "자막 오류 감지. 자막을 끄고 복구 시도.", error)
+
+                            // 1. 사용자에게 알림 (UI 컨텍스트 사용)
+                            Toast.makeText(context, "자막 파일 오류로 인해 자막을 끕니다.", Toast.LENGTH_LONG).show()
+
+                            // 2. 자막 트랙 비활성화
+                            val params = controller.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                                .build()
+                            controller.trackSelectionParameters = params
+                            
+                            // 3. ViewModel 상태 동기화 (UI 메뉴 갱신)
+                            viewModel.toggleSubtitleEnabled(false)
+
+                            // 4. 재생 복구 시도
+                            val currentPos = controller.currentPosition // 현재 위치 저장
+                            controller.prepare() // 에러 상태 초기화
+                            controller.seekTo(currentPos) // 원래 위치로 이동
+                            controller.play() // 재생 재개
+                            
+                            // 에러 화면을 띄우지 않도록 여기서 함수 종료
+                            return
+                        }
+
+                        // 자막 문제가 아니라면 기존처럼 에러 화면 표시
                         playbackError = error.message
                     }
                     override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
