@@ -39,7 +39,8 @@ import androidx.compose.material.icons.filled.Star
 fun MainScreen(
     activity: com.uviewer_android.MainActivity? = null, 
     initialIntentPath: String? = null,
-    shouldResume: Boolean = false
+    shouldResume: Boolean = false,
+    onHandledResume: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.uviewer_android.ui.AppViewModelProvider.Factory)
@@ -65,14 +66,21 @@ fun MainScreen(
     }
 
     // Auto-resume if flag is set
-    androidx.compose.runtime.LaunchedEffect(shouldResume, libraryUiState.mostRecentFile) {
+    androidx.compose.runtime.LaunchedEffect(shouldResume, libraryUiState.mostRecentFile?.path) {
         if (shouldResume && libraryUiState.mostRecentFile != null) {
             val recent = libraryUiState.mostRecentFile!!
-            val encodedPath = android.net.Uri.encode(recent.path, null)
-            val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
-            navController.navigate(route) {
-                launchSingleTop = true
+            val currentEntry = navController.currentBackStackEntry
+            val currentPath = currentEntry?.arguments?.getString("path")
+            
+            // Only navigate if we're not already viewing this file
+            if (currentPath != recent.path) {
+                val encodedPath = android.net.Uri.encode(recent.path, null)
+                val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
+                navController.navigate(route) {
+                    launchSingleTop = true
+                }
             }
+            onHandledResume()
         }
     }
 

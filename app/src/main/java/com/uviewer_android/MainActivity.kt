@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.core.os.LocaleListCompat
 import com.uviewer_android.data.repository.UserPreferencesRepository
 import com.uviewer_android.ui.MainScreen
@@ -40,6 +41,16 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
+    private var shouldResumeState by androidx.compose.runtime.mutableStateOf(false)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra("action") == "resume") {
+            shouldResumeState = true
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -49,7 +60,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             null
         }
-        val shouldResume = intent?.getStringExtra("action") == "resume"
+        if (intent?.getStringExtra("action") == "resume") {
+            shouldResumeState = true
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
@@ -96,7 +109,12 @@ class MainActivity : AppCompatActivity() {
             }
 
             UviewerTheme(darkTheme = darkTheme) {
-                MainScreen(activity = this@MainActivity, initialIntentPath = intentPath, shouldResume = shouldResume)
+                MainScreen(
+                    activity = this@MainActivity, 
+                    initialIntentPath = intentPath, 
+                    shouldResume = shouldResumeState,
+                    onHandledResume = { shouldResumeState = false }
+                )
             }
         }
     }

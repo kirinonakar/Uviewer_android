@@ -20,7 +20,8 @@ class PdfViewerViewModel(
     application: Application,
     private val webDavRepository: WebDavRepository,
     private val recentFileDao: com.uviewer_android.data.RecentFileDao,
-    private val bookmarkDao: com.uviewer_android.data.BookmarkDao
+    private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
+    private val favoriteDao: com.uviewer_android.data.FavoriteDao
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(PdfViewerUiState())
@@ -68,10 +69,26 @@ class PdfViewerViewModel(
 
     fun toggleBookmark(path: String, page: Int, isWebDav: Boolean, serverId: Int?) {
         viewModelScope.launch {
-            val title = File(path).name
+            val fileName = File(path).name
+            val bookmarkTitle = "$fileName - pg ${page + 1}"
+            
+            // Bookmark (Position)
             bookmarkDao.insertBookmark(
                 com.uviewer_android.data.Bookmark(
-                    title = title,
+                    title = bookmarkTitle,
+                    path = path,
+                    isWebDav = isWebDav,
+                    serverId = serverId,
+                    type = "PDF",
+                    position = page,
+                    timestamp = System.currentTimeMillis()
+                )
+            )
+
+            // Favorite (File)
+            favoriteDao.insertFavorite(
+                com.uviewer_android.data.FavoriteItem(
+                    title = bookmarkTitle,
                     path = path,
                     isWebDav = isWebDav,
                     serverId = serverId,

@@ -16,7 +16,7 @@ class FavoritesViewModel(
 
     val favorites: StateFlow<List<FavoriteItem>> = favoriteDao.getAllFavorites()
         .map { list ->
-            list.sortedWith(compareBy<FavoriteItem> { it.type.equals("FOLDER", ignoreCase = true) }.thenBy { it.title })
+            list.sortedByDescending { it.timestamp }
         }
         .stateIn(
             scope = viewModelScope,

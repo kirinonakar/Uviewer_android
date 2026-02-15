@@ -183,16 +183,16 @@ fun MediaPlayerScreen(
             if (controller.mediaItemCount != mediaItems.size || controller.getMediaItemAt(0).mediaId != mediaItems[0].mediaId) {
                  controller.setMediaItems(mediaItems, currentIndex, uiState.savedPosition)
                  controller.prepare()
+                 controller.playWhenReady = true
             } else if (currentMediaId != expectedMediaId) {
                 controller.seekToDefaultPosition(currentIndex)
+                controller.playWhenReady = true
             }
             
             controller.trackSelectionParameters = controller.trackSelectionParameters
                 .buildUpon()
                 .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, !subtitleEnabled)
                 .build()
-
-            controller.playWhenReady = true
         }
     }
 

@@ -275,7 +275,10 @@ fun ImageViewerScreen(
                                 }
                                 IconButton(onClick = { 
                                     viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
-                                    android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
+                                    val archiveName = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
+                                    val imageName = if (currentImageIndex >= 0 && currentImageIndex < uiState.images.size) uiState.images[currentImageIndex].name else ""
+                                    val displayTitle = if (imageName.isNotEmpty() && archiveName != imageName) "$archiveName - $imageName" else imageName
+                                    android.widget.Toast.makeText(context, "Bookmark Saved: $displayTitle", android.widget.Toast.LENGTH_SHORT).show()
                                 }) {
                                     Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
                                 }

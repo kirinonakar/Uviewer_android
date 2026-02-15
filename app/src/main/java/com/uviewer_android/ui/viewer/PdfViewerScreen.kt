@@ -152,6 +152,7 @@ fun PdfViewerScreen(
                     actions = {
                         IconButton(onClick = {
                             viewModel.toggleBookmark(filePath, currentPage, isWebDav, serverId)
+                            android.widget.Toast.makeText(context, "Bookmark Saved: Page ${currentPage + 1}", android.widget.Toast.LENGTH_SHORT).show()
                         }) {
                             Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
                         }

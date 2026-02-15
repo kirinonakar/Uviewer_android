@@ -83,13 +83,14 @@ enum class ViewMode {
         fun toggleBookmark(path: String, index: Int, isWebDav: Boolean, serverId: Int?, type: String, currentImages: List<FileEntry>) {
             viewModelScope.launch {
                 try {
-                    val title = if (path.endsWith("/")) path.dropLast(1).substringAfterLast("/") else path.substringAfterLast("/")
+                    val archiveName = if (path.endsWith("/")) path.dropLast(1).substringAfterLast("/") else path.substringAfterLast("/")
                     val imageName = if (index >= 0 && index < currentImages.size) currentImages[index].name else null
+                    val bookmarkTitle = if (imageName != null && archiveName != imageName) "$archiveName - $imageName" else archiveName
 
                     // Add to Bookmarks (Page/Position)
                     bookmarkDao.insertBookmark(
                         com.uviewer_android.data.Bookmark(
-                            title = title,
+                            title = bookmarkTitle,
                             path = path,
                             isWebDav = isWebDav,
                             serverId = serverId,
@@ -103,13 +104,14 @@ enum class ViewMode {
                     // Add to Favorites (File)
                     favoriteDao.insertFavorite(
                         com.uviewer_android.data.FavoriteItem(
-                            title = title,
+                            title = bookmarkTitle,
                             path = path,
                             isWebDav = isWebDav,
                             serverId = serverId,
                             type = type,
                             position = index,
-                            positionTitle = imageName
+                            positionTitle = imageName,
+                            timestamp = System.currentTimeMillis()
                         )
                     )
                 } catch (e: Exception) {
@@ -311,12 +313,14 @@ enum class ViewMode {
          val path = currentPath ?: return
          viewModelScope.launch {
              try {
-                 val title = File(path).name
+                 val archiveName = File(path).name
                  val imageName = if (index >= 0 && index < uiState.value.images.size) uiState.value.images[index].name else null
+                 val displayTitle = if (imageName != null && archiveName != imageName) "$archiveName - $imageName" else archiveName
+                 
                  recentFileDao.insertRecent(
                      com.uviewer_android.data.RecentFile(
                          path = path,
-                         title = title,
+                         title = displayTitle,
                          isWebDav = currentIsWebDav,
                          serverId = currentServerId,
                          type = if (currentIsZip) "ZIP" else "IMAGE",

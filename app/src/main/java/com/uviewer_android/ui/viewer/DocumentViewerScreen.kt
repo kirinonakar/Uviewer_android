@@ -276,7 +276,13 @@ fun DocumentViewerScreen(
                             IconButton(onClick = {
                                 val typeStr = if (type == FileEntry.FileType.EPUB) "EPUB" else "TEXT"
                                 viewModel.toggleBookmark(filePath, currentLine, isWebDav, serverId, typeStr)
-                                android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
+                                val msg = if (type == FileEntry.FileType.EPUB) {
+                                    val ch = uiState.currentChapterIndex + 1
+                                    "Bookmark Saved: Ch $ch / Line $currentLine"
+                                } else {
+                                    "Bookmark Saved: Line $currentLine"
+                                }
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
                             }) {
                                 Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
                             }
