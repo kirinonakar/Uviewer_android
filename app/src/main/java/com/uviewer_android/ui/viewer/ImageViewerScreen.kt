@@ -1,6 +1,7 @@
 package com.uviewer_android.ui.viewer
 
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import com.uviewer_android.R
 import android.util.Log
 import androidx.compose.foundation.clickable
@@ -166,43 +167,20 @@ fun ImageViewerScreen(
         var isDualPage by remember { mutableStateOf(false) }
         val pageCount = if (isDualPage) (totalImages + 1) / 2 else totalImages
         
-        val pagerState = rememberPagerState(initialPage = if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex) {
-            pageCount
-        }
-        
-        // Sync pager state with initialIndex from ViewModel
-        LaunchedEffect(uiState.initialIndex, isDualPage) {
-            val target = if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex
-            if (pagerState.currentPage != target && target < pageCount) {
-                pagerState.scrollToPage(target)
+        val scales = remember { mutableStateMapOf<Int, Float>() }
+        var globalScale by remember { mutableFloatStateOf(1f) }
+        var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
+
+        // Use key to recreate pagerState when toggling dual mode to ensure immediate mapping
+        val pagerState = key(isDualPage) {
+            val initial = if (isDualPage) currentPageIndex / 2 else currentPageIndex
+            rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
+                pageCount
             }
         }
-        // This is tricky with Compose Pager state preservation on count change.
-        // For simplicity, we restart at 0 or try to map. 
-        // Better: Use a derived state or handle it carefully.
-        // If we switch to Dual, page -> page / 2.
-        // If we switch to Single, page -> page * 2.
-        // But pagerState.scrollToPage must be called in LaunchedEffect.
         
-        val scales = remember { mutableStateMapOf<Int, Float>() }
-        // Hoist global scale for "maintain zoom" feature
-        var globalScale by remember { mutableFloatStateOf(1f) }
-        
-        var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
-        
-        // Ensure starting page is correct even if state hasn't synced yet
-        val initialMappedPage = remember { if (isDualPage) uiState.initialIndex / 2 else uiState.initialIndex }
-        
-        // Update index when mode toggles
-        LaunchedEffect(isDualPage) {
-             val target = if (isDualPage) currentPageIndex / 2 else currentPageIndex * 2
-             if (target < pageCount) {
-                 pagerState.scrollToPage(target)
-             }
-        }
-        
-        // Track current page to sync back
-        LaunchedEffect(pagerState.currentPage) {
+        // Update currentPageIndex when pager changes
+        LaunchedEffect(pagerState.currentPage, isDualPage) {
              currentPageIndex = if (isDualPage) pagerState.currentPage * 2 else pagerState.currentPage
              viewModel.updateProgress(currentPageIndex)
         }
@@ -227,16 +205,17 @@ fun ImageViewerScreen(
             containerColor = if (isFullScreen) Color.Black else MaterialTheme.colorScheme.background,
             topBar = {
                 if (!isFullScreen) {
-                    val title = if (isDualPage) {
+                    val containerName = uiState.containerName
+                    val imageTitle = if (isDualPage) {
                         val p = pagerState.currentPage * 2
-                        val img1 = uiState.images[p].name
-                        val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
-                        val pageTitle = if (img2 != null) "$img1 / $img2" else img1
-                        if (uiState.containerName != null) "${uiState.containerName} - $pageTitle" else pageTitle
+                        if (p >= 0 && p < uiState.images.size) {
+                            val img1 = uiState.images[p].name
+                            val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
+                            if (img2 != null) "$img1 / $img2" else img1
+                        } else ""
                     } else {
-                        if (pagerState.currentPage < uiState.images.size) {
-                            val imgName = uiState.images[pagerState.currentPage].name
-                            if (uiState.containerName != null) "${uiState.containerName} - $imgName" else imgName
+                        if (pagerState.currentPage >= 0 && pagerState.currentPage < uiState.images.size) {
+                            uiState.images[pagerState.currentPage].name
                         } else ""
                     }
                     
@@ -244,7 +223,16 @@ fun ImageViewerScreen(
 
                     Column {
                         TopAppBar(
-                            title = { Text(title, maxLines = 1) }, 
+                            title = {
+                                Column {
+                                    if (containerName != null) {
+                                        Text(containerName, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                                        Text(imageTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
+                                    } else {
+                                        Text(imageTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                            }, 
                             navigationIcon = {
                                 IconButton(onClick = onBack) {
                                     Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
