@@ -381,7 +381,9 @@ fun MediaPlayerScreen(
                             }
                         },
                         update = { playerView ->
-                             playerView.player = mediaController
+                             if (playerView.player != mediaController) {
+                                 playerView.player = mediaController
+                             }
                         },
                         modifier = Modifier
                             .fillMaxSize()

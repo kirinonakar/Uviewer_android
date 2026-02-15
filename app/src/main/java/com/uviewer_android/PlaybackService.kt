@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
@@ -51,8 +52,26 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        val mediaCodecSelector = MediaCodecSelector { mimeType, requiresSecureDecoder, audioSinkSideChannel ->
+            // 기본 디코더 리스트 가져오기
+            val decoders = MediaCodecSelector.DEFAULT.getDecoderInfos(mimeType, requiresSecureDecoder, audioSinkSideChannel)
+            
+            // AVC(H.264) 영상인 경우 소프트웨어 디코더를 우선순위로 변경
+            if (mimeType == "video/avc") {
+                val (software, hardware) = decoders.partition { info ->
+                    val name = info.name.lowercase()
+                    name.contains("google") || name.contains("android") || name.contains("sw")
+                }
+                // 소프트웨어 디코더를 리스트 앞쪽으로 배치하여 우선 사용하게 함
+                software + hardware
+            } else {
+                decoders
+            }
+        }
+
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
-            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
+            .setMediaCodecSelector(mediaCodecSelector)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             .setEnableDecoderFallback(true)
 
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
