@@ -127,9 +127,32 @@ object EpubParser {
         )
     }
 
-    fun prepareHtmlForViewer(html: String, resetCss: String): Pair<String, Int> {
+    fun prepareHtmlForViewer(html: String, resetCss: String, baseDir: File? = null): Pair<String, Int> {
         val doc = Jsoup.parse(html)
         
+        // [추가] 이미지 경로를 절대 경로로 변경
+        if (baseDir != null) {
+            val images = doc.select("img")
+            for (img in images) {
+                val src = img.attr("src")
+                // http나 file로 시작하지 않는 상대 경로만 처리
+                if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
+                    val imgFile = File(baseDir, src) // 상대 경로 결합
+                    img.attr("src", "file://${imgFile.canonicalPath}")
+                }
+            }
+            
+            // SVG image 태그 등도 필요하면 처리 (xlink:href 등)
+            val svgs = doc.select("image")
+            for (svg in svgs) {
+                val href = svg.attr("xlink:href")
+                if (href.isNotEmpty() && !href.startsWith("http") && !href.startsWith("file://")) {
+                    val imgFile = File(baseDir, href)
+                    svg.attr("xlink:href", "file://${imgFile.canonicalPath}")
+                }
+            }
+        }
+
         // 1. Inject styling and scroll script into head
         doc.head().append(resetCss)
         doc.head().append("""

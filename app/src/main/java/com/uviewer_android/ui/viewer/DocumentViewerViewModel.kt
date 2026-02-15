@@ -246,17 +246,22 @@ class DocumentViewerViewModel(
                         )
                     } else {
                         // Text / Aozora / HTML
-                        // Update TOC headers by reading the whole file in background? 
-                        // Or just first few throusand lines?
-                        // For efficiency, scan headers during indexing or in a separate pass.
                         
                         val startLine = savedLine
                         val chunkIdx = (startLine - 1) / LINES_PER_CHUNK
+
+                        // Set Base URL for WebDAV to support relative remote images
+                        var baseUrl: String? = null
+                        if (isWebDav && serverId != null) {
+                            val parentPath = if (filePath.contains("/")) filePath.substringBeforeLast("/") else ""
+                            baseUrl = webDavRepository.buildUrl(serverId, if (parentPath.isEmpty()) "" else "$parentPath/")
+                        }
                         
                         _uiState.value = _uiState.value.copy(
                             currentChunkIndex = chunkIdx,
                             totalLines = totalLines,
-                            currentLine = savedLine
+                            currentLine = savedLine,
+                            baseUrl = baseUrl
                         )
                         loadTextChunk(chunkIdx)
                     }
@@ -394,10 +399,14 @@ class DocumentViewerViewModel(
                 resetCss + chunkText
             } else {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val imageRootPath = if (!isWebDavContext) {
+                        "file://${java.io.File(currentFilePath).parentFile?.absolutePath ?: ""}"
+                    } else ""
+                    
                     var htmlBody = if (currentFilePath.endsWith(".md", ignoreCase = true)) {
                         convertMarkdownToHtml(chunkText)
                     } else {
-                        AozoraParser.parse(chunkText, globalLineOffset)
+                        AozoraParser.parse(chunkText, globalLineOffset, imageRootPath)
                     }
                     
                     if (!isWebDavContext) {
@@ -616,7 +625,7 @@ class DocumentViewerViewModel(
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                     """.trimIndent()
 
-                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss)
+                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss, baseDir = chapterFile.parentFile)
                     val processedContent = processedResult.first
                     val lineCount = processedResult.second
 
@@ -823,11 +832,9 @@ class DocumentViewerViewModel(
                         webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
                         result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
                     } catch (e: Exception) {
-                        // Hide missing image or attempt subfolder search logic? 
-                        // For WebDAV, listing subfolders recursively is expensive. 
-                        // User request specifically mentions "같은경로, 하위폴더 모두 대응".
-                        // For local it's easier. For WebDAV let's assume if it's not found, we hide it.
-                        result = result.replace(match.value, "")
+                        // Failed to download from WebDAV. 
+                        // Leave the original tag so it can be resolved via baseUrl 
+                        // (if anonymous access is allowed) or hidden by onerror.
                     }
                 }
             } else if (parentDir != null) {
@@ -844,8 +851,9 @@ class DocumentViewerViewModel(
                 if (imgFile.exists()) {
                     result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
                 } else {
-                    // Hide missing image tag as requested
-                    result = result.replace(match.value, "")
+                    // File not found locally. 
+                    // Leave the tag alone so onerror="this.style.display='none';" can trigger 
+                    // or and WebView might still try to resolve it via baseUrl.
                 }
             }
         }

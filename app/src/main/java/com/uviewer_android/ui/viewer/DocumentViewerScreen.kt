@@ -490,12 +490,16 @@ fun DocumentViewerScreen(
                                     }
                                 }, "Android")
 
-                                settings.allowFileAccess = true 
+                                settings.allowFileAccess = true
+                                settings.allowContentAccess = true
+                                settings.allowFileAccessFromFileURLs = true
+                                settings.allowUniversalAccessFromFileURLs = true
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
                                 settings.useWideViewPort = true
                                 settings.loadWithOverviewMode = true
+                                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                                 
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -685,10 +689,15 @@ fun DocumentViewerScreen(
                                           padding: 0 !important;
                                       }
                                       img {
-                                          width: 100% !important;
+                                          max-width: 100% !important;
                                           height: auto !important;
                                           display: block !important;
-                                          margin: 0 auto !important;
+                                          margin: 1em auto !important;
+                                          object-fit: contain !important;
+                                      }
+                                      img[style*="display: none"] {
+                                          margin: 0 !important;
+                                          height: 0 !important;
                                       }
                                       /* Table wrapping support */
                                       table {
