@@ -64,8 +64,7 @@ object AppViewModelProvider {
         initializer {
             val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as UviewerApplication)
             com.uviewer_android.ui.recent.RecentFilesViewModel(
-                recentFileDao = app.container.database.recentFileDao(),
-                userPreferencesRepository = app.container.userPreferencesRepository
+                recentFileDao = app.container.database.recentFileDao()
             )
         }
         initializer {

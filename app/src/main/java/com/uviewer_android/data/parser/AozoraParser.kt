@@ -130,20 +130,20 @@ object AozoraParser {
         return parsedLines.joinToString("\n")
     }
 
-    fun extractTitles(text: String): List<Pair<String, Int>> {
+    fun extractTitles(text: String, lineOffset: Int = 0): List<Pair<String, Int>> {
         val titles = mutableListOf<Pair<String, Int>>()
         val lines = text.split(Regex("\\r?\\n|\\r"))
         val pattern = Regex("［＃[大中小]見出し］(.+?)［＃[大中小]見出し終わり］")
         lines.forEachIndexed { index, line ->
             pattern.find(line)?.let {
-                titles.add(it.groupValues[1] to (index + 1))
+                titles.add(it.groupValues[1] to (index + lineOffset + 1))
             }
         }
         return titles
     }
 
     fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000"): String {
-        val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
+        val writingMode = "horizontal-tb"
         // Remove monospace, use standard CJK fonts
         val fontFamily = when(font) {
             "serif" -> "'Sawarabi Mincho', serif"
@@ -159,18 +159,16 @@ object AozoraParser {
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&family=Sawarabi+Gothic&display=swap');
-                    html, body {
-                        margin: 0;
-                        padding: 0;
-                        background-color: $backgroundColor;
-                        color: $textColor;
-                    }
                     body {
                         font-family: $fontFamily;
                         font-size: ${fontSize}px;
+                        background-color: $backgroundColor;
+                        color: $textColor;
                         writing-mode: $writingMode;
                         -webkit-writing-mode: $writingMode;
-                        text-orientation: mixed;
+                        text-orientation: upright;
+                        margin: 0;
+                        padding: 0;
                         line-height: 1.8;
                         overflow-x: ${if (isVertical) "auto" else "hidden"};
                         overflow-y: ${if (isVertical) "hidden" else "auto"};
@@ -178,7 +176,7 @@ object AozoraParser {
                         width: ${if (isVertical) "auto" else "100%"};
                     }
                     p, div, h1, h2, h3 {
-                        padding: ${if (isVertical) "0.4em 0" else "0 0.4em"};
+                        padding: 0 0.4em;
                         min-height: 1.2em;
                     }
 

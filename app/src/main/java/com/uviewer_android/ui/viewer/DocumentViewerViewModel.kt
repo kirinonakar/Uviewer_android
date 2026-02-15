@@ -60,7 +60,6 @@ class DocumentViewerViewModel(
     val fontSize = userPreferencesRepository.fontSize
     val fontFamily = userPreferencesRepository.fontFamily
     val docBackgroundColor = userPreferencesRepository.docBackgroundColor
-    val verticalWriting = userPreferencesRepository.verticalWriting
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
@@ -79,16 +78,14 @@ class DocumentViewerViewModel(
                 userPreferencesRepository.fontFamily,
                 userPreferencesRepository.docBackgroundColor,
                 userPreferencesRepository.customDocBackgroundColor,
-                combine(userPreferencesRepository.customDocTextColor, userPreferencesRepository.verticalWriting) { t, v -> t to v }
-            ) { size, family, color, customBg, textColorVertical ->
-                val (customText, vertical) = textColorVertical
+                userPreferencesRepository.customDocTextColor
+            ) { size, family, color, customBg, customText ->
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
                     fontFamily = family,
                     docBackgroundColor = color,
                     customDocBackgroundColor = customBg,
-                    customDocTextColor = customText,
-                    isVertical = vertical
+                    customDocTextColor = customText
                 )
                 if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -185,17 +182,25 @@ class DocumentViewerViewModel(
 
                     val totalLines = reader.getTotalLines()
                     
-                    // Background pass to extract titles for TOC
-                    viewModelScope.launch {
-                        val sampleText = reader.readLines(1, 5000) // Scan first 5000 lines for headers
-                        val chapters = AozoraParser.extractTitles(sampleText).map { (title, line) ->
-                            com.uviewer_android.data.model.EpubSpineItem(
-                                title = title,
-                                href = "line-$line",
-                                id = "line-$line"
-                            )
+                    // Background pass to extract titles for TOC - Scan entire file in chunks
+                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                        val allChapters = mutableListOf<com.uviewer_android.data.model.EpubSpineItem>()
+                        val scanChunkSize = 10000
+                        for (startLine in 1..totalLines step scanChunkSize) {
+                            val chunkText = reader.readLines(startLine, scanChunkSize)
+                            val chunkChapters = AozoraParser.extractTitles(chunkText, startLine - 1).map { (title, line) ->
+                                com.uviewer_android.data.model.EpubSpineItem(
+                                    title = title,
+                                    href = "line-$line",
+                                    id = "line-$line"
+                                )
+                            }
+                            allChapters.addAll(chunkChapters)
+                            // Update UI incrementally if list is long
+                            if (allChapters.size % 50 == 0 || startLine + scanChunkSize > totalLines) {
+                                _uiState.value = _uiState.value.copy(epubChapters = allChapters.toList())
+                            }
                         }
-                        _uiState.value = _uiState.value.copy(epubChapters = chapters)
                     }
 
                     if (type == FileEntry.FileType.CSV || (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv"))) {
@@ -370,7 +375,7 @@ class DocumentViewerViewModel(
                     val colors = getColors()
                     AozoraParser.wrapInHtml(
                         htmlBody, 
-                        _uiState.value.isVertical, 
+                        false, 
                         _uiState.value.fontFamily, 
                         _uiState.value.fontSize, 
                         colors.first, 
@@ -492,12 +497,6 @@ class DocumentViewerViewModel(
                         "sans-serif" -> "'Sawarabi Gothic', sans-serif"
                         else -> "serif"
                     }
-                    val writingMode = if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"
-                    val overflowX = if (_uiState.value.isVertical) "auto" else "hidden"
-                    val overflowY = if (_uiState.value.isVertical) "hidden" else "auto"
-                    val widthAttr = if (_uiState.value.isVertical) "auto" else "100%"
-                    val bodyPadding = if (_uiState.value.isVertical) "2em 1.5em !important" else "1.2em !important"
-
                     val resetCss = """
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                         <style data-app-style="true">
@@ -507,22 +506,16 @@ class DocumentViewerViewModel(
                                 overflow-wrap: break-word !important; 
                             }
                             html, body {
-                                width: $widthAttr !important;
-                                height: 100vh !important;
+                                width: 100% !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
                                 background-color: ${colors.first} !important;
                                 color: ${colors.second} !important;
-                                overflow-x: $overflowX !important;
-                                overflow-y: $overflowY !important;
                             }
                             body { 
                                 font-family: $fontFamily !important;
                                 font-size: ${_uiState.value.fontSize}px !important;
-                                writing-mode: $writingMode !important;
-                                -webkit-writing-mode: $writingMode !important;
-                                text-orientation: mixed !important;
-                                padding: $bodyPadding;
+                                padding: 1.2em !important;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -599,12 +592,6 @@ class DocumentViewerViewModel(
     fun setDocBackgroundColor(color: String) {
         viewModelScope.launch {
             userPreferencesRepository.setDocBackgroundColor(color)
-        }
-    }
-
-    fun toggleVerticalWriting() {
-        viewModelScope.launch {
-            userPreferencesRepository.setVerticalWriting(!_uiState.value.isVertical)
         }
     }
 

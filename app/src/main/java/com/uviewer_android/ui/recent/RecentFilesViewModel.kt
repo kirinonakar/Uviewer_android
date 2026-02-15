@@ -10,11 +10,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class RecentFilesViewModel(
-    private val recentFileDao: com.uviewer_android.data.RecentFileDao,
-    private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository
+    private val recentFileDao: RecentFileDao
 ) : ViewModel() {
-
-    val viewMode: StateFlow<Int> = userPreferencesRepository.libraryViewMode
 
     val recentFiles: StateFlow<List<RecentFile>> = recentFileDao.getRecentFiles()
         .stateIn(
@@ -32,13 +29,6 @@ class RecentFilesViewModel(
     fun clearAll() {
         viewModelScope.launch {
             recentFileDao.deleteAll()
-        }
-    }
-
-    fun toggleViewMode() {
-        val newMode = if (viewMode.value == 0) 1 else 0
-        viewModelScope.launch {
-            userPreferencesRepository.setLibraryViewMode(newMode)
         }
     }
 }

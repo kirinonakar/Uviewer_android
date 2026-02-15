@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -147,12 +148,19 @@ fun DocumentViewerScreen(
             ModalDrawerSheet(
                 modifier = Modifier.width(300.dp) // Limit width
             ) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    stringResource(R.string.table_of_contents),
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.titleLarge
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        stringResource(R.string.table_of_contents),
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    IconButton(onClick = { scope.launch { drawerState.close() } }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
                 HorizontalDivider()
                 LazyColumn {
                     itemsIndexed(uiState.epubChapters) { index, item ->
@@ -234,14 +242,6 @@ fun DocumentViewerScreen(
                                 }
                             }
 
-                            IconButton(onClick = { viewModel.toggleVerticalWriting() }) {
-                                Icon(
-                                    imageVector = if (uiState.isVertical) Icons.Default.TextFields else Icons.Default.FormatSize,
-                                    contentDescription = "Toggle Vertical Writing",
-                                    tint = if (uiState.isVertical) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-
                             IconButton(onClick = { showFontSettingsDialog = true }) {
                                 Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
                             }
@@ -260,7 +260,6 @@ fun DocumentViewerScreen(
                                     "UTF-8" to "UTF-8",
                                     stringResource(R.string.encoding_sjis) to "Shift_JIS",
                                     stringResource(R.string.encoding_euckr) to "EUC-KR",
-                                    stringResource(R.string.encoding_johab) to "x-Johab",
                                     stringResource(R.string.encoding_w1252) to "windows-1252"
                                 )
                                 encodings.forEach { (label, value) ->
@@ -549,20 +548,8 @@ fun DocumentViewerScreen(
                                         val width = width
                                         val x = e.x
                                         // Custom instant scrolling via JS to avoid animation
-                                        if (uiState.isVertical) {
-                                            // Vertical Text (Horizontal Scroll RtoL)
-                                            // Top side = Prev? No, usually vertical is pages RtoL.
-                                            // Right side = Prev
-                                            // Left side = Next
-                                            if (x > width * 2 / 3) {
-                                                // Right touch: pageUp (Prev Page in RtoL)
-                                                webViewRef?.evaluateJavascript("window.pageUp();", null)
-                                            } else if (x < width / 3) {
-                                                // Left touch: pageDown (Next Page in RtoL)
-                                                webViewRef?.evaluateJavascript("window.pageDown();", null)
-                                            } else {
-                                                onToggleFullScreen()
-                                            }
+                                        if (false) {
+                                            // Vertical Text (Removed)
                                         } else {
                                             // Standard Text (Vertical Scroll)
                                             // Left side = Prev
@@ -606,55 +593,45 @@ fun DocumentViewerScreen(
             UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
             else -> "#ffffff" to "#000000"
         }
-                                      val writingMode = if (uiState.isVertical) "vertical-rl" else "horizontal-tb"
-                                      val paddingAttr = if (uiState.isVertical) "0.4em 0" else "0 0.4em"
-                                      val bodyPadding = if (uiState.isVertical) "2em 1.5em" else "0"
-                                      val overflowX = if (uiState.isVertical) "auto" else "hidden"
-                                      val overflowY = if (uiState.isVertical) "hidden" else "auto"
-                                      val widthAttr = if (uiState.isVertical) "auto" else "100%"
-
-                                      val style = """
-                                      <style>
-                                          html, body {
-                                              margin: 0;
-                                              padding: 0;
-                                              background-color: $bgColor !important;
-                                              color: $textColor !important;
-                                              writing-mode: $writingMode !important;
-                                              -webkit-writing-mode: $writingMode !important;
-                                          }
-                                          body {
-                                              font-family: ${uiState.fontFamily} !important;
-                                              font-size: ${uiState.fontSize}px !important;
-                                              text-orientation: mixed !important;
-                                              line-height: 1.8 !important;
-                                              padding: $bodyPadding !important;
-                                              box-sizing: border-box !important;
-                                              word-wrap: break-word !important;
-                                              overflow-wrap: break-word !important;
-                                              overflow-x: $overflowX !important;
-                                              overflow-y: $overflowY !important;
-                                              height: 100vh !important;
-                                              width: $widthAttr !important;
-                                              /* Ensure safe area for cutouts if needed */
-                                              padding-top: env(safe-area-inset-top, 0);
-                                          }
-                                          /* Padding for text elements to keep them readable */
-                                          p, div, h1, h2, h3, h4, h5, h6 {
-                                              padding: $paddingAttr;
-                                          }
-                                          /* Remove padding for images to make them edge-to-edge */
-                                          div:has(img), p:has(img) {
-                                              padding: 0 !important;
-                                          }
-                                          img {
-                                              max-width: 100% !important;
-                                              height: auto !important;
-                                              display: block !important;
-                                              margin: 0 auto !important;
-                                          }
-                                          </style>
-                                      """
+                                  val style = """
+                                  <style>
+                                      html, body {
+                                          margin: 0;
+                                          padding: 0;
+                                          background-color: $bgColor !important;
+                                          color: $textColor !important;
+                                          writing-mode: horizontal-tb !important;
+                                          -webkit-writing-mode: horizontal-tb !important;
+                                      }
+                                      body {
+                                          font-family: ${uiState.fontFamily} !important;
+                                          font-size: ${uiState.fontSize}px !important;
+                                          line-height: 1.6 !important;
+                                          padding: 0 !important; /* Remove body padding for full-width images */
+                                          box-sizing: border-box !important;
+                                          word-wrap: break-word !important;
+                                          overflow-wrap: break-word !important;
+                                          /* Ensure safe area for cutouts if needed */
+                                          padding-top: env(safe-area-inset-top, 0);
+                                          padding-bottom: calc(env(safe-area-inset-bottom, 0) + 50vh); /* Allow scrolling past end */
+                                      }
+                                      /* Padding for text elements to keep them readable */
+                                      p, div, h1, h2, h3, h4, h5, h6 {
+                                          padding-left: 0.4em;
+                                          padding-right: 0.4em;
+                                      }
+                                      /* Remove padding for images to make them edge-to-edge */
+                                      div:has(img), p:has(img) {
+                                          padding: 0 !important;
+                                      }
+                                      img {
+                                          width: 100% !important;
+                                          height: auto !important;
+                                          display: block !important;
+                                          margin: 0 auto !important;
+                                      }
+                                      </style>
+                                  """
                                   // Inject style intelligently
                                   val contentWithStyle = if (uiState.content.contains("</head>")) {
                                       uiState.content.replace("</head>", "$style</head>")
@@ -687,24 +664,7 @@ fun DocumentViewerScreen(
                              }
                           )
                           
-                          // Custom Swipe Detection for TOC (Left Edge Only)
-                          if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
-                              Box(
-                                  modifier = Modifier
-                                      .fillMaxHeight()
-                                      .width(40.dp) // Only active on left edge
-                                      .align(Alignment.CenterStart)
-                                      .pointerInput(Unit) {
-                                          detectHorizontalDragGestures(
-                                              onHorizontalDrag = { _, dragAmount ->
-                                                  if (dragAmount > 20) {
-                                                      scope.launch { drawerState.open() }
-                                                  }
-                                              }
-                                          )
-                                      }
-                              )
-                          }
+
                 }
                 }
             }

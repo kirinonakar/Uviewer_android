@@ -27,7 +27,6 @@ object EncodingDetector {
         // 4. Heuristic Scoring
         val sjisScore = getSjisScore(bytes)
         val eucKrScore = getEucKrScore(bytes)
-        val johabScore = getJohabScore(bytes)
         val utf8Score = getUtf8Score(bytes)
         val utf8Percent = if (bytes.isNotEmpty()) utf8Score.toFloat() / bytes.size else 0f
 
@@ -37,20 +36,17 @@ object EncodingDetector {
         }
 
         // Winner takes all
-        if (johabScore > eucKrScore && johabScore > sjisScore) {
-            return try { Charset.forName("x-Johab") } catch (e: Exception) { StandardCharsets.UTF_8 }
-        }
-        if (sjisScore > eucKrScore && sjisScore > johabScore && sjisScore > 0) {
+        if (sjisScore > eucKrScore && sjisScore > 0) {
             return try { Charset.forName("Shift_JIS") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
-        if (eucKrScore > sjisScore && eucKrScore > johabScore && eucKrScore > 0) {
+        if (eucKrScore > sjisScore && eucKrScore > 0) {
              // If UTF-8 score is decent, prefers UTF-8 over EUC-KR if EUC-KR score is just noise
              if (utf8Percent > 0.8f && eucKrScore < bytes.size * 0.1f) return StandardCharsets.UTF_8
              return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
 
         // Default preference if scores match
-        if (eucKrScore > 0 && eucKrScore >= sjisScore && eucKrScore >= johabScore) {
+        if (eucKrScore > 0 && eucKrScore >= sjisScore) {
              if (utf8Percent > 0.8f) return StandardCharsets.UTF_8
              return try { Charset.forName("EUC-KR") } catch (e: Exception) { StandardCharsets.UTF_8 }
         }
@@ -146,28 +142,6 @@ object EncodingDetector {
             if (i + 1 >= bytes.size) break
             val b2 = bytes[i + 1].toInt() and 0xFF
             if (b1 in 0xB0..0xC8 && b2 in 0xA1..0xFE) {
-                score += 2
-                i += 2
-                continue
-            }
-            i++
-        }
-        return score
-    }
-
-    private fun getJohabScore(bytes: ByteArray): Int {
-        var score = 0
-        var i = 0
-        while (i < bytes.size) {
-            val b1 = bytes[i].toInt() and 0xFF
-            if (b1 < 0x80) {
-                i++
-                continue
-            }
-            if (i + 1 >= bytes.size) break
-            val b2 = bytes[i + 1].toInt() and 0xFF
-            // Johab Lead: 0x84-0xD3, Trail: 0x41-0x7E, 0x81-0xFE
-            if (b1 in 0x84..0xD3 && ((b2 in 0x41..0x7E) || (b2 in 0x81..0xFE))) {
                 score += 2
                 i += 2
                 continue

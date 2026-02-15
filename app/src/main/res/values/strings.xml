@@ -13,8 +13,6 @@
     <string name="add">Add</string>
     <string name="delete">Delete</string>
     <string name="back">Back</string>
-    <string name="grid_view">Grid View</string>
-    <string name="list_view">List View</string>
     
     <!-- Library -->
     <string name="add_to_favorites">Add to favorites</string>
@@ -115,6 +113,5 @@
     <string name="encoding_auto">Auto</string>
     <string name="encoding_sjis">Shift_JIS (Japan)</string>
     <string name="encoding_euckr">EUC-KR (Korea)</string>
-    <string name="encoding_johab">Johab (Korean Combination)</string>
     <string name="encoding_w1252">Windows-1252</string>
 </resources>

@@ -12,8 +12,6 @@
     <string name="add">추가</string>
     <string name="delete">삭제</string>
     <string name="back">뒤로</string>
-    <string name="grid_view">그리드 보기</string>
-    <string name="list_view">목록 보기</string>
     
     <!-- Library -->
     <string name="add_to_favorites">즐겨찾기에 추가</string>
@@ -82,7 +80,6 @@
     <string name="encoding_auto">자동</string>
     <string name="encoding_sjis">Shift_JIS (일본어)</string>
     <string name="encoding_euckr">EUC-KR (한국어)</string>
-    <string name="encoding_johab">조합형 (한국어 조합형)</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="sharpening_amount">샤프닝 강도</string>
     <string name="sharpening_amount_fmt">샤프닝 강도: %d</string>

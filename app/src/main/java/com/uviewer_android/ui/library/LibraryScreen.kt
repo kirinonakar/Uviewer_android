@@ -4,11 +4,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.background
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.LocationOn
@@ -142,12 +137,6 @@ fun LibraryScreen(
                     IconButton(onClick = { viewModel.navigateToRoot() }) {
                         Icon(Icons.Default.Home, contentDescription = stringResource(R.string.go_to_root))
                     }
-                    IconButton(onClick = { viewModel.toggleViewMode() }) {
-                        Icon(
-                            imageVector = if (uiState.viewMode == 0) Icons.Default.GridView else Icons.AutoMirrored.Filled.List,
-                            contentDescription = if (uiState.viewMode == 0) stringResource(R.string.grid_view) else stringResource(R.string.list_view)
-                        )
-                    }
                 }
             )
         },
@@ -220,7 +209,7 @@ fun LibraryScreen(
                             }
                         }
                     }
-                } else if (uiState.viewMode == 0) {
+                } else {
                     LazyColumn(state = currentListState, modifier = Modifier.fillMaxSize()) {
                         items(listToShow) { file ->
                             val isFavorite = uiState.favoritePaths.contains(file.path)
@@ -245,40 +234,6 @@ fun LibraryScreen(
                                     }
                                 }
                             )
-                        }
-                    }
-                } else {
-                    val gridState = rememberLazyGridState()
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 120.dp),
-                        state = gridState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(listToShow) { file ->
-                             val isFavorite = uiState.favoritePaths.contains(file.path)
-                             FileThumbnailItem(
-                                 file = file,
-                                 isFavorite = isFavorite,
-                                 onToggleFavorite = { viewModel.toggleFavorite(file) },
-                                 onTogglePin = { viewModel.togglePin(file) },
-                                 onClick = {
-                                     if (file.isDirectory) {
-                                         if (file.path.startsWith("server:")) {
-                                             viewModel.openFolder("/", file.serverId)
-                                         } else {
-                                             viewModel.navigateTo(file)
-                                         }
-                                         if (selectedTab == 2) {
-                                             selectedTab = if (file.isWebDav) 1 else 0
-                                         }
-                                     } else {
-                                         onNavigateToViewer(file)
-                                     }
-                                 }
-                             )
                         }
                     }
                 }
@@ -404,95 +359,4 @@ fun FileItemRow(
             }
         }
     )
-}
-
-@Composable
-fun FileThumbnailItem(
-    file: FileEntry,
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
-    onTogglePin: () -> Unit,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.85f)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (file.type == FileEntry.FileType.IMAGE && !file.isWebDav) {
-                    androidx.compose.foundation.Image(
-                        painter = coil.compose.rememberAsyncImagePainter(file.path),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                    )
-                } else {
-                    val icon = when {
-                        file.path.startsWith("server:") -> Icons.Default.Dns
-                        file.type == FileEntry.FileType.FOLDER -> Icons.Filled.Folder
-                        file.type == FileEntry.FileType.ZIP -> Icons.Filled.Archive
-                        file.type == FileEntry.FileType.IMAGE -> Icons.Filled.Image
-                        file.type == FileEntry.FileType.AUDIO -> Icons.Filled.MusicNote
-                        file.type == FileEntry.FileType.VIDEO -> Icons.Filled.Movie
-                        file.type == FileEntry.FileType.PDF || file.type == FileEntry.FileType.EPUB -> Icons.Filled.Book
-                        else -> Icons.Filled.Description
-                    }
-                    Icon(
-                        icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(48.dp),
-                        tint = if (file.path.startsWith("server:")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            
-            Text(
-                file.name,
-                modifier = Modifier
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-                    .fillMaxWidth(),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.labelMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Start
-            )
-            
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 4.dp, end = 4.dp, bottom = 4.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onTogglePin, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = if (file.isPinned) Icons.Filled.LocationOn else Icons.Outlined.LocationOn,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (file.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-                IconButton(onClick = onToggleFavorite, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp),
-                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-            }
-        }
-    }
 }

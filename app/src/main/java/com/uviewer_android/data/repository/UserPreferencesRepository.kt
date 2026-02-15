@@ -69,25 +69,16 @@ class UserPreferencesRepository(context: Context) {
     )
     val sharpeningAmount: StateFlow<Int> = _sharpeningAmount.asStateFlow()
 
-    private val _verticalWriting = MutableStateFlow(
-        sharedPreferences.getBoolean("vertical_writing", false)
+    private val _imageViewMode = MutableStateFlow(
+        sharedPreferences.getInt("image_view_mode", 0)
     )
-    val verticalWriting: StateFlow<Boolean> = _verticalWriting.asStateFlow()
+    val imageViewMode: StateFlow<Int> = _imageViewMode.asStateFlow()
+
 
     private val _subtitleEnabled = MutableStateFlow(
         sharedPreferences.getBoolean("subtitle_enabled", true)
     )
     val subtitleEnabled: StateFlow<Boolean> = _subtitleEnabled.asStateFlow()
-
-    private val _libraryViewMode = MutableStateFlow(
-        sharedPreferences.getInt("library_view_mode", 0)
-    )
-    val libraryViewMode: StateFlow<Int> = _libraryViewMode.asStateFlow()
-
-    private val _imageViewMode = MutableStateFlow(
-        sharedPreferences.getInt("image_view_mode", 0)
-    )
-    val imageViewMode: StateFlow<Int> = _imageViewMode.asStateFlow()
 
 
     fun setThemeMode(mode: String) {
@@ -187,20 +178,6 @@ class UserPreferencesRepository(context: Context) {
             putInt("image_view_mode", mode)
         }
         _imageViewMode.value = mode
-    }
-
-    fun setVerticalWriting(vertical: Boolean) {
-        sharedPreferences.edit {
-            putBoolean("vertical_writing", vertical)
-        }
-        _verticalWriting.value = vertical
-    }
-
-    fun setLibraryViewMode(mode: Int) {
-        sharedPreferences.edit {
-            putInt("library_view_mode", mode)
-        }
-        _libraryViewMode.value = mode
     }
 
 
