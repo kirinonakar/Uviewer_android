@@ -25,6 +25,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +62,8 @@ fun LibraryScreen(
         1 -> remoteListState
         else -> pinListState
     }
+    
+    val currentGridState = rememberLazyGridState()
 
     var showAddServerDialog by remember { mutableStateOf(false) }
 
@@ -79,10 +92,7 @@ fun LibraryScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    val title = if (uiState.currentPath == rootPath) stringResource(R.string.nav_library)
-                               else if (uiState.currentPath == "WebDAV") stringResource(R.string.remote)
-                               else uiState.currentPath
-                    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1) 
+                    Text(stringResource(R.string.nav_library), style = MaterialTheme.typography.titleMedium, maxLines = 1) 
                 },
                 navigationIcon = {
                     if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
@@ -111,6 +121,13 @@ fun LibraryScreen(
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.sort_date_asc)) },
                             onClick = { viewModel.setSortOption(SortOption.DATE_ASC); sortExpanded = false }
+                        )
+                    }
+
+                    IconButton(onClick = { viewModel.toggleViewMode() }) {
+                        Icon(
+                            if (uiState.isGridView) Icons.Default.ViewList else Icons.Default.ViewModule,
+                            contentDescription = if (uiState.isGridView) "Switch to List View" else "Switch to Grid View"
                         )
                     }
 
@@ -177,27 +194,59 @@ fun LibraryScreen(
                         }
                     }
                 } else {
-                    LazyColumn(state = currentListState, modifier = Modifier.fillMaxSize()) {
-                        items(listToShow) { file ->
-                            val isFavorite = uiState.favoritePaths.contains(file.path)
-                            FileItemRow(
-                                file = file,
-                                isFavorite = isFavorite,
-                                onToggleFavorite = { viewModel.toggleFavorite(file) },
-                                onTogglePin = { viewModel.togglePin(file) },
-                                onClick = {
-                                    if (file.isDirectory) {
-                                        if (file.path.startsWith("server:")) {
-                                            // When clicking a server from the list, ALWAYS start at root "/"
-                                            viewModel.openFolder("/", file.serverId)
+                    if (uiState.isGridView) {
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 120.dp),
+                            state = currentGridState,
+                            contentPadding = PaddingValues(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(listToShow) { file ->
+                                val isFavorite = uiState.favoritePaths.contains(file.path)
+                                FileItemGridCard(
+                                    file = file,
+                                    isFavorite = isFavorite,
+                                    onToggleFavorite = { viewModel.toggleFavorite(file) },
+                                    onTogglePin = { viewModel.togglePin(file) },
+                                    onClick = {
+                                        if (file.isDirectory) {
+                                            if (file.path.startsWith("server:")) {
+                                                viewModel.openFolder("/", file.serverId)
+                                            } else {
+                                                viewModel.navigateTo(file)
+                                            }
                                         } else {
-                                            viewModel.navigateTo(file)
+                                            onNavigateToViewer(file)
                                         }
-                                    } else {
-                                        onNavigateToViewer(file)
                                     }
-                                }
-                            )
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(state = currentListState, modifier = Modifier.fillMaxSize()) {
+                            items(listToShow) { file ->
+                                val isFavorite = uiState.favoritePaths.contains(file.path)
+                                FileItemRow(
+                                    file = file,
+                                    isFavorite = isFavorite,
+                                    onToggleFavorite = { viewModel.toggleFavorite(file) },
+                                    onTogglePin = { viewModel.togglePin(file) },
+                                    onClick = {
+                                        if (file.isDirectory) {
+                                            if (file.path.startsWith("server:")) {
+                                                // When clicking a server from the list, ALWAYS start at root "/"
+                                                viewModel.openFolder("/", file.serverId)
+                                            } else {
+                                                viewModel.navigateTo(file)
+                                            }
+                                        } else {
+                                            onNavigateToViewer(file)
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -323,4 +372,99 @@ fun FileItemRow(
             }
         }
     )
+}
+
+@Composable
+fun FileItemGridCard(
+    file: FileEntry,
+    isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
+    onTogglePin: () -> Unit,
+    onClick: () -> Unit
+) {
+    ElevatedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                val isZip = file.type == FileEntry.FileType.ZIP || file.type == FileEntry.FileType.IMAGE_ZIP
+                if ((file.type == FileEntry.FileType.IMAGE || isZip) && !file.isWebDav) {
+                    AsyncImage(
+                        model = java.io.File(file.path),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    val icon = when {
+                        file.path.startsWith("server:") -> Icons.Default.Dns
+                        file.isDirectory -> Icons.Filled.Folder
+                        file.type == FileEntry.FileType.ZIP -> Icons.Filled.Archive
+                        file.type == FileEntry.FileType.IMAGE -> Icons.Filled.Image
+                        file.type == FileEntry.FileType.AUDIO -> Icons.Filled.MusicNote
+                        file.type == FileEntry.FileType.VIDEO -> Icons.Filled.Movie
+                        file.type == FileEntry.FileType.PDF || file.type == FileEntry.FileType.EPUB -> Icons.Filled.Book
+                        else -> Icons.Filled.Description
+                    }
+                    Icon(
+                        icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = if (file.path.startsWith("server:")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                
+                // Overlay for Pin/Favorite
+                Box(modifier = Modifier.fillMaxSize().padding(4.dp)) {
+                    Row(modifier = Modifier.align(Alignment.TopEnd)) {
+                        if (file.isPinned) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        if (isFavorite) {
+                            Icon(
+                                Icons.Default.Star,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            }
+            
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(
+                    file.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (!file.isDirectory) {
+                    Text(
+                        com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
 }

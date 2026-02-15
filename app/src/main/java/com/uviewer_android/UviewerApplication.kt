@@ -23,10 +23,11 @@ class UviewerApplication : Application(), ImageLoaderFactory {
         return ImageLoader.Builder(this)
             .components {
                 if (Build.VERSION.SDK_INT >= 28) {
-                    add(ImageDecoderDecoder.Factory())
+                    add(coil.decode.ImageDecoderDecoder.Factory())
                 } else {
-                    add(GifDecoder.Factory())
+                    add(coil.decode.GifDecoder.Factory())
                 }
+                add(com.uviewer_android.data.utils.ZipThumbnailFetcher.Factory())
             }
             .crossfade(true)
             .build()

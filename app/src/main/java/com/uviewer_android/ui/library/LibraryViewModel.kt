@@ -22,7 +22,8 @@ data class LibraryUiState(
     val selectedTabIndex: Int = 0,
     val serverId: Int? = null,
     val error: String? = null,
-    val sortOption: SortOption = SortOption.NAME
+    val sortOption: SortOption = SortOption.NAME,
+    val isGridView: Boolean = false
 )
 
 enum class SortOption { NAME, DATE_ASC, DATE_DESC, SIZE_ASC, SIZE_DESC }
@@ -64,7 +65,8 @@ class LibraryViewModel(
         _state.value = _state.value.copy(
             selectedTabIndex = lastTab,
             serverId = effectiveServerId,
-            currentPath = effectivePath
+            currentPath = effectivePath,
+            isGridView = userPreferencesRepository.getLibraryViewMode()
         )
 
         if (lastTab == 2) {
@@ -163,6 +165,12 @@ class LibraryViewModel(
 
     fun setSortOption(option: SortOption) {
         _sortOption.value = option
+    }
+
+    fun toggleViewMode() {
+        val newMode = !_state.value.isGridView
+        _state.value = _state.value.copy(isGridView = newMode)
+        userPreferencesRepository.setLibraryViewMode(newMode)
     }
     
     fun selectTab(index: Int) {

@@ -218,6 +218,11 @@ class UserPreferencesRepository(context: Context) {
     }
     fun getLastServerId(): Int = sharedPreferences.getInt("last_server_id", -1)
 
+    fun setLibraryViewMode(isGrid: Boolean) {
+        sharedPreferences.edit().putBoolean("library_view_mode", isGrid).apply()
+    }
+    fun getLibraryViewMode(): Boolean = sharedPreferences.getBoolean("library_view_mode", false)
+
     companion object {
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"
