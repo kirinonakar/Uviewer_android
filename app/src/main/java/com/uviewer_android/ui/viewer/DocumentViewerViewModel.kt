@@ -169,12 +169,16 @@ class DocumentViewerViewModel(
                         epubChapters = book.spine,
                         currentChapterIndex = 0,
                         isLoading = false,
-                        currentLine = 1 // EPUB uses chapter index, reset line? Or restore? 
-                        // EPUB restoration is complex (chapter + percentage). 
-                        // For now sticking to chapter 0 as requested, or maybe basic chapter restore could be added later.
-                        // But user specifically asked for "Document bookmark restoration (save/restore line position)" which implies Text/Aozora mostly.
+                        currentLine = 1
                     )
-                    loadChapter(0) // Load first chapter
+                    
+                    val chapterIdx = savedLine / 1000000
+                    val lineInChapter = savedLine % 1000000
+                    if (chapterIdx in book.spine.indices) {
+                        loadChapter(chapterIdx, lineInChapter)
+                    } else {
+                        loadChapter(0)
+                    }
                 } else {
                     // Text / HTML / CSV
                     val file = if (isWebDav && serverId != null) {
@@ -267,7 +271,22 @@ class DocumentViewerViewModel(
         if (currentFilePath.isNotEmpty()) {
              viewModelScope.launch {
                  try {
-                     val title = File(currentFilePath).name
+                     val fileName = File(currentFilePath).name
+                     val savePosition = if (currentFileType == FileEntry.FileType.EPUB) {
+                         _uiState.value.currentChapterIndex * 1000000 + line
+                     } else {
+                         line
+                     }
+                     
+                     val title = if (currentFileType == FileEntry.FileType.EPUB) {
+                         val ch = _uiState.value.currentChapterIndex + 1
+                         val total = _uiState.value.totalLines
+                         val pct = if (total > 0) (line * 100 / total) else 0
+                         "$fileName - ch$ch $pct%"
+                     } else {
+                         fileName
+                     }
+                     
                      recentFileDao.insertRecent(
                         com.uviewer_android.data.RecentFile(
                             path = currentFilePath,
@@ -276,7 +295,7 @@ class DocumentViewerViewModel(
                             serverId = serverIdContext,
                             type = currentFileType?.name ?: "TEXT",
                             lastAccessed = System.currentTimeMillis(),
-                            pageIndex = line
+                            pageIndex = savePosition
                         )
                     )
                  } catch (e: Exception) { e.printStackTrace() }
@@ -308,15 +327,6 @@ class DocumentViewerViewModel(
                             max-width: 100% !important; 
                             box-sizing: border-box !important; 
                             overflow-wrap: break-word !important; 
-                            width: auto !important; 
-                            height: auto !important; 
-                            float: none !important; 
-                            position: static !important; 
-                            margin-left: 0 !important;
-                            margin-right: 0 !important;
-                            padding-left: 0 !important;
-                            padding-right: 0 !important;
-                            text-indent: 0 !important;
                         }
                         html, body {
                             width: 100% !important;
@@ -431,6 +441,11 @@ class DocumentViewerViewModel(
     }
 
     fun jumpToLine(line: Int) {
+        if (currentFileType == FileEntry.FileType.EPUB) {
+            if (line < 1 || line > _uiState.value.totalLines) return
+            _uiState.value = _uiState.value.copy(currentLine = line)
+            return
+        }
         val reader = largeTextReader ?: return
         if (line < 1 || line > reader.getTotalLines()) return
         
@@ -461,7 +476,22 @@ class DocumentViewerViewModel(
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {
         viewModelScope.launch {
             val fileName = File(path).name
-            val bookmarkTitle = if (type == "DOCUMENT" || type == "TEXT" || type == "PDF") "$fileName - line $line" else fileName
+            val savePosition = if (type == "EPUB") {
+                _uiState.value.currentChapterIndex * 1000000 + line
+            } else {
+                line
+            }
+
+            val bookmarkTitle = when (type) {
+                "EPUB" -> {
+                    val ch = _uiState.value.currentChapterIndex + 1
+                    val total = _uiState.value.totalLines
+                    val pct = if (total > 0) (line * 100 / total) else 0
+                    "$fileName - ch$ch $pct%"
+                }
+                "DOCUMENT", "TEXT", "PDF" -> "$fileName - line $line"
+                else -> fileName
+            }
             
             // Bookmark (Position)
             bookmarkDao.insertBookmark(
@@ -471,7 +501,7 @@ class DocumentViewerViewModel(
                     isWebDav = isWebDav,
                     serverId = serverId,
                     type = type,
-                    position = line,
+                    position = savePosition,
                     timestamp = System.currentTimeMillis()
                 )
             )
@@ -484,13 +514,13 @@ class DocumentViewerViewModel(
                     isWebDav = isWebDav,
                     serverId = serverId,
                     type = type,
-                    position = line
+                    position = savePosition
                 )
             )
         }
     }
 
-    fun loadChapter(index: Int) {
+    fun loadChapter(index: Int, initialLine: Int = 1) {
         val chapters = _uiState.value.epubChapters
         if (index in chapters.indices) {
             val chapter = chapters[index]
@@ -512,7 +542,6 @@ class DocumentViewerViewModel(
                         else -> "serif"
                     }
                     val resetCss = """
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                         <style data-app-style="true">
                             *:not(ruby):not(rt):not(rp) { 
                                 max-width: 100% !important; 
@@ -551,18 +580,23 @@ class DocumentViewerViewModel(
                                 margin-right: 0 !important;
                             }
                         </style>
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                     """.trimIndent()
+
+                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss)
+                    val processedContent = processedResult.first
+                    val lineCount = processedResult.second
 
                     val baseUrl = "file://${chapterFile.parent}/"
                     
                     _uiState.value = _uiState.value.copy(
                         url = null, 
                         baseUrl = baseUrl,
-                        content = resetCss + rawContent, 
+                        content = processedContent, 
                         currentChapterIndex = index,
                         isLoading = false,
-                        currentLine = 1,
-                        totalLines = rawContent.lines().size
+                        currentLine = if (initialLine == -1) lineCount else initialLine,
+                        totalLines = lineCount
                     )
                 }
             } else {
@@ -585,7 +619,7 @@ class DocumentViewerViewModel(
     fun prevChapter() {
         val prev = _uiState.value.currentChapterIndex - 1
         if (prev >= 0) {
-            loadChapter(prev)
+            loadChapter(prev, initialLine = -1)
         }
     }
 
@@ -639,24 +673,32 @@ class DocumentViewerViewModel(
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         
-        // Tables
-        val tableRegex = Regex("^\\|(.+)\\|\\s*$\\n^\\|[ :\\- | ]+\\|\\s*$\\n((?:^\\|.+\\|\\s*$(?:\\n|$))+)", RegexOption.MULTILINE)
+        // Tables - Improved Regex and parsing
+        val tableRegex = Regex("(^(?:\\|.*\\|.*\\|*)+(?:\\r?\\n\\|[ :\\-\\| ]+\\|*)+(?:\\r?\\n(?:\\|.*\\|.*\\|*)+)*)", RegexOption.MULTILINE)
         html = html.replace(tableRegex) { match ->
-            val header = match.groupValues[1].split("|").filter { it.isNotBlank() }.map { it.trim() }
-            val rows = match.groupValues[2].trim().split("\n").map { row ->
+            val lines = match.value.trim().split(Regex("\\r?\\n"))
+            if (lines.size < 2) return@replace match.value
+            
+            val header = lines[0].trim().trim('|').split("|").map { it.trim() }
+            val rows = lines.drop(2).map { row ->
                 row.trim().trim('|').split("|").map { it.trim() }
             }
             
-            val sb = StringBuilder("<table style='border-collapse: collapse; width: 100%; margin: 1em 0;'>")
-            sb.append("<thead><tr style='background-color: rgba(128,128,128,0.1);'>")
-            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px;'>$it</th>") }
+            val sb = StringBuilder("<div class='table-container' style='overflow-x: auto; margin: 1em 0; background-color: transparent;'>")
+            sb.append("<table style='border-collapse: collapse; min-width: 100%; border: 1px solid #888; white-space: nowrap !important; word-break: normal !important; overflow-wrap: normal !important;'>")
+            sb.append("<thead style='background-color: rgba(128,128,128,0.2);'><tr>")
+            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px; text-align: center; white-space: nowrap !important;'>$it</th>") }
             sb.append("</tr></thead><tbody>")
             rows.forEach { row ->
                 sb.append("<tr>")
-                row.forEach { sb.append("<td style='border: 1px solid #888; padding: 8px;'>$it</td>") }
+                // Fill missing cells if any
+                for (i in 0 until header.size) {
+                    val cell = row.getOrNull(i) ?: ""
+                    sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: nowrap !important;'>$cell</td>")
+                }
                 sb.append("</tr>")
             }
-            sb.append("</tbody></table>")
+            sb.append("</tbody></table></div>")
             sb.toString()
         }
 
@@ -665,9 +707,9 @@ class DocumentViewerViewModel(
         html = html.replace(Regex("^## (.*)$", RegexOption.MULTILINE), "<h2>$1</h2>")
         html = html.replace(Regex("^### (.*)$", RegexOption.MULTILINE), "<h3>$1</h3>")
         
-        // Bold - tighter regex to avoid long matches, supporting spaces
-        html = html.replace(Regex("\\*\\*\\s*(.*?)\\s*\\*\\*"), "<b>$1</b>")
-        html = html.replace(Regex("__\\s*(.*?)\\s*__"), "<b>$1</b>")
+        // Bold
+        html = html.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
+        html = html.replace(Regex("__(.*?)__"), "<b>$1</b>")
         
         // Italic
         html = html.replace(Regex("\\*(.*?)\\*"), "<i>$1</i>")
@@ -675,6 +717,23 @@ class DocumentViewerViewModel(
         
         // Links
         html = html.replace(Regex("\\[(.*?)\\]\\((.*?)\\)"), "<a href=\"$2\">$1</a>")
+
+        // Newlines to <br> (only for lines that are not inside HTML tags we just created)
+        var insideTag = false
+        html = html.split("\n").joinToString("\n") { line ->
+            val trimmed = line.trim()
+            if (trimmed.startsWith("<table") || trimmed.startsWith("<div class='table-container'")) {
+                insideTag = true
+                line
+            } else if (trimmed.endsWith("</table>") || trimmed.endsWith("</div>")) {
+                insideTag = false
+                line
+            } else if (insideTag || (trimmed.startsWith("<") && trimmed.endsWith(">"))) {
+                line
+            } else {
+                "$line<br/>"
+            }
+        }
         
         // Images handled by resolveLocalImages later
         html = html.replace(Regex("!\\[(.*?)\\]\\((.*?)\\)"), "<img src=\"$2\" alt=\"$1\" />")

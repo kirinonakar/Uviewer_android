@@ -4,10 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.graphicsLayer
@@ -213,18 +217,6 @@ fun MediaPlayerScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { 
-                                mediaController?.seekToPrevious()
-                                viewModel.prev(isWebDav, serverId) 
-                            }) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
-                            }
-                            IconButton(onClick = { 
-                                mediaController?.seekToNext()
-                                viewModel.next(isWebDav, serverId) 
-                            }) {
-                                Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White)
-                            }
                             if (fileType == FileEntry.FileType.VIDEO) {
                                 var showSubtitleMenu by remember { mutableStateOf(false) }
                                 IconButton(onClick = { showSubtitleMenu = true }) {
@@ -327,13 +319,30 @@ fun MediaPlayerScreen(
 
                 var controlViewRef by remember { mutableStateOf<androidx.media3.ui.PlayerControlView?>(null) }
                 var artworkData by remember { mutableStateOf<ByteArray?>(null) }
+                var showControls by remember { mutableStateOf(true) }
+                var isPlaying by remember { mutableStateOf(false) }
 
                 LaunchedEffect(mediaController) {
-                    mediaController?.addListener(object : androidx.media3.common.Player.Listener {
-                        override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
-                            artworkData = mediaMetadata.artworkData
+                    mediaController?.let { controller ->
+                        isPlaying = controller.isPlaying
+                        val listener = object : androidx.media3.common.Player.Listener {
+                            override fun onIsPlayingChanged(playing: Boolean) {
+                                isPlaying = playing
+                            }
+                            override fun onMediaMetadataChanged(mediaMetadata: androidx.media3.common.MediaMetadata) {
+                                artworkData = mediaMetadata.artworkData
+                            }
                         }
-                    })
+                        controller.addListener(listener)
+                    }
+                }
+
+                // Control Visibility Timeout
+                LaunchedEffect(showControls, isPlaying) {
+                    if (showControls && isPlaying) {
+                        kotlinx.coroutines.delay(5000)
+                        showControls = false
+                    }
                 }
 
                 Box(
@@ -392,14 +401,10 @@ fun MediaPlayerScreen(
                                     val screenHeightPx = size.height
                                     if (offset.y > screenHeightPx * 0.7f) {
                                         // Bottom area tap -> Show Controls
-                                        controlViewRef?.show()
+                                        showControls = true
                                     } else {
                                         // Toggle Fullscreen / Controls
-                                        if (controlViewRef?.isVisible == true) {
-                                            controlViewRef?.hide()
-                                        } else {
-                                            controlViewRef?.show()
-                                        }
+                                        showControls = !showControls
                                         onToggleFullScreen()
                                     }
                                 }
@@ -407,27 +412,93 @@ fun MediaPlayerScreen(
                         }
                 )
 
-                // Separate Controls (Always upright)
-                AndroidView(
-                    factory = { ctx ->
-                        androidx.media3.ui.PlayerControlView(ctx).apply {
-                            player = mediaController
-                            showTimeoutMs = 5000
-                            setShowFastForwardButton(true)
-                            setShowRewindButton(true)
-                            setShowNextButton(false) // Handled by top bar
-                            setShowPreviousButton(false) // Handled by top bar
-                        }
-                    },
-                    update = { controlView ->
-                        controlView.player = mediaController
-                        controlViewRef = controlView
-                    },
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = showControls,
+                    enter = androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.fadeOut(),
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .wrapContentHeight()
-                )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(bottom = 32.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().wrapContentHeight(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            // Custom Player Control Row (Prev - Play/Pause - Next)
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(onClick = { 
+                                    mediaController?.seekToPrevious()
+                                    viewModel.prev(isWebDav, serverId) 
+                                    showControls = true // Reset timer
+                                }) {
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(48.dp))
+                                }
+                                
+                                Spacer(Modifier.width(48.dp))
+                                
+                                IconButton(onClick = { 
+                                    mediaController?.let {
+                                        if (it.isPlaying) it.pause() else it.play()
+                                    }
+                                    showControls = true // Reset timer
+                                }) {
+                                    Icon(
+                                        if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, 
+                                        contentDescription = "Play/Pause", 
+                                        tint = Color.White, 
+                                        modifier = Modifier.size(64.dp)
+                                    )
+                                }
+                                
+                                Spacer(Modifier.width(48.dp))
+                                
+                                IconButton(onClick = { 
+                                    mediaController?.seekToNext()
+                                    viewModel.next(isWebDav, serverId) 
+                                    showControls = true // Reset timer
+                                }) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
+                                }
+                            }
+                            
+                            // Progress Slider (Using PlayerControlView purely for slider/time)
+                            AndroidView(
+                                factory = { ctx ->
+                                    androidx.media3.ui.PlayerControlView(ctx).apply {
+                                        player = mediaController
+                                        showTimeoutMs = 0 // We handle visibility in Compose
+                                        setShowFastForwardButton(false)
+                                        setShowRewindButton(false)
+                                        setShowNextButton(false) 
+                                        setShowPreviousButton(false)
+                                        
+                                        // Hide internal play/pause and other center controls if they exist in the default layout
+                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)?.visibility = android.view.View.GONE
+                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play)?.visibility = android.view.View.GONE
+                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_pause)?.visibility = android.view.View.GONE
+                                    }
+                                },
+                                update = { controlView ->
+                                    controlView.player = mediaController
+                                    controlViewRef = controlView
+                                    // Manually show to ensure it's and remains visible while AnimatedVisibility is active
+                                    controlView.show()
+                                },
+                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                            )
+                        }
+                    }
+                }
             }
         }
     }

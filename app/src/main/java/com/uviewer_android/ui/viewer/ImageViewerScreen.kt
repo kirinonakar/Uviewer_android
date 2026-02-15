@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import androidx.compose.ui.draw.clipToBounds
 import com.uviewer_android.ui.AppViewModelProvider
@@ -290,8 +291,8 @@ fun ImageViewerScreen(
                                 }
                                 IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
                                     Icon(
-                                        Icons.Default.SwapHoriz,
-                                        contentDescription = "Invert Controls",
+                                        if (invertImageControl) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+                                        contentDescription = "Flip Controls",
                                         tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current
                                     )
                                 }
@@ -624,33 +625,78 @@ fun ZoomableImage(
             coil.compose.SubcomposeAsyncImage(
                 model = buildRequest(imageUrl),
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
-                loading = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(strokeWidth = 2.dp)
-                    }
-                },
-                error = { state ->
-                    val errorMsg = state.result.throwable.message ?: "Unknown error"
-                    Log.e("ImageViewer", "Failed to load image: $imageUrl", state.result.throwable)
-                    Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Image Error", color = Color.Red, style = MaterialTheme.typography.bodyMedium)
-                            Text(imageUrl.substringAfterLast("/"), color = Color.White, style = MaterialTheme.typography.labelMedium)
-                            Text(errorMsg, color = Color.Gray, style = MaterialTheme.typography.labelSmall, maxLines = 3)
+                modifier = Modifier.fillMaxSize()
+            ) {
+                val state = painter.state
+                when (state) {
+                    is coil.compose.AsyncImagePainter.State.Loading -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(strokeWidth = 2.dp)
                         }
                     }
-                },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
+                    is coil.compose.AsyncImagePainter.State.Error -> {
+                        val errorMsg = state.result.throwable.message ?: "Unknown error"
+                        Log.e("ImageViewer", "Failed to load image: $imageUrl", state.result.throwable)
+                        Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Image Error", color = Color.Red, style = MaterialTheme.typography.bodyMedium)
+                                Text(imageUrl.substringAfterLast("/"), color = Color.White, style = MaterialTheme.typography.labelMedium)
+                                Text(errorMsg, color = Color.Gray, style = MaterialTheme.typography.labelSmall, maxLines = 3)
+                            }
+                        }
+                    }
+                    is coil.compose.AsyncImagePainter.State.Success -> {
                         if (isSplit) {
-                            scaleX = 2f
-                            translationX = if (isRight) -size.width / 2 else size.width / 2
+                            val srcSize = state.painter.intrinsicSize
+                            if (srcSize.width > 0 && srcSize.height > 0) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    androidx.compose.ui.layout.Layout(
+                                        content = {
+                                            androidx.compose.foundation.Image(
+                                                painter = state.painter,
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
+                                            )
+                                        }
+                                    ) { measurables, constraints ->
+                                        val halfWidth = srcSize.width / 2f
+                                        val ar = halfWidth / srcSize.height
+                                        
+                                        val width: Int
+                                        val height: Int
+                                        if (constraints.maxWidth / ar <= constraints.maxHeight) {
+                                            width = constraints.maxWidth
+                                            height = (width / ar).toInt()
+                                        } else {
+                                            height = constraints.maxHeight
+                                            width = (height * ar).toInt()
+                                        }
+                                        
+                                        val imagePlaceable = measurables[0].measure(
+                                            androidx.compose.ui.unit.Constraints.fixed(width * 2, height)
+                                        )
+                                        
+                                        layout(width, height) {
+                                            val x = if (isRight) -width else 0
+                                            imagePlaceable.place(x, 0)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            androidx.compose.foundation.Image(
+                                painter = state.painter,
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
                         }
                     }
-            )
+                    else -> {}
+                }
+            }
         }
     }
 }

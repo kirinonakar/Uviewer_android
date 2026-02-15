@@ -95,6 +95,10 @@ object AozoraParser {
             l = l.replace(Regex("［＃中見出し］(.+?)［＃中見出し終わり］"), "<h2 class=\"aozora-title\">$1</h2>")
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
             
+            // Markdown style bold support
+            l = l.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
+            l = l.replace(Regex("__(.*?)__"), "<b>$1</b>")
+            
             // Bold - Maintain state across lines
             val wasBoldAtStart = isBold
             if (l.contains("__BOLD_START__")) {
@@ -228,6 +232,20 @@ object AozoraParser {
                         font-size: 0.75em;
                         margin-left: -0.25em;
                         margin-right: -0.25em;
+                    }
+                    /* Table styling */
+                    table {
+                        border-collapse: collapse;
+                        width: 100%;
+                        margin: 1em 0;
+                    }
+                    th, td {
+                        border: 1px solid #888;
+                        padding: 8px;
+                    }
+                    .table-container {
+                        padding: 0 !important;
+                        margin: 1em 0;
                     }
                     /* Support for Vertical text centering and padding */
                     body.vertical {

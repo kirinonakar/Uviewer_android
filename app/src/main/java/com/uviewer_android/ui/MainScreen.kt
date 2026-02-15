@@ -36,11 +36,45 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Star
 
 @Composable
-fun MainScreen(activity: com.uviewer_android.MainActivity? = null) {
+fun MainScreen(
+    activity: com.uviewer_android.MainActivity? = null, 
+    initialIntentPath: String? = null,
+    shouldResume: Boolean = false
+) {
     val navController = rememberNavController()
     val libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.uviewer_android.ui.AppViewModelProvider.Factory)
     val libraryUiState by libraryViewModel.uiState.collectAsState()
     var isFullScreen by remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    androidx.compose.runtime.LaunchedEffect(initialIntentPath) {
+        if (initialIntentPath != null) {
+            val fileName = java.io.File(initialIntentPath).name.lowercase()
+            val type = when {
+                fileName.endsWith(".pdf") -> "PDF"
+                fileName.endsWith(".epub") -> "EPUB"
+                fileName.endsWith(".zip") || fileName.endsWith(".cbz") -> "COMPRESSED"
+                fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png") || fileName.endsWith(".gif") || fileName.endsWith(".webp") -> "IMAGE"
+                fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav") || fileName.endsWith(".flac") -> "AUDIO"
+                fileName.endsWith(".mp4") || fileName.endsWith(".mkv") || fileName.endsWith(".avi") -> "VIDEO"
+                else -> "TEXT"
+            }
+            val encodedPath = android.net.Uri.encode(initialIntentPath, null)
+            val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
+            navController.navigate(route)
+        }
+    }
+
+    // Auto-resume if flag is set
+    androidx.compose.runtime.LaunchedEffect(shouldResume, libraryUiState.mostRecentFile) {
+        if (shouldResume && libraryUiState.mostRecentFile != null) {
+            val recent = libraryUiState.mostRecentFile!!
+            val encodedPath = android.net.Uri.encode(recent.path, null)
+            val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+        }
+    }
 
     val items = listOf(
         Screen.Resume("Resume"),

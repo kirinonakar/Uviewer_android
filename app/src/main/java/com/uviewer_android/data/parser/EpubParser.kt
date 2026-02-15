@@ -126,4 +126,29 @@ object EpubParser {
             rootDir = epubRoot.absolutePath
         )
     }
+
+    fun prepareHtmlForViewer(html: String, resetCss: String): Pair<String, Int> {
+        val doc = Jsoup.parse(html)
+        
+        // 1. Inject styling into head
+        doc.head().append(resetCss)
+        
+        // 2. Inject line IDs into body block elements
+        val body = doc.body()
+        val elements = body.select("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, article, section")
+        var count = 0
+        for (el in elements) {
+            count++
+            el.attr("id", "line-$count")
+        }
+        
+        // If no block elements found, wrap the whole body text to ensure at least one line exists
+        if (count == 0) {
+            val content = body.html()
+            body.html("<div id=\"line-1\">$content</div>")
+            count = 1
+        }
+        
+        return doc.outerHtml() to count
+    }
 }

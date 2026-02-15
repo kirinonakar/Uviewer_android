@@ -118,17 +118,50 @@ fun DocumentViewerScreen(
         }
     }
 
-    LaunchedEffect(isFullScreen, useLightStatusBar) {
+    LaunchedEffect(isFullScreen, useLightStatusBar, docBackgroundColor, uiState.customDocBackgroundColor) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = useLightStatusBar
+            
             if (isFullScreen) {
+                // Change status bar and navigation bar colors to match document background
+                val bgColorHex = when (docBackgroundColor) {
+                    UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
+                    UserPreferencesRepository.DOC_BG_DARK -> "#121212"
+                    UserPreferencesRepository.DOC_BG_CUSTOM -> {
+                        val custom = uiState.customDocBackgroundColor
+                        if (custom.startsWith("#")) custom else "#FFFFFF"
+                    }
+                    else -> "#FFFFFF"
+                }
+                try {
+                    val color = android.graphics.Color.parseColor(bgColorHex)
+                    window.statusBarColor = color
+                    window.navigationBarColor = color
+                } catch (e: Exception) {
+                    // Fallback to white or dark if parsing fails
+                    if (docBackgroundColor == UserPreferencesRepository.DOC_BG_DARK) {
+                        window.statusBarColor = android.graphics.Color.DKGRAY
+                        window.navigationBarColor = android.graphics.Color.DKGRAY
+                    } else {
+                        window.statusBarColor = android.graphics.Color.WHITE
+                        window.navigationBarColor = android.graphics.Color.WHITE
+                    }
+                }
+
+                insetsController.isAppearanceLightStatusBars = useLightStatusBar
+                insetsController.isAppearanceLightNavigationBars = useLightStatusBar
+                
                 // Hide navigation, keep status
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
+                // Reset to navigation defaults (Transparent + app theme icons)
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                insetsController.isAppearanceLightStatusBars = !isAppDark
+                insetsController.isAppearanceLightNavigationBars = !isAppDark
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -320,7 +353,16 @@ fun DocumentViewerScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Line: $currentLine / ${uiState.totalLines}", style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    if (type == FileEntry.FileType.EPUB) {
+                                        val ch = uiState.currentChapterIndex + 1
+                                        val totalCh = uiState.epubChapters.size
+                                        "Ch: $ch / $totalCh | Line: $currentLine / ${uiState.totalLines}"
+                                    } else {
+                                        "Line: $currentLine / ${uiState.totalLines}"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                                 // Percentage
                                 Text("${if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines) else 0}%", style = MaterialTheme.typography.bodySmall)
                             }
@@ -429,9 +471,12 @@ fun DocumentViewerScreen(
                                         post {
                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
 
-                                            val reportedChunkIndex = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
-                                            if (reportedChunkIndex != viewModel.uiState.value.currentChunkIndex) {
-                                                return@post
+                                            // Bypass chunk check for EPUB as it doesn't use chunks the same way
+                                            if (type != FileEntry.FileType.EPUB) {
+                                                val reportedChunkIndex = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                                if (reportedChunkIndex != viewModel.uiState.value.currentChunkIndex) {
+                                                    return@post
+                                                }
                                             }
 
                                             if (line != currentLine) {
@@ -475,15 +520,29 @@ fun DocumentViewerScreen(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
-                                        
                                         val targetLine = viewModel.uiState.value.currentLine
+                                        val totalLines = viewModel.uiState.value.totalLines
                                         val jsScrollLogic = """
                                             // 1. Restore scroll position
-                                            var el = document.getElementById('line-$targetLine'); 
-                                            if(el) {
-                                                el.scrollIntoView({ behavior: 'instant', block: 'start' });
-                                            } else if ($targetLine === 1) {
-                                                window.scrollTo(0, 0);
+                                            if ($targetLine === $totalLines && $totalLines > 1) {
+                                                 var ph = window.innerHeight - 40;
+                                                 var sh = document.documentElement.scrollHeight;
+                                                 var ch = window.innerHeight;
+                                                 var maxScroll = sh - ch;
+                                                 var y = 0;
+                                                 while (y < maxScroll) {
+                                                     var nextY = Math.min(y + ph, maxScroll);
+                                                     if (nextY === y) break;
+                                                     y = nextY;
+                                                 }
+                                                 window.scrollTo(0, y);
+                                            } else {
+                                                var el = document.getElementById('line-$targetLine'); 
+                                                if(el) {
+                                                    el.scrollIntoView({ behavior: 'instant', block: 'start' });
+                                                } else if ($targetLine === 1) {
+                                                    window.scrollTo(0, 0);
+                                                }
                                             }
                                             
                                             // 1.5. Dynamic tagging for 3-character ruby
@@ -795,7 +854,7 @@ fun FontSettingsDialog(
                 Column {
                     Text(stringResource(R.string.document_background))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        mapOf(
+                        listOf(
                             UserPreferencesRepository.DOC_BG_WHITE to "White",
                             UserPreferencesRepository.DOC_BG_SEPIA to "Sepia",
                             UserPreferencesRepository.DOC_BG_DARK to "Dark"
@@ -806,6 +865,13 @@ fun FontSettingsDialog(
                                 label = { Text(label) }
                             )
                         }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilterChip(
+                            selected = docBackgroundColor == UserPreferencesRepository.DOC_BG_CUSTOM,
+                            onClick = { viewModel.setDocBackgroundColor(UserPreferencesRepository.DOC_BG_CUSTOM) },
+                            label = { Text("Custom") }
+                        )
                     }
                 }
 

@@ -60,7 +60,9 @@ class PlaybackService : MediaSessionService() {
             }
         })
 
-        val intent = Intent(this, MainActivity::class.java)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("action", "resume")
+        }
         val pendingIntent = android.app.PendingIntent.getActivity(
             this, 0, intent, 
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT

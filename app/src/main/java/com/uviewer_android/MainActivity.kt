@@ -39,10 +39,18 @@ class MainActivity : AppCompatActivity() {
         }
         return super.onKeyDown(keyCode, event)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
+        val intentPath = if (intent?.action == Intent.ACTION_VIEW) {
+            handleIntent(intent)
+        } else {
+            null
+        }
+        val shouldResume = intent?.getStringExtra("action") == "resume"
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (!Environment.isExternalStorageManager()) {
                  try {
@@ -88,8 +96,51 @@ class MainActivity : AppCompatActivity() {
             }
 
             UviewerTheme(darkTheme = darkTheme) {
-                MainScreen(activity = this@MainActivity)
+                MainScreen(activity = this@MainActivity, initialIntentPath = intentPath, shouldResume = shouldResume)
             }
         }
+    }
+
+    private fun handleIntent(intent: Intent): String? {
+        val uri = intent.data ?: return null
+        return if (uri.scheme == "file") {
+            uri.path
+        } else if (uri.scheme == "content") {
+            try {
+                val cursor = contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val path = it.getString(0)
+                        if (path != null) return path
+                    }
+                }
+                
+                // Fallback: Copy to temp file if path not found (common for some providers)
+                val fileName = getFileName(uri) ?: "temp_file"
+                val tempFile = java.io.File(cacheDir, fileName)
+                contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+                tempFile.absolutePath
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        } else {
+            null
+        }
+    }
+
+    private fun getFileName(uri: Uri): String? {
+        var name: String? = null
+        contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index != -1) name = cursor.getString(index)
+            }
+        }
+        return name
     }
 }
