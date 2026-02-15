@@ -131,28 +131,23 @@ fun SettingsScreen(
                 )
                 
                 if (showCustomColorDialog) {
-                    var bgHex by remember { mutableStateOf(customDocBackgroundColor) }
-                    var textHex by remember { mutableStateOf(customDocTextColor) }
-                    
                     AlertDialog(
                         onDismissRequest = { showCustomColorDialog = false },
                         title = { Text(stringResource(R.string.manual_color_picker)) },
                         text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
-                                    value = bgHex,
-                                    onValueChange = { bgHex = it },
-                                    label = { Text(stringResource(R.string.background_color) + " (Hex)") },
-                                    placeholder = { Text("#FFFFFF") },
-                                    singleLine = true
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text(stringResource(R.string.text_color), style = MaterialTheme.typography.labelMedium)
+                                HSLColorPicker(
+                                    initialColor = customDocTextColor,
+                                    onColorChanged = { viewModel.setCustomDocTextColor(it) }
                                 )
-                                OutlinedTextField(
-                                    value = textHex,
-                                    onValueChange = { textHex = it },
-                                    label = { Text(stringResource(R.string.text_color) + " (Hex)") },
-                                    placeholder = { Text("#000000") },
-                                    singleLine = true
+                                
+                                Text(stringResource(R.string.background_color), style = MaterialTheme.typography.labelMedium)
+                                HSLColorPicker(
+                                    initialColor = customDocBackgroundColor,
+                                    onColorChanged = { viewModel.setCustomDocBackgroundColor(it) }
                                 )
+                                
                                 Spacer(Modifier.height(8.dp))
                                 Text("Preview:", style = MaterialTheme.typography.labelMedium)
                                 Box(
@@ -160,7 +155,7 @@ fun SettingsScreen(
                                         .fillMaxWidth()
                                         .height(60.dp)
                                         .background(
-                                            try { Color(android.graphics.Color.parseColor(if (bgHex.startsWith("#")) bgHex else "#$bgHex")) } catch (e: Exception) { Color.White },
+                                            try { Color(android.graphics.Color.parseColor(customDocBackgroundColor)) } catch (e: Exception) { Color.White },
                                             shape = MaterialTheme.shapes.small
                                         )
                                         .padding(8.dp),
@@ -168,22 +163,13 @@ fun SettingsScreen(
                                 ) {
                                     Text(
                                         "Sample Text",
-                                        color = try { Color(android.graphics.Color.parseColor(if (textHex.startsWith("#")) textHex else "#$textHex")) } catch (e: Exception) { Color.Black }
+                                        color = try { Color(android.graphics.Color.parseColor(customDocTextColor)) } catch (e: Exception) { Color.Black }
                                     )
                                 }
                             }
                         },
                         confirmButton = {
-                            TextButton(onClick = {
-                                val finalBg = if (bgHex.startsWith("#")) bgHex.uppercase() else "#${bgHex.uppercase()}"
-                                val finalLines = if (textHex.startsWith("#")) textHex.uppercase() else "#${textHex.uppercase()}"
-                                viewModel.setCustomDocBackgroundColor(finalBg)
-                                viewModel.setCustomDocTextColor(finalLines)
-                                showCustomColorDialog = false
-                            }) { Text(stringResource(R.string.confirm)) }
-                        },
-                        dismissButton = {
-                            TextButton(onClick = { showCustomColorDialog = false }) { Text(stringResource(R.string.cancel)) }
+                            TextButton(onClick = { showCustomColorDialog = false }) { Text(stringResource(R.string.confirm)) }
                         }
                     )
                 }
@@ -650,4 +636,72 @@ fun AddServerDialog(
             }
         }
     )
+}
+
+@Composable
+fun HSLColorPicker(
+    initialColor: String,
+    onColorChanged: (String) -> Unit
+) {
+    // Parse hex to HSL
+    fun hexToHsl(hex: String): FloatArray {
+        val color = try { android.graphics.Color.parseColor(hex) } catch (e: Exception) { android.graphics.Color.WHITE }
+        val hsl = FloatArray(3)
+        androidx.core.graphics.ColorUtils.RGBToHSL(
+            android.graphics.Color.red(color),
+            android.graphics.Color.green(color),
+            android.graphics.Color.blue(color),
+            hsl
+        )
+        return hsl
+    }
+
+    fun hslToHex(h: Float, s: Float, l: Float): String {
+        val color = androidx.core.graphics.ColorUtils.HSLToColor(floatArrayOf(h, s, l))
+        return String.format("#%06X", 0xFFFFFF and color)
+    }
+
+    val initialHsl = remember(initialColor) { hexToHsl(initialColor) }
+    var h by remember { mutableFloatStateOf(initialHsl[0]) }
+    var s by remember { mutableFloatStateOf(initialHsl[1]) }
+    var l by remember { mutableFloatStateOf(initialHsl[2]) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(24.dp)
+                .background(Color(android.graphics.Color.parseColor(hslToHex(h, s, l))), MaterialTheme.shapes.small)
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                hslToHex(h, s, l), 
+                style = MaterialTheme.typography.labelSmall,
+                color = if (l > 0.5f) Color.Black else Color.White
+            )
+        }
+
+        // Hue
+        Slider(
+            value = h,
+            onValueChange = { h = it; onColorChanged(hslToHex(h, s, l)) },
+            valueRange = 0f..360f,
+            modifier = Modifier.height(32.dp)
+        )
+        // Saturation
+        Slider(
+            value = s,
+            onValueChange = { s = it; onColorChanged(hslToHex(h, s, l)) },
+            valueRange = 0f..1f,
+            modifier = Modifier.height(32.dp)
+        )
+        // Lightness
+        Slider(
+            value = l,
+            onValueChange = { l = it; onColorChanged(hslToHex(h, s, l)) },
+            valueRange = 0f..1f,
+            modifier = Modifier.height(32.dp)
+        )
+    }
 }

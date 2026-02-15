@@ -13,6 +13,10 @@
     <string name="add">Add</string>
     <string name="delete">Delete</string>
     <string name="back">Back</string>
+    <string name="back_again_to_exit">Press again to exit</string>
+    <string name="sort_name">Name</string>
+    <string name="sort_date_desc">Date (Newest)</string>
+    <string name="sort_date_asc">Date (Oldest)</string>
     
     <!-- Library -->
     <string name="add_to_favorites">Add to favorites</string>
@@ -20,6 +24,11 @@
     <string name="go_to_root">Go to root</string>
     <string name="local">Local</string>
     <string name="remote">Remote</string>
+    <string name="pinned">Pin</string>
+    <string name="no_servers_added">No Servers Added</string>
+    <string name="no_pinned_files">No Pinned Files</string>
+    <string name="no_files_found">No Files Found</string>
+    <string name="add_server_hint">Click + to add a WebDAV server</string>
 
     <!-- Favorites -->
     <string name="title_favorites">Favorites</string>
@@ -99,6 +108,10 @@
     <string name="password">Password</string>
     <string name="add_server_desc">Add Server</string>
     <string name="add_server_menu">+ Add Server</string>
+    <string name="server_name_hint">Name (e.g. My Cloud)</string>
+    <string name="use_https">Use HTTPS</string>
+    <string name="server_host_hint">Host (e.g. example.com/dav)</string>
+    <string name="server_port_hint">Port (Leave empty for default)</string>
 
     <!-- Viewers -->
     <string name="unsupported_type_fmt">Unsupported file type: %1$s\nPath: %2$s</string>

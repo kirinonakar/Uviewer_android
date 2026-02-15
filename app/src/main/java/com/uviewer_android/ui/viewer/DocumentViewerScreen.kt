@@ -5,6 +5,7 @@ import com.uviewer_android.R
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -134,24 +135,30 @@ fun DocumentViewerScreen(
                     }
                     else -> "#FFFFFF"
                 }
+
                 try {
                     val color = android.graphics.Color.parseColor(bgColorHex)
                     window.statusBarColor = color
                     window.navigationBarColor = color
+                    
+                    // Set status/navigation bar appearance (icon colors)
+                    insetsController.isAppearanceLightStatusBars = useLightStatusBar
+                    insetsController.isAppearanceLightNavigationBars = useLightStatusBar
                 } catch (e: Exception) {
                     // Fallback to white or dark if parsing fails
                     if (docBackgroundColor == UserPreferencesRepository.DOC_BG_DARK) {
                         window.statusBarColor = android.graphics.Color.DKGRAY
                         window.navigationBarColor = android.graphics.Color.DKGRAY
+                        insetsController.isAppearanceLightStatusBars = false
+                        insetsController.isAppearanceLightNavigationBars = false
                     } else {
                         window.statusBarColor = android.graphics.Color.WHITE
                         window.navigationBarColor = android.graphics.Color.WHITE
+                        insetsController.isAppearanceLightStatusBars = true
+                        insetsController.isAppearanceLightNavigationBars = true
                     }
                 }
 
-                insetsController.isAppearanceLightStatusBars = useLightStatusBar
-                insetsController.isAppearanceLightNavigationBars = useLightStatusBar
-                
                 // Hide navigation, keep status
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
@@ -531,17 +538,14 @@ fun DocumentViewerScreen(
                                         val jsScrollLogic = """
                                             // 1. Restore scroll position
                                             if ($targetLine === $totalLines && $totalLines > 1) {
-                                                 var ph = window.innerHeight - 40;
-                                                 var sh = document.documentElement.scrollHeight;
-                                                 var ch = window.innerHeight;
-                                                 var maxScroll = sh - ch;
-                                                 var y = 0;
-                                                 while (y < maxScroll) {
-                                                     var nextY = Math.min(y + ph, maxScroll);
-                                                     if (nextY === y) break;
-                                                     y = nextY;
+                                                 var el = document.getElementById('line-$targetLine');
+                                                 if (el) {
+                                                     var rect = el.getBoundingClientRect();
+                                                     var targetY = window.pageYOffset + rect.bottom - window.innerHeight;
+                                                     window.scrollTo(0, targetY);
+                                                 } else {
+                                                     window.scrollTo(0, document.documentElement.scrollHeight);
                                                  }
-                                                 window.scrollTo(0, y);
                                             } else {
                                                 var el = document.getElementById('line-$targetLine'); 
                                                 if(el) {
@@ -693,7 +697,7 @@ fun DocumentViewerScreen(
                                           overflow-wrap: break-word !important;
                                           /* Ensure safe area for cutouts if needed */
                                           padding-top: env(safe-area-inset-top, 0);
-                                          padding-bottom: calc(env(safe-area-inset-bottom, 0) + 50vh); /* Allow scrolling past end */
+                                          padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10vh); /* Allow scrolling past end */
                                       }
                                       /* Padding for text elements to keep them readable */
                                       p, div, h1, h2, h3, h4, h5, h6 {
@@ -709,6 +713,9 @@ fun DocumentViewerScreen(
                                           height: auto !important;
                                           display: block !important;
                                           margin: 0 auto !important;
+                                      }
+                                      div[id^="line-"] {
+                                          break-inside: avoid !important;
                                       }
                                       </style>
                                   """

@@ -423,8 +423,15 @@ fun MediaPlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color.Black.copy(alpha = 0.5f))
-                            .padding(bottom = 32.dp)
+                            .background(
+                                androidx.compose.ui.graphics.Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.7f)
+                                    )
+                                )
+                            )
+                            .padding(bottom = 24.dp, top = 48.dp) // Added top padding for better gradient spread
                     ) {
                         Column(
                             modifier = Modifier.fillMaxWidth().wrapContentHeight(),
@@ -475,26 +482,42 @@ fun MediaPlayerScreen(
                             AndroidView(
                                 factory = { ctx ->
                                     androidx.media3.ui.PlayerControlView(ctx).apply {
+                                        setBackgroundColor(android.graphics.Color.TRANSPARENT) // Ensure no internal background
                                         player = mediaController
-                                        showTimeoutMs = 0 // We handle visibility in Compose
+                                        showTimeoutMs = 0 
                                         setShowFastForwardButton(false)
                                         setShowRewindButton(false)
                                         setShowNextButton(false) 
                                         setShowPreviousButton(false)
                                         
-                                        // Hide internal play/pause and other center controls if they exist in the default layout
-                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)?.visibility = android.view.View.GONE
-                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play)?.visibility = android.view.View.GONE
-                                        findViewById<android.view.View>(androidx.media3.ui.R.id.exo_pause)?.visibility = android.view.View.GONE
+                                        // Hide internal play/pause and other center controls that might cast shadows
+                                        try {
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play_pause)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_play)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_pause)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_prev)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_next)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_rew)?.let { it.visibility = android.view.View.GONE }
+                                            findViewById<android.view.View>(androidx.media3.ui.R.id.exo_ffwd)?.let { it.visibility = android.view.View.GONE }
+                                            
+                                            // Some themes apply a background to the control bar itself
+                                            val controlsParent = findViewById<android.view.View>(androidx.media3.ui.R.id.exo_controls_background)
+                                            controlsParent?.visibility = android.view.View.GONE
+                                        } catch (e: Exception) {}
                                     }
                                 },
                                 update = { controlView ->
                                     controlView.player = mediaController
                                     controlViewRef = controlView
-                                    // Manually show to ensure it's and remains visible while AnimatedVisibility is active
                                     controlView.show()
                                 },
-                                modifier = Modifier.fillMaxWidth().wrapContentHeight()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight()
+                                    .graphicsLayer {
+                                        // Slight adjustment to avoid any clipping issues at the bottom
+                                        translationY = -8.dp.toPx()
+                                    }
                             )
                         }
                     }

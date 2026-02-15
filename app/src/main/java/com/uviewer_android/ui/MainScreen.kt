@@ -40,6 +40,7 @@ fun MainScreen(
     activity: com.uviewer_android.MainActivity? = null, 
     initialIntentPath: String? = null,
     shouldResume: Boolean = false,
+    resumeSpecificPath: String? = null,
     onHandledResume: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -66,21 +67,45 @@ fun MainScreen(
     }
 
     // Auto-resume if flag is set
-    androidx.compose.runtime.LaunchedEffect(shouldResume, libraryUiState.mostRecentFile?.path) {
-        if (shouldResume && libraryUiState.mostRecentFile != null) {
-            val recent = libraryUiState.mostRecentFile!!
-            val currentEntry = navController.currentBackStackEntry
-            val currentPath = currentEntry?.arguments?.getString("path")
-            
-            // Only navigate if we're not already viewing this file
-            if (currentPath != recent.path) {
-                val encodedPath = android.net.Uri.encode(recent.path, null)
-                val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
-                navController.navigate(route) {
-                    launchSingleTop = true
+    androidx.compose.runtime.LaunchedEffect(shouldResume, resumeSpecificPath, libraryUiState.mostRecentFile?.path) {
+        if (shouldResume) {
+            // Priority 1: Specific path from notification (currently playing)
+            if (resumeSpecificPath != null) {
+                val currentEntry = navController.currentBackStackEntry
+                val currentPath = currentEntry?.arguments?.getString("path")
+                
+                if (currentPath != resumeSpecificPath) {
+                    val fileName = resumeSpecificPath.lowercase()
+                    val type = when {
+                        fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav") || fileName.endsWith(".flac") -> "AUDIO"
+                        fileName.endsWith(".mp4") || fileName.endsWith(".mkv") || fileName.endsWith(".avi") -> "VIDEO"
+                        else -> "file"
+                    }
+                    
+                    val encodedPath = android.net.Uri.encode(resumeSpecificPath, null)
+                    // Position -1 to trigger auto-resume in viewer
+                    val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
                 }
+                onHandledResume()
             }
-            onHandledResume()
+            // Priority 2: Database recent file
+            else if (libraryUiState.mostRecentFile != null) {
+                val recent = libraryUiState.mostRecentFile!!
+                val currentEntry = navController.currentBackStackEntry
+                val currentPath = currentEntry?.arguments?.getString("path")
+                
+                if (currentPath != recent.path) {
+                    val encodedPath = android.net.Uri.encode(recent.path, null)
+                    val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
+                    navController.navigate(route) {
+                        launchSingleTop = true
+                    }
+                }
+                onHandledResume()
+            }
         }
     }
 

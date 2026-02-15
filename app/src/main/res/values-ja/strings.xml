@@ -12,10 +12,19 @@
     <string name="add">追加</string>
     <string name="delete">削除</string>
     <string name="back">戻る</string>
+    <string name="back_again_to_exit">もう一度戻るを押すと終了します</string>
+    <string name="sort_name">名前順</string>
+    <string name="sort_date_desc">日付順 (新しい順)</string>
+    <string name="sort_date_asc">日付順 (古い順)</string>
     
     <!-- Library -->
     <string name="add_to_favorites">お気に入りに追加</string>
     <string name="remove_from_favorites">お気に入りから削除</string>
+    <string name="pinned">固定</string>
+    <string name="no_servers_added">追加されたサーバーはありません</string>
+    <string name="no_pinned_files">固定されたファイルはありません</string>
+    <string name="no_files_found">ファイルが見つかりません</string>
+    <string name="add_server_hint">+ を押して WebDAV サーバーを追加してください</string>
 
     <!-- Favorites -->
     <string name="title_favorites">お気に入り</string>
@@ -65,6 +74,10 @@
     <string name="username">ユーザー名</string>
     <string name="password">パスワード</string>
     <string name="add_server_desc">サーバーを追加</string>
+    <string name="server_name_hint">名前 (例: マイクラウド)</string>
+    <string name="use_https">HTTPSを使用</string>
+    <string name="server_host_hint">ホスト (例: example.com/dav)</string>
+    <string name="server_port_hint">ポート (空欄の場合はデフォルトを使用)</string>
 
     <!-- Viewers -->
     <string name="add_server_menu">+ サーバーを追加</string>

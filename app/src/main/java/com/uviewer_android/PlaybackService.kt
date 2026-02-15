@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private val authHeaders = java.util.concurrent.ConcurrentHashMap<String, String>()
@@ -48,8 +49,16 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setEnableDecoderFallback(true)
+
+        val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
+            .setDataSourceFactory(dataSourceFactory)
+
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(this).setDataSourceFactory(dataSourceFactory))
+            .setRenderersFactory(renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .setSeekBackIncrementMs(15000)
             .setSeekForwardIncrementMs(15000)
             .build()
@@ -58,17 +67,14 @@ class PlaybackService : MediaSessionService() {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 android.util.Log.e("PlaybackService", "ExoPlayer Error: ${error.errorCodeName} (${error.errorCode})", error)
             }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                super.onMediaItemTransition(mediaItem, reason)
+                updateSessionIntent(mediaItem)
+            }
         })
 
-        val intent = Intent(this, MainActivity::class.java).apply {
-            putExtra("action", "resume")
-        }
-        val pendingIntent = android.app.PendingIntent.getActivity(
-            this, 0, intent, 
-            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
-        )
         mediaSession = MediaSession.Builder(this, player)
-            .setSessionActivity(pendingIntent)
             .setCallback(object : MediaSession.Callback {
                 override fun onAddMediaItems(
                     mediaSession: MediaSession,
@@ -88,6 +94,27 @@ class PlaybackService : MediaSessionService() {
                 }
             })
             .build()
+            
+        updateSessionIntent(player.currentMediaItem)
+    }
+
+    private fun updateSessionIntent(mediaItem: MediaItem?) {
+        val path = mediaItem?.localConfiguration?.uri?.toString() ?: return
+        
+        // Remove file:// prefix if present
+        val cleanPath = if (path.startsWith("file://")) path.substring(7) else path
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("action", "resume")
+            putExtra("playing_path", cleanPath)
+        }
+        
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            this, 0, intent, 
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        
+        mediaSession?.setSessionActivity(pendingIntent)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession

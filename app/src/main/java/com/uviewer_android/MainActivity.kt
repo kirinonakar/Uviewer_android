@@ -42,12 +42,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private var shouldResumeState by androidx.compose.runtime.mutableStateOf(false)
+    private var resumePathState by androidx.compose.runtime.mutableStateOf<String?>(null)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getStringExtra("action") == "resume") {
             shouldResumeState = true
+            resumePathState = intent.getStringExtra("playing_path")
         }
     }
 
@@ -62,6 +64,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (intent?.getStringExtra("action") == "resume") {
             shouldResumeState = true
+            resumePathState = intent.getStringExtra("playing_path")
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -113,7 +116,11 @@ class MainActivity : AppCompatActivity() {
                     activity = this@MainActivity, 
                     initialIntentPath = intentPath, 
                     shouldResume = shouldResumeState,
-                    onHandledResume = { shouldResumeState = false }
+                    resumeSpecificPath = resumePathState,
+                    onHandledResume = { 
+                        shouldResumeState = false 
+                        resumePathState = null
+                    }
                 )
             }
         }

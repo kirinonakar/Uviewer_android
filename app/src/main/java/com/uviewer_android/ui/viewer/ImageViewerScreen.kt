@@ -615,7 +615,9 @@ fun ZoomableImage(
                 return loaderBuilder
                     .crossfade(true)
                     .apply {
-                        if (sharpeningAmount > 0) {
+                        // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
+                        val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                        if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }
                     }
@@ -836,7 +838,9 @@ fun ZoomableDualImage(
                 return loaderBuilder
                     .crossfade(true)
                     .apply {
-                        if (sharpeningAmount > 0) {
+                        // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
+                        val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                        if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }
                     }

@@ -649,6 +649,18 @@ class DocumentViewerViewModel(
         }
     }
 
+    fun setCustomDocBackgroundColor(color: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.setCustomDocBackgroundColor(color)
+        }
+    }
+
+    fun setCustomDocTextColor(color: String) {
+        viewModelScope.launch {
+            userPreferencesRepository.setCustomDocTextColor(color)
+        }
+    }
+
     fun setManualEncoding(encoding: String?, isWebDav: Boolean, serverId: Int?) {
         _uiState.value = _uiState.value.copy(manualEncoding = encoding)
         // Reload

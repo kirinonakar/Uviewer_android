@@ -63,7 +63,7 @@ fun LibraryScreen(
                 (context as? android.app.Activity)?.finish()
             } else {
                 backPressedTime = currentTime
-                Toast.makeText(context, "Press again to exit", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.back_again_to_exit), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -101,15 +101,15 @@ fun LibraryScreen(
                         onDismissRequest = { sortExpanded = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Name") },
+                            text = { Text(stringResource(R.string.sort_name)) },
                             onClick = { viewModel.setSortOption(SortOption.NAME); sortExpanded = false }
                         )
                         DropdownMenuItem(
-                            text = { Text("Date (Newest)") },
+                            text = { Text(stringResource(R.string.sort_date_desc)) },
                             onClick = { viewModel.setSortOption(SortOption.DATE_DESC); sortExpanded = false }
                         )
                         DropdownMenuItem(
-                            text = { Text("Date (Oldest)") },
+                            text = { Text(stringResource(R.string.sort_date_asc)) },
                             onClick = { viewModel.setSortOption(SortOption.DATE_ASC); sortExpanded = false }
                         )
                     }
@@ -146,7 +146,7 @@ fun LibraryScreen(
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { viewModel.selectTab(2) },
-                    text = { Text("Pin") } 
+                    text = { Text(stringResource(R.string.pinned)) } 
                 )
             }
 
@@ -161,15 +161,15 @@ fun LibraryScreen(
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                if (selectedTab == 1 && uiState.serverId == null) "No Servers Added" 
-                                else if (selectedTab == 2) "No Pinned Files"
-                                else "No Files Found",
+                                if (selectedTab == 1 && uiState.serverId == null) stringResource(R.string.no_servers_added)
+                                else if (selectedTab == 2) stringResource(R.string.no_pinned_files)
+                                else stringResource(R.string.no_files_found),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (selectedTab == 1 && uiState.serverId == null) {
                                 Text(
-                                    "Click + to add a WebDAV server", 
+                                    stringResource(R.string.add_server_hint), 
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                                 )
@@ -213,27 +213,27 @@ fun LibraryScreen(
 
                 AlertDialog(
                     onDismissRequest = { showAddServerDialog = false },
-                    title = { Text("Add WebDAV Server") },
+                    title = { Text(stringResource(R.string.add_webdav_server)) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name (e.g. My Cloud)") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.server_name_hint)) }, modifier = Modifier.fillMaxWidth())
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Text("Use HTTPS", modifier = Modifier.weight(1f))
+                                Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f))
                                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                             }
-                            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text("Host (e.g. example.com/dav)") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(stringResource(R.string.server_host_hint)) }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(
                                 value = port, 
                                 onValueChange = { port = it }, 
-                                label = { Text("Port (Leave empty for default)") }, 
+                                label = { Text(stringResource(R.string.server_port_hint)) }, 
                                 modifier = Modifier.fillMaxWidth(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                             )
-                            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text(stringResource(R.string.username)) }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(
                                 value = pass, 
                                 onValueChange = { pass = it }, 
-                                label = { Text("Password") }, 
+                                label = { Text(stringResource(R.string.password)) }, 
                                 modifier = Modifier.fillMaxWidth(), 
                                 visualTransformation = PasswordVisualTransformation(),
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
@@ -250,10 +250,10 @@ fun LibraryScreen(
                                 viewModel.addServer(name, finalUrl, user, pass)
                                 showAddServerDialog = false
                             }
-                        }) { Text("Add") }
+                        }) { Text(stringResource(R.string.add)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showAddServerDialog = false }) { Text("Cancel") }
+                        TextButton(onClick = { showAddServerDialog = false }) { Text(stringResource(R.string.cancel)) }
                     }
                 )
             }
