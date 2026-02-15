@@ -31,11 +31,20 @@ object AozoraParser {
 
             // Ruby pattern: ｜Kanji《Ruby》 or ｜Kanji(Ruby) or ｜Kanji（Ruby）
             l = l.replace(Regex("[｜|](.+?)《(.+?)》")) { m ->
+                val base = m.groupValues[1]
                 val ruby = m.groupValues[2]
-                if (ruby.length == 3) {
-                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
+                
+                val rubyClass = when {
+                    base.length == 1 && ruby.length >= 3 -> "ruby-scale"
+                    base.length == 2 && ruby.length >= 5 -> "ruby-scale"
+                    base.length == 3 && ruby.length >= 7 -> "ruby-scale"
+                    else -> ""
+                }
+                
+                if (rubyClass.isNotEmpty()) {
+                    "<ruby>$base<rt class=\"$rubyClass\">$ruby</rt></ruby>"
                 } else {
-                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
+                    "<ruby>$base<rt>$ruby</rt></ruby>"
                 }
             }
             l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]")) { m ->
@@ -204,11 +213,10 @@ object AozoraParser {
                         text-align: center;
                         margin: 1.5em 0;
                     }
-                    .ruby-3-inner {
-                        display: inline-block;
-                        transform: scaleX(0.75);
-                        transform-origin: center bottom;
-                        white-space: nowrap;
+                    rt.ruby-scale {
+                        font-size: 0.75em;
+                        margin-left: -0.25em;
+                        margin-right: -0.25em;
                     }
                     /* Support for Vertical text centering and padding */
                     body.vertical {

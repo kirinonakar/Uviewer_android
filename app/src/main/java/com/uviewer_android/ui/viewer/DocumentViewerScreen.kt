@@ -603,7 +603,7 @@ fun DocumentViewerScreen(
                             val previousHash = (wv.tag as? Int) ?: 0
                              
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#000000"
+            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
             UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
             else -> "#ffffff" to "#000000"

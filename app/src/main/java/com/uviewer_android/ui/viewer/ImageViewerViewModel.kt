@@ -24,8 +24,13 @@ data class ImageViewerUiState(
     val isContentLoadedFromWebDav: Boolean = false,
     val containerName: String? = null,
     val persistZoom: Boolean = false,
-    val sharpeningAmount: Int = 0
+    val sharpeningAmount: Int = 0,
+    val viewMode: ViewMode = ViewMode.SINGLE
 )
+
+enum class ViewMode {
+    SINGLE, DUAL, SPLIT
+}
 
     class ImageViewerViewModel(
         application: Application,
@@ -291,6 +296,15 @@ data class ImageViewerUiState(
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
             }
+    }
+
+    fun toggleViewMode() {
+        val nextMode = when (_uiState.value.viewMode) {
+            ViewMode.SINGLE -> ViewMode.DUAL
+            ViewMode.DUAL -> ViewMode.SPLIT
+            ViewMode.SPLIT -> ViewMode.SINGLE
+        }
+        _uiState.value = _uiState.value.copy(viewMode = nextMode)
     }
 
     fun updateProgress(index: Int) {

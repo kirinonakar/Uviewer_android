@@ -72,7 +72,9 @@ fun MainScreen(activity: com.uviewer_android.MainActivity? = null) {
                                 if (screen is Screen.Resume) {
                                     val recent = libraryUiState.mostRecentFile
                                     if (recent != null) {
-                                    val encodedPath = android.net.Uri.encode(recent.path, null)
+                                        val encodedPath = android.net.Uri.encode(recent.path, null)
+                                        // Use pageIndex for position. For Media, it might be seek position? 
+                                        // Current ViewerScreen handles position as initialLine or initialIndex.
                                         val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
                                         navController.navigate(route) {
                                             launchSingleTop = true
@@ -204,9 +206,10 @@ fun MainScreen(activity: com.uviewer_android.MainActivity? = null) {
                     serverId = serverId,
                     initialPosition = position,
                     onBack = { 
-                        // filePath is already decoded by Navigation
-                        val parentPath = filePath.substringBeforeLast('/', "/")
-                        val encodedParentPath = android.net.Uri.encode(parentPath, null)
+                        // Use java.io.File to get parent safely, handling different path separators
+                        val file = java.io.File(filePath)
+                        val parent = file.parent ?: "/"
+                        val encodedParentPath = android.net.Uri.encode(parent, null)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id)

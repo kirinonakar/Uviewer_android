@@ -165,24 +165,37 @@ fun ImageViewerScreen(
         // But isDualPage is state. 
         // Let's hoist declarations.
         
-        var isDualPage by remember { mutableStateOf(false) }
-        val pageCount = if (isDualPage) (totalImages + 1) / 2 else totalImages
+        val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+        val viewMode = uiState.viewMode
+        val pageCount = when (viewMode) {
+            ViewMode.SINGLE -> totalImages
+            ViewMode.DUAL -> (totalImages + 1) / 2
+            ViewMode.SPLIT -> totalImages * 2
+        }
         
         val scales = remember { mutableStateMapOf<Int, Float>() }
         var globalScale by remember { mutableFloatStateOf(1f) }
         var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
 
-        // Use key to recreate pagerState when toggling dual mode to ensure immediate mapping
-        val pagerState = key(isDualPage) {
-            val initial = if (isDualPage) currentPageIndex / 2 else currentPageIndex
+        // Use key to recreate pagerState when toggling view mode to ensure immediate mapping
+        val pagerState = key(viewMode) {
+            val initial = when (viewMode) {
+                ViewMode.SINGLE -> currentPageIndex
+                ViewMode.DUAL -> currentPageIndex / 2
+                ViewMode.SPLIT -> currentPageIndex * 2
+            }
             rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
                 pageCount
             }
         }
         
         // Update currentPageIndex when pager changes
-        LaunchedEffect(pagerState.currentPage, isDualPage) {
-             currentPageIndex = if (isDualPage) pagerState.currentPage * 2 else pagerState.currentPage
+        LaunchedEffect(pagerState.currentPage, viewMode) {
+             currentPageIndex = when (viewMode) {
+                 ViewMode.SINGLE -> pagerState.currentPage
+                 ViewMode.DUAL -> pagerState.currentPage * 2
+                 ViewMode.SPLIT -> pagerState.currentPage / 2
+             }
              viewModel.updateProgress(currentPageIndex)
         }
 
@@ -207,17 +220,30 @@ fun ImageViewerScreen(
             topBar = {
                 if (!isFullScreen) {
                     val containerName = uiState.containerName
-                    val imageTitle = if (isDualPage) {
-                        val p = pagerState.currentPage * 2
-                        if (p >= 0 && p < uiState.images.size) {
-                            val img1 = uiState.images[p].name
-                            val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
-                            if (img2 != null) "$img1 / $img2" else img1
-                        } else ""
-                    } else {
-                        if (pagerState.currentPage >= 0 && pagerState.currentPage < uiState.images.size) {
-                            uiState.images[pagerState.currentPage].name
-                        } else ""
+                    val imageTitle = when (viewMode) {
+                        ViewMode.DUAL -> {
+                            val p = pagerState.currentPage * 2
+                            if (p >= 0 && p < uiState.images.size) {
+                                val img1 = uiState.images[p].name
+                                val img2 = if (p + 1 < uiState.images.size) uiState.images[p+1].name else null
+                                val progress = if (isZip) " [${p + 1}/$totalImages]" else ""
+                                if (img2 != null) "$img1 / $img2$progress" else "$img1$progress"
+                            } else ""
+                        }
+                        ViewMode.SPLIT -> {
+                            val imgIdx = pagerState.currentPage / 2
+                            if (imgIdx >= 0 && imgIdx < uiState.images.size) {
+                                val side = if (pagerState.currentPage % 2 == 0) " (Left)" else " (Right)"
+                                val progress = if (isZip) " [${imgIdx + 1}/$totalImages]" else ""
+                                uiState.images[imgIdx].name + side + progress
+                            } else ""
+                        }
+                        else -> {
+                            if (pagerState.currentPage >= 0 && pagerState.currentPage < uiState.images.size) {
+                                val progress = if (isZip) " [${pagerState.currentPage + 1}/$totalImages]" else ""
+                                uiState.images[pagerState.currentPage].name + progress
+                            } else ""
+                        }
                     }
                     
                     var showSettingsDialog by remember { mutableStateOf(false) }
@@ -241,17 +267,25 @@ fun ImageViewerScreen(
                             },
                             actions = {
                                 val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
-                                val currentImageIndex = if (isDualPage) (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1) else pagerState.currentPage
+                                val currentImageIndex = when (viewMode) {
+                                    ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)
+                                    ViewMode.SPLIT -> (pagerState.currentPage / 2).coerceAtMost(uiState.images.size - 1)
+                                    else -> pagerState.currentPage
+                                }
                                 IconButton(onClick = { 
                                     viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
                                     android.widget.Toast.makeText(context, "Bookmark Saved", android.widget.Toast.LENGTH_SHORT).show()
                                 }) {
                                     Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
                                 }
-                                IconButton(onClick = { isDualPage = !isDualPage }) {
+                                IconButton(onClick = { viewModel.toggleViewMode() }) {
                                     Icon(
-                                        if (isDualPage) Icons.Default.ViewAgenda else Icons.Default.ViewCarousel, 
-                                        contentDescription = "Toggle Dual Page"
+                                        when (viewMode) {
+                                            ViewMode.SINGLE -> Icons.Default.ViewCarousel
+                                            ViewMode.DUAL -> Icons.Default.ViewAgenda
+                                            ViewMode.SPLIT -> Icons.Default.VerticalSplit
+                                        }, 
+                                        contentDescription = "Toggle View Mode"
                                     )
                                 }
                                 IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
@@ -325,7 +359,7 @@ fun ImageViewerScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
                     .background(Color.Black)
-                    .pointerInput(pagerState, isDualPage) {
+                    .pointerInput(pagerState, viewMode) {
                         detectTapGestures(
                             onTap = { offset ->
                                 scope.launch {
@@ -372,12 +406,24 @@ fun ImageViewerScreen(
                     reverseLayout = invertImageControl,
                     beyondViewportPageCount = 1
                 ) { page ->
-                    val (firstIdx, secondIdx) = if (isDualPage) {
-                        val p1 = page * 2
-                        val p2 = page * 2 + 1
-                        if (dualPageOrder == 1) Pair(p2, p1) else Pair(p1, p2)
-                    } else {
-                        Pair(page, -1)
+                    val (firstIdx, secondIdx, isSplit, isRight) = when (viewMode) {
+                        ViewMode.DUAL -> {
+                            val p1 = page * 2
+                            val p2 = page * 2 + 1
+                            if (dualPageOrder == 1) Triple(p2, p1, false).let { Quad(it.first, it.second, it.third, false) } 
+                            else Triple(p1, p2, false).let { Quad(it.first, it.second, it.third, false) }
+                        }
+                        ViewMode.SPLIT -> {
+                            val imgIdx = page / 2
+                            val right = page % 2 == 1
+                            // Reversing split logic if RTL order? 
+                            // Usually split is Left then Right. 
+                            // Request says: "다음이미지 방향에 있는 반쪽 나뉜 이미지를 다음 이미지로 표시"
+                            // If LTR, Next is Right. If RTL, Next is Left.
+                            val actualRight = if (dualPageOrder == 1) !right else right
+                            Quad(imgIdx, -1, true, actualRight)
+                        }
+                        else -> Quad(page, -1, false, false)
                     }
 
                     Box(
@@ -385,10 +431,10 @@ fun ImageViewerScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         val firstImage = if (firstIdx >= 0 && firstIdx < uiState.images.size) uiState.images[firstIdx] else null
-                        val secondImage = if (isDualPage && secondIdx >= 0 && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
+                        val secondImage = if (secondIdx >= 0 && secondIdx < uiState.images.size) uiState.images[secondIdx] else null
 
-                        key(firstIdx) {
-                            if (isDualPage) {
+                        key(firstIdx, isSplit, isRight) {
+                            if (viewMode == ViewMode.DUAL) {
                                 ZoomableDualImage(
                                     firstImageUrl = firstImage?.path,
                                     secondImageUrl = secondImage?.path,
@@ -412,7 +458,9 @@ fun ImageViewerScreen(
                                     sharpeningAmount = uiState.sharpeningAmount,
                                     onScaleChanged = { newScale -> 
                                         if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
-                                    }
+                                    },
+                                    isSplit = isSplit,
+                                    isRight = isRight
                                 )
                             }
                         }
@@ -423,6 +471,8 @@ fun ImageViewerScreen(
     }
 }
 
+data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
 @Composable
 fun ZoomableImage(
     imageUrl: String,
@@ -432,7 +482,9 @@ fun ZoomableImage(
     scale: Float,
     sharpeningAmount: Int,
     onScaleChanged: (Float) -> Unit,
-    secondImageUrl: String? = null // For dual page
+    secondImageUrl: String? = null,
+    isSplit: Boolean = false,
+    isRight: Boolean = false
 ) {
     val currentScale by rememberUpdatedState(scale)
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -590,7 +642,14 @@ fun ZoomableImage(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        if (isSplit) {
+                            scaleX = 2f
+                            translationX = if (isRight) -size.width / 2 else size.width / 2
+                        }
+                    }
             )
         }
     }

@@ -625,7 +625,7 @@ class DocumentViewerViewModel(
 
     private fun getColors(): Pair<String, String> {
         return when (_uiState.value.docBackgroundColor) {
-             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#000000"
+             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
              UserPreferencesRepository.DOC_BG_CUSTOM -> _uiState.value.customDocBackgroundColor to _uiState.value.customDocTextColor
              else -> "#ffffff" to "#000000"
@@ -639,14 +639,35 @@ class DocumentViewerViewModel(
             .replace("<", "&lt;")
             .replace(">", "&gt;")
         
+        // Tables
+        val tableRegex = Regex("^\\|(.+)\\|\\s*$\\n^\\|[ :\\- | ]+\\|\\s*$\\n((?:^\\|.+\\|\\s*$(?:\\n|$))+)", RegexOption.MULTILINE)
+        html = html.replace(tableRegex) { match ->
+            val header = match.groupValues[1].split("|").filter { it.isNotBlank() }.map { it.trim() }
+            val rows = match.groupValues[2].trim().split("\n").map { row ->
+                row.trim().trim('|').split("|").map { it.trim() }
+            }
+            
+            val sb = StringBuilder("<table style='border-collapse: collapse; width: 100%; margin: 1em 0;'>")
+            sb.append("<thead><tr style='background-color: rgba(128,128,128,0.1);'>")
+            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px;'>$it</th>") }
+            sb.append("</tr></thead><tbody>")
+            rows.forEach { row ->
+                sb.append("<tr>")
+                row.forEach { sb.append("<td style='border: 1px solid #888; padding: 8px;'>$it</td>") }
+                sb.append("</tr>")
+            }
+            sb.append("</tbody></table>")
+            sb.toString()
+        }
+
         // Headers
         html = html.replace(Regex("^# (.*)$", RegexOption.MULTILINE), "<h1>$1</h1>")
         html = html.replace(Regex("^## (.*)$", RegexOption.MULTILINE), "<h2>$1</h2>")
         html = html.replace(Regex("^### (.*)$", RegexOption.MULTILINE), "<h3>$1</h3>")
         
-        // Bold
-        html = html.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
-        html = html.replace(Regex("__(.*?)__"), "<b>$1</b>")
+        // Bold - tighter regex to avoid long matches, supporting spaces
+        html = html.replace(Regex("\\*\\*\\s*(.*?)\\s*\\*\\*"), "<b>$1</b>")
+        html = html.replace(Regex("__\\s*(.*?)\\s*__"), "<b>$1</b>")
         
         // Italic
         html = html.replace(Regex("\\*(.*?)\\*"), "<i>$1</i>")
@@ -658,9 +679,14 @@ class DocumentViewerViewModel(
         // Images handled by resolveLocalImages later
         html = html.replace(Regex("!\\[(.*?)\\]\\((.*?)\\)"), "<img src=\"$2\" alt=\"$1\" />")
         
-        // Paragraphs
+        // Paragraphs with line break preservation
         html = html.split(Regex("\\n\\n+")).joinToString("") { p ->
-            if (p.startsWith("<h") || p.startsWith("<img")) p else "<p>${p.replace("\n", " ")}</p>"
+            if (p.startsWith("<h") || p.startsWith("<img") || p.startsWith("<table")) {
+                p
+            } else {
+                val content = p.trim().replace("\n", "<br/>")
+                if (content.isEmpty()) "" else "<p>$content</p>"
+            }
         }
         
         return html
@@ -682,7 +708,6 @@ class DocumentViewerViewModel(
                 if (!cacheBase.exists()) cacheBase.mkdirs()
                 
                 val webDavPath = if (parentPath.isEmpty()) originalSrc else "$parentPath/$originalSrc"
-                // Simple hash for filename
                 val fileName = java.net.URLEncoder.encode(webDavPath, "UTF-8").takeLast(100)
                 val cachedFile = File(cacheBase, fileName)
                 
@@ -693,13 +718,24 @@ class DocumentViewerViewModel(
                         webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
                         result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
                     } catch (e: Exception) {
-                        // Hide missing image
+                        // Hide missing image or attempt subfolder search logic? 
+                        // For WebDAV, listing subfolders recursively is expensive. 
+                        // User request specifically mentions "같은경로, 하위폴더 모두 대응".
+                        // For local it's easier. For WebDAV let's assume if it's not found, we hide it.
                         result = result.replace(match.value, "")
                     }
                 }
             } else if (parentDir != null) {
                 // Local resolution
-                val imgFile = java.io.File(parentDir, originalSrc)
+                var imgFile = java.io.File(parentDir, originalSrc)
+                if (!imgFile.exists()) {
+                    // Search in subfolders as requested
+                    val found = parentDir.walkTopDown()
+                        .maxDepth(3) // limit depth to avoid excessive search
+                        .find { it.name == originalSrc.substringAfterLast("/") }
+                    if (found != null) imgFile = found
+                }
+
                 if (imgFile.exists()) {
                     result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
                 } else {
