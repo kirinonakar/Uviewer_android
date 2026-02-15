@@ -60,6 +60,7 @@ class DocumentViewerViewModel(
     val fontSize = userPreferencesRepository.fontSize
     val fontFamily = userPreferencesRepository.fontFamily
     val docBackgroundColor = userPreferencesRepository.docBackgroundColor
+    val verticalWriting = userPreferencesRepository.verticalWriting
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
@@ -78,14 +79,16 @@ class DocumentViewerViewModel(
                 userPreferencesRepository.fontFamily,
                 userPreferencesRepository.docBackgroundColor,
                 userPreferencesRepository.customDocBackgroundColor,
-                userPreferencesRepository.customDocTextColor
-            ) { size, family, color, customBg, customText ->
+                combine(userPreferencesRepository.customDocTextColor, userPreferencesRepository.verticalWriting) { t, v -> t to v }
+            ) { size, family, color, customBg, textColorVertical ->
+                val (customText, vertical) = textColorVertical
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
                     fontFamily = family,
                     docBackgroundColor = color,
                     customDocBackgroundColor = customBg,
-                    customDocTextColor = customText
+                    customDocTextColor = customText,
+                    isVertical = vertical
                 )
                 if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -367,7 +370,7 @@ class DocumentViewerViewModel(
                     val colors = getColors()
                     AozoraParser.wrapInHtml(
                         htmlBody, 
-                        false, 
+                        _uiState.value.isVertical, 
                         _uiState.value.fontFamily, 
                         _uiState.value.fontSize, 
                         colors.first, 
@@ -489,6 +492,12 @@ class DocumentViewerViewModel(
                         "sans-serif" -> "'Sawarabi Gothic', sans-serif"
                         else -> "serif"
                     }
+                    val writingMode = if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"
+                    val overflowX = if (_uiState.value.isVertical) "auto" else "hidden"
+                    val overflowY = if (_uiState.value.isVertical) "hidden" else "auto"
+                    val widthAttr = if (_uiState.value.isVertical) "auto" else "100%"
+                    val bodyPadding = if (_uiState.value.isVertical) "2em 1.5em !important" else "1.2em !important"
+
                     val resetCss = """
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                         <style data-app-style="true">
@@ -498,16 +507,22 @@ class DocumentViewerViewModel(
                                 overflow-wrap: break-word !important; 
                             }
                             html, body {
-                                width: 100% !important;
+                                width: $widthAttr !important;
+                                height: 100vh !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
                                 background-color: ${colors.first} !important;
                                 color: ${colors.second} !important;
+                                overflow-x: $overflowX !important;
+                                overflow-y: $overflowY !important;
                             }
                             body { 
                                 font-family: $fontFamily !important;
                                 font-size: ${_uiState.value.fontSize}px !important;
-                                padding: 1.2em !important;
+                                writing-mode: $writingMode !important;
+                                -webkit-writing-mode: $writingMode !important;
+                                text-orientation: mixed !important;
+                                padding: $bodyPadding;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -584,6 +599,12 @@ class DocumentViewerViewModel(
     fun setDocBackgroundColor(color: String) {
         viewModelScope.launch {
             userPreferencesRepository.setDocBackgroundColor(color)
+        }
+    }
+
+    fun toggleVerticalWriting() {
+        viewModelScope.launch {
+            userPreferencesRepository.setVerticalWriting(!_uiState.value.isVertical)
         }
     }
 

@@ -22,7 +22,8 @@ data class LibraryUiState(
     val isWebDavTab: Boolean = false,
     val serverId: Int? = null,
     val error: String? = null,
-    val sortOption: SortOption = SortOption.NAME
+    val sortOption: SortOption = SortOption.NAME,
+    val viewMode: Int = 0 // 0: List, 1: Grid
 )
 
 enum class SortOption { NAME, DATE_ASC, DATE_DESC, SIZE_ASC, SIZE_DESC }
@@ -61,7 +62,8 @@ class LibraryViewModel(
         _state.value = _state.value.copy(
             isWebDavTab = isWebDav,
             serverId = effectiveServerId,
-            currentPath = effectivePath
+            currentPath = effectivePath,
+            viewMode = userPreferencesRepository.libraryViewMode.value
         )
 
         if (isWebDav && (effectiveServerId == null || effectivePath == "WebDAV")) {
@@ -77,8 +79,9 @@ class LibraryViewModel(
         favoriteDao.getAllFavorites(),
         _sortOption,
         recentFileDao.getMostRecentFile().onStart { emit(null) },
-        _servers
-    ) { state, favorites, sort, mostRecent, servers ->
+        combine(_servers, userPreferencesRepository.libraryViewMode) { s, v -> s to v }
+    ) { state, favorites, sort, mostRecent, serversViewMode ->
+        val (servers, viewMode) = serversViewMode
         var listToProcess = state.fileList
         
         // If we are in WebDAV tab and explicitly at the server list path OR no server selected
@@ -148,7 +151,8 @@ class LibraryViewModel(
             favoritePaths = favorites.map { it.path }.toSet(),
             pinnedFiles = favoriteEntries.filter { it.isPinned }.sortedBy { it.name.lowercase() },
             sortOption = sort,
-            mostRecentFile = mostRecent
+            mostRecentFile = mostRecent,
+            viewMode = viewMode
         )
     }.stateIn(
         scope = viewModelScope,
@@ -331,6 +335,14 @@ class LibraryViewModel(
             if (_state.value.serverId == server.id) {
                 showServerList()
             }
+        }
+    }
+
+    fun toggleViewMode() {
+        val currentMode = userPreferencesRepository.libraryViewMode.value
+        val newMode = if (currentMode == 0) 1 else 0
+        viewModelScope.launch {
+            userPreferencesRepository.setLibraryViewMode(newMode)
         }
     }
 }
