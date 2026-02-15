@@ -19,7 +19,7 @@ data class LibraryUiState(
     val pinnedFiles: List<FileEntry> = emptyList(), // For Pin Tab
     val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
     val isLoading: Boolean = false,
-    val isWebDavTab: Boolean = false,
+    val selectedTabIndex: Int = 0,
     val serverId: Int? = null,
     val error: String? = null,
     val sortOption: SortOption = SortOption.NAME
@@ -47,24 +47,29 @@ class LibraryViewModel(
     init {
         val lastTab = userPreferencesRepository.getLastLibraryTab()
         val lastServerId = userPreferencesRepository.getLastServerId()
-        val isWebDav = lastTab == 1
         
-        val lastPath = if (isWebDav) {
-            userPreferencesRepository.getLastWebDavPath() ?: "WebDAV"
-        } else {
-            userPreferencesRepository.getLastLocalPath() ?: android.os.Environment.getExternalStorageDirectory().absolutePath
+        val isWebDav = lastTab == 1
+        var lastPath = when (lastTab) {
+            1 -> userPreferencesRepository.getLastWebDavPath() ?: "WebDAV"
+            2 -> "/" // Pin tab doesn't have a path, but we need a default
+            else -> userPreferencesRepository.getLastLocalPath() ?: android.os.Environment.getExternalStorageDirectory().absolutePath
         }
+
+        // "마지막 위치가 없으면 홈으로" logic handles by default values above.
+        // If lastPath doesn't exist, we might want to check, but usually it's persistent.
 
         val effectiveServerId = if (isWebDav && lastServerId != -1) lastServerId else null
         val effectivePath = if (isWebDav && (effectiveServerId == null || lastPath == "WebDAV")) "WebDAV" else lastPath
         
         _state.value = _state.value.copy(
-            isWebDavTab = isWebDav,
+            selectedTabIndex = lastTab,
             serverId = effectiveServerId,
             currentPath = effectivePath
         )
 
-        if (isWebDav && (effectiveServerId == null || effectivePath == "WebDAV")) {
+        if (lastTab == 2) {
+            // Pin tab just shows pinnedFiles from combine flow
+        } else if (isWebDav && (effectiveServerId == null || effectivePath == "WebDAV")) {
             showServerList()
         } else {
             loadFiles(effectivePath, effectiveServerId)
@@ -82,7 +87,7 @@ class LibraryViewModel(
         var listToProcess = state.fileList
         
         // If we are in WebDAV tab and explicitly at the server list path OR no server selected
-        val isServerList = state.isWebDavTab && (state.serverId == null || state.currentPath == "WebDAV")
+        val isServerList = state.selectedTabIndex == 1 && (state.serverId == null || state.currentPath == "WebDAV")
         
         if (isServerList) {
             listToProcess = servers.map { server ->
@@ -160,7 +165,17 @@ class LibraryViewModel(
         _sortOption.value = option
     }
     
-    fun loadInitialPath(isWebDav: Boolean) {
+    fun selectTab(index: Int) {
+        if (_state.value.selectedTabIndex == index) return
+        
+        userPreferencesRepository.setLastLibraryTab(index)
+        
+        if (index == 2) {
+            _state.value = _state.value.copy(selectedTabIndex = index)
+            return
+        }
+
+        val isWebDav = index == 1
         val lastPath = if (isWebDav) {
              userPreferencesRepository.getLastWebDavPath() ?: "WebDAV"
         } else {
@@ -171,11 +186,10 @@ class LibraryViewModel(
         val effectivePath = if (isWebDav && (effectiveServerId == null || lastPath == "WebDAV")) "WebDAV" else lastPath
 
         _state.value = _state.value.copy(
-            isWebDavTab = isWebDav, 
+            selectedTabIndex = index, 
             serverId = effectiveServerId,
             currentPath = effectivePath
         )
-        userPreferencesRepository.setLastLibraryTab(if (isWebDav) 1 else 0)
         
         if (isWebDav && (effectiveServerId == null || effectivePath == "WebDAV")) {
             showServerList()
@@ -198,7 +212,7 @@ class LibraryViewModel(
 
     private fun loadFiles(path: String, serverId: Int? = _state.value.serverId) {
         // Guard: Don't load files if we should be showing the server list
-        if (_state.value.isWebDavTab && (serverId == null || path == "WebDAV")) {
+        if (_state.value.selectedTabIndex == 1 && (serverId == null || path == "WebDAV")) {
             showServerList()
             return
         }
@@ -206,7 +220,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
-                val files = if (_state.value.isWebDavTab && serverId != null) {
+                val files = if (_state.value.selectedTabIndex == 1 && serverId != null) {
                     webDavRepository.listFiles(serverId, path)
                 } else {
                     fileRepository.listFiles(path)
@@ -219,14 +233,14 @@ class LibraryViewModel(
                 )
                 
                 // Save path specifically for the current tab
-                if (_state.value.isWebDavTab) {
+                if (_state.value.selectedTabIndex == 1) {
                     userPreferencesRepository.setLastWebDavPath(path)
                     serverId?.let { userPreferencesRepository.setLastServerId(it) }
-                } else {
+                } else if (_state.value.selectedTabIndex == 0) {
                     userPreferencesRepository.setLastLocalPath(path)
                 }
                 userPreferencesRepository.setLastLibraryPath(path)
-                userPreferencesRepository.setLastLibraryTab(if (_state.value.isWebDavTab) 1 else 0)
+                userPreferencesRepository.setLastLibraryTab(_state.value.selectedTabIndex)
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -282,7 +296,8 @@ class LibraryViewModel(
 
     fun navigateTo(entry: FileEntry) {
         if (entry.isDirectory) {
-            _state.value = _state.value.copy(isWebDavTab = entry.isWebDav, serverId = entry.serverId)
+            val tabIndex = if (entry.isWebDav) 1 else 0
+            _state.value = _state.value.copy(selectedTabIndex = tabIndex, serverId = entry.serverId)
             loadFiles(entry.path, entry.serverId)
         }
     }
@@ -292,7 +307,7 @@ class LibraryViewModel(
         val serverId = _state.value.serverId
         val rootPath = android.os.Environment.getExternalStorageDirectory().absolutePath
 
-        if (_state.value.isWebDavTab && serverId != null && currentPath == "/") {
+        if (_state.value.selectedTabIndex == 1 && serverId != null && currentPath == "/") {
             showServerList()
             _state.value = _state.value.copy(serverId = null)
         } else if (currentPath != rootPath && currentPath != "/" && currentPath != "WebDAV") {
@@ -302,7 +317,7 @@ class LibraryViewModel(
     }
 
     fun navigateToRoot() {
-        if (_state.value.isWebDavTab) {
+        if (_state.value.selectedTabIndex == 1) {
             showServerList()
             _state.value = _state.value.copy(serverId = null)
         } else {
@@ -312,8 +327,8 @@ class LibraryViewModel(
     }
 
     fun openFolder(path: String, serverId: Int?) {
-        val isWebDav = serverId != null && serverId != -1
-        _state.value = _state.value.copy(isWebDavTab = isWebDav, serverId = serverId)
+        val tabIndex = if (serverId != null && serverId != -1) 1 else 0
+        _state.value = _state.value.copy(selectedTabIndex = tabIndex, serverId = serverId)
         loadFiles(path, serverId)
     }
 

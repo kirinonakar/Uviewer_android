@@ -16,9 +16,20 @@ object AozoraParser {
         val boldStartPattern = "［＃(?:ここから太字| 여기서 태그 시작 )］"
         val boldEndPattern = "［＃(?:여기서 태그 끝 |ここで太字終わり|太字終わり)］"
         val boldRegex = Regex("$boldStartPattern(.*?)$boldEndPattern", RegexOption.DOT_MATCHES_ALL)
-        
+
         val markedText = boldRegex.replace(text) { match: MatchResult ->
-            "__BOLD_START__${match.groupValues[1]}__BOLD_END__"
+            val content = match.groupValues[1]
+            val startRegex = Regex(boldStartPattern)
+            val parts = content.split(startRegex)
+            if (parts.size == 1) {
+                "__BOLD_START__${content}__BOLD_END__"
+            } else {
+                // If there are multiple bold start tags, use only the last one.
+                // The previous ones are ignored and removed from the display.
+                val prefix = parts.dropLast(1).joinToString("")
+                val boldContent = parts.last()
+                "${prefix}__BOLD_START__${boldContent}__BOLD_END__"
+            }
         }
 
         val lines = markedText.split(Regex("\\r?\\n|\\r"))

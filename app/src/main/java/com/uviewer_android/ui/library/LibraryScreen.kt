@@ -36,26 +36,7 @@ fun LibraryScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    // Unified tab selection logic
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var isInitialized by remember { mutableStateOf(false) }
-
-    // Sync UI with ViewModel state
-    LaunchedEffect(uiState.isWebDavTab) {
-        if (!isInitialized) {
-            selectedTab = if (uiState.isWebDavTab) 1 else 0
-            isInitialized = true
-        }
-    }
-
-    // Secondary sync: if ViewModel says we are on WebDAV but UI is on Local, something is wrong
-    LaunchedEffect(uiState.isWebDavTab) {
-        if (uiState.isWebDavTab && selectedTab == 0) {
-            selectedTab = 1
-        } else if (!uiState.isWebDavTab && selectedTab == 1) {
-            selectedTab = 0
-        }
-    }
+    val selectedTab = uiState.selectedTabIndex
 
     var backPressedTime by remember { mutableLongStateOf(0L) }
     val context = LocalContext.current
@@ -91,7 +72,6 @@ fun LibraryScreen(
     LaunchedEffect(initialPath, initialServerId) {
         if (!initialPath.isNullOrEmpty()) {
             viewModel.openFolder(initialPath, initialServerId)
-            selectedTab = if (initialServerId != null && initialServerId != -1) 1 else 0
         }
     }
 
@@ -155,30 +135,17 @@ fun LibraryScreen(
             TabRow(selectedTabIndex = selectedTab) {
                 Tab(
                     selected = selectedTab == 0,
-                    onClick = { 
-                        if (selectedTab != 0) {
-                            selectedTab = 0
-                            viewModel.loadInitialPath(false)
-                        }
-                    },
+                    onClick = { viewModel.selectTab(0) },
                     text = { Text(stringResource(R.string.local)) }
                 )
                 Tab(
                     selected = selectedTab == 1,
-                    onClick = { 
-                        if (selectedTab != 1) {
-                            selectedTab = 1
-                            viewModel.loadInitialPath(true)
-                        }
-                    },
+                    onClick = { viewModel.selectTab(1) },
                     text = { Text(stringResource(R.string.remote)) }
                 )
                 Tab(
                     selected = selectedTab == 2,
-                    onClick = { 
-                        selectedTab = 2
-                        // No need to load path, just show favorites from state
-                    },
+                    onClick = { viewModel.selectTab(2) },
                     text = { Text("Pin") } 
                 )
             }
@@ -225,9 +192,6 @@ fun LibraryScreen(
                                             viewModel.openFolder("/", file.serverId)
                                         } else {
                                             viewModel.navigateTo(file)
-                                        }
-                                        if (selectedTab == 2) {
-                                            selectedTab = if (file.isWebDav) 1 else 0
                                         }
                                     } else {
                                         onNavigateToViewer(file)
