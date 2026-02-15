@@ -230,10 +230,13 @@ fun MediaPlayerScreen(
                                         DropdownMenuItem(
                                             text = { Text("Off") },
                                             onClick = { 
-                                                mediaController?.trackSelectionParameters = mediaController?.trackSelectionParameters
-                                                    ?.buildUpon()
-                                                    ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-                                                    ?.build() ?: mediaController!!.trackSelectionParameters
+                                                mediaController?.let { controller ->
+                                                    val params = controller.trackSelectionParameters
+                                                        .buildUpon()
+                                                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
+                                                        .build()
+                                                    controller.trackSelectionParameters = params
+                                                }
                                                 viewModel.toggleSubtitleEnabled(false)
                                                 showSubtitleMenu = false 
                                             }
@@ -242,11 +245,14 @@ fun MediaPlayerScreen(
                                             DropdownMenuItem(
                                                 text = { Text(track.label) },
                                                 onClick = {
-                                                    mediaController?.trackSelectionParameters = mediaController?.trackSelectionParameters
-                                                        ?.buildUpon()
-                                                        ?.setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                                                        ?.setPreferredTextLanguage(track.language)
-                                                        ?.build() ?: mediaController!!.trackSelectionParameters
+                                                    mediaController?.let { controller ->
+                                                        val params = controller.trackSelectionParameters
+                                                            .buildUpon()
+                                                            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                                                            .setPreferredTextLanguage(track.language)
+                                                            .build()
+                                                        controller.trackSelectionParameters = params
+                                                    }
                                                     viewModel.toggleSubtitleEnabled(true)
                                                     showSubtitleMenu = false
                                                 }

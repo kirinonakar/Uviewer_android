@@ -23,6 +23,8 @@ class PlaybackService : MediaSessionService() {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setAllowCrossProtocolRedirects(true)
             .setUserAgent("Uviewer/1.0")
+            .setConnectTimeoutMs(15000)
+            .setReadTimeoutMs(15000)
         
         val baseDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpDataSourceFactory)
         
@@ -50,11 +52,13 @@ class PlaybackService : MediaSessionService() {
         }
 
         val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(this)
-            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             .setEnableDecoderFallback(true)
 
         val mediaSourceFactory = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(this)
             .setDataSourceFactory(dataSourceFactory)
+            .setSubtitleParserFactory(androidx.media3.extractor.text.SubtitleParser.Factory.UNSUPPORTED)
+            .setLoadErrorHandlingPolicy(androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(3))
 
         player = ExoPlayer.Builder(this)
             .setRenderersFactory(renderersFactory)
