@@ -519,14 +519,26 @@ fun DocumentViewerScreen(
                                                 }
                                             }
                                             
-                                            // 1.5. Dynamic tagging for 3-character ruby
-                                             document.querySelectorAll('rt').forEach(function(el) {
-                                                 var text = el.textContent.trim();
-                                                 if (text.length === 3) {
-                                                     // rt 태그 안쪽에 span을 넣어 감싸줍니다.
-                                                     el.innerHTML = '<span class="ruby-3-inner">' + text + '</span>';
-                                                 }
-                                             });
+                                            // 1.5. Dynamic tagging for ruby based on rules
+                                            document.querySelectorAll('rt').forEach(function(el) {
+                                                var rubyText = el.textContent.trim();
+                                                var baseNode = el.previousSibling || el.parentElement.firstChild;
+                                                var baseText = baseNode ? baseNode.textContent.trim() : "";
+                                                var baseLen = baseText.length;
+                                                var rubyLen = rubyText.length;
+                                                
+                                                var needCompression = false;
+                                                if (baseLen === 1 && rubyLen >= 3) needCompression = true;
+                                                else if (baseLen === 2 && rubyLen >= 5) needCompression = true;
+                                                else if (baseLen === 3 && rubyLen >= 7) needCompression = true;
+                                                
+                                                if (needCompression) {
+                                                    el.classList.add('ruby-wide');
+                                                    if (el.children.length === 0) {
+                                                        el.innerHTML = '<span>' + rubyText + '</span>';
+                                                    }
+                                                }
+                                            });
                                             
                                             // 2. 정확한 JS 기반 페이지 넘김 함수 생성
                                             window.pageDown = function() {
@@ -677,6 +689,35 @@ fun DocumentViewerScreen(
                                           height: auto !important;
                                           display: block !important;
                                           margin: 0 auto !important;
+                                      }
+                                      /* Table wrapping support */
+                                      table {
+                                          width: 100% !important;
+                                          table-layout: fixed !important;
+                                          border-collapse: collapse !important;
+                                          margin: 1em 0 !important;
+                                      }
+                                      th, td {
+                                          border: 1px solid #888 !important;
+                                          padding: 8px !important;
+                                          white-space: normal !important;
+                                          word-wrap: break-word !important;
+                                          overflow-wrap: break-word !important;
+                                          vertical-align: top !important;
+                                      }
+                                      rt {
+                                          font-size: 0.5em !important;
+                                          text-align: center !important;
+                                      }
+                                      .ruby-wide {
+                                          margin-left: -0.3em !important;
+                                          margin-right: -0.3em !important;
+                                      }
+                                      .ruby-wide span {
+                                          display: inline-block !important;
+                                          transform: scaleX(0.75) !important;
+                                          transform-origin: center bottom !important;
+                                          white-space: nowrap !important;
                                       }
                                       div[id^="line-"] {
                                           break-inside: avoid !important;

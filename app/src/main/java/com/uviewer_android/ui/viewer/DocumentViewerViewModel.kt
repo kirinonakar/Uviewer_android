@@ -224,17 +224,17 @@ class DocumentViewerViewModel(
                         // For CSV, just load the whole thing or large chunk for table view
                         val contentString = reader.readLines(1, totalLines.coerceAtMost(2000))
                         val rows = contentString.lines().filter { it.isNotBlank() }
-                        val sb = StringBuilder()
-                        sb.append("<table>")
+                        val sb = StringBuilder("<div class='table-container' style='overflow-x: auto; margin: 1em 0; width: 100%;'>")
+                        sb.append("<table style='width: 100%; table-layout: fixed; border-collapse: collapse; margin: 1em 0;'>")
                         rows.forEach { row ->
                             sb.append("<tr>")
                             val cells = row.split(",")
                             cells.forEach { cell ->
-                                sb.append("<td style='border:1px solid #ccc; padding: 4px;'>${cell.trim()}</td>")
+                                sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>${cell.trim()}</td>")
                             }
                             sb.append("</tr>")
                         }
-                        sb.append("</table>")
+                        sb.append("</table></div>")
                         
                          _uiState.value = _uiState.value.copy(
                             content = sb.toString(),
@@ -358,18 +358,32 @@ class DocumentViewerViewModel(
                         }
                         /* Support for tables in small screens */
                         table {
-                            display: block !important;
-                            overflow-x: auto !important;
                             width: 100% !important;
+                            table-layout: fixed !important;
+                            border-collapse: collapse !important;
+                            margin: 1em 0 !important;
+                            display: table !important; /* Ensure it's not block to respect table-layout */
+                        }
+                        th, td {
+                            border: 1px solid #888 !important;
+                            padding: 8px !important;
+                            white-space: normal !important;
+                            word-wrap: break-word !important;
+                            overflow-wrap: break-word !important;
+                            vertical-align: top !important;
                         }
                         rt {
+                            font-size: 0.5em !important;
                             text-align: center !important;
                         }
-                        .ruby-3-inner {
+                        .ruby-wide {
+                            margin-left: -0.3em !important;
+                            margin-right: -0.3em !important;
+                        }
+                        .ruby-wide span {
                             display: inline-block !important;
                             transform: scaleX(0.75) !important;
                             transform-origin: center bottom !important;
-                            margin: 0 -0.4em !important;
                             white-space: nowrap !important;
                         }
                         /* Hide potentially problematic layout elements */
@@ -562,13 +576,17 @@ class DocumentViewerViewModel(
                                 line-height: 1.8 !important;
                             }
                             rt {
+                                font-size: 0.5em !important;
                                 text-align: center !important;
                             }
-                            .ruby-3-inner {
+                            .ruby-wide {
+                                margin-left: -0.3em !important;
+                                margin-right: -0.3em !important;
+                            }
+                            .ruby-wide span {
                                 display: inline-block !important;
                                 transform: scaleX(0.75) !important;
                                 transform-origin: center bottom !important;
-                                margin: 0 -0.4em !important;
                                 white-space: nowrap !important;
                             }
                             /* Layout ignore fixes */
@@ -578,6 +596,21 @@ class DocumentViewerViewModel(
                                 width: auto !important;
                                 margin-left: 0 !important;
                                 margin-right: 0 !important;
+                            }
+                            /* Table wrapping support */
+                            table {
+                                width: 100% !important;
+                                table-layout: fixed !important;
+                                border-collapse: collapse !important;
+                                margin: 1em 0 !important;
+                            }
+                            th, td {
+                                border: 1px solid #888 !important;
+                                padding: 8px !important;
+                                white-space: normal !important;
+                                word-wrap: break-word !important;
+                                overflow-wrap: break-word !important;
+                                vertical-align: top !important;
                             }
                         </style>
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
@@ -684,6 +717,8 @@ class DocumentViewerViewModel(
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
+            .replace("&lt;br&gt;", "<br/>", ignoreCase = true)
+            .replace("&lt;br/&gt;", "<br/>", ignoreCase = true)
         
         // Tables - Improved Regex and parsing
         val tableRegex = Regex("(^(?:\\|.*\\|.*\\|*)+(?:\\r?\\n\\|[ :\\-\\| ]+\\|*)+(?:\\r?\\n(?:\\|.*\\|.*\\|*)+)*)", RegexOption.MULTILINE)
@@ -697,16 +732,15 @@ class DocumentViewerViewModel(
             }
             
             val sb = StringBuilder("<div class='table-container' style='overflow-x: auto; margin: 1em 0; background-color: transparent;'>")
-            sb.append("<table style='border-collapse: collapse; min-width: 100%; border: 1px solid #888; white-space: nowrap !important; word-break: normal !important; overflow-wrap: normal !important;'>")
+            sb.append("<table style='width: 100%; table-layout: fixed; border-collapse: collapse; margin: 1em 0;'>")
             sb.append("<thead style='background-color: rgba(128,128,128,0.2);'><tr>")
-            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px; text-align: center; white-space: nowrap !important;'>$it</th>") }
+            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px; text-align: center; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>$it</th>") }
             sb.append("</tr></thead><tbody>")
             rows.forEach { row ->
                 sb.append("<tr>")
-                // Fill missing cells if any
                 for (i in 0 until header.size) {
                     val cell = row.getOrNull(i) ?: ""
-                    sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: nowrap !important;'>$cell</td>")
+                    sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>$cell</td>")
                 }
                 sb.append("</tr>")
             }

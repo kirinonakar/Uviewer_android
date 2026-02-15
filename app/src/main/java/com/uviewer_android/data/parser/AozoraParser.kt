@@ -39,50 +39,37 @@ object AozoraParser {
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;")
+                .replace("&lt;br&gt;", "<br/>", ignoreCase = true)
+                .replace("&lt;br/&gt;", "<br/>", ignoreCase = true)
 
-            // Ruby pattern: ｜Kanji《Ruby》 or ｜Kanji(Ruby) or ｜Kanji（Ruby）
-            l = l.replace(Regex("[｜|](.+?)《(.+?)》")) { m ->
-                val base = m.groupValues[1]
-                val ruby = m.groupValues[2]
-                
-                val rubyClass = when {
-                    base.length == 1 && ruby.length >= 3 -> "ruby-scale"
-                    base.length == 2 && ruby.length >= 5 -> "ruby-scale"
-                    base.length == 3 && ruby.length >= 7 -> "ruby-scale"
-                    else -> ""
+            // [핵심 1] 루비 클래스 결정 로직을 함수로 분리 (규칙 통합)
+            fun getRubyHtml(base: String, ruby: String): String {
+                val needCompression = when {
+                    base.length == 1 && ruby.length >= 3 -> true
+                    base.length == 2 && ruby.length >= 5 -> true
+                    base.length == 3 && ruby.length >= 7 -> true
+                    else -> false
                 }
-                
-                if (rubyClass.isNotEmpty()) {
-                    "<ruby>$base<rt class=\"$rubyClass\">$ruby</rt></ruby>"
+
+                return if (needCompression) {
+                    "<ruby>$base<rt class=\"ruby-wide\"><span>$ruby</span></rt></ruby>"
                 } else {
                     "<ruby>$base<rt>$ruby</rt></ruby>"
                 }
             }
-            l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]")) { m ->
-                val ruby = m.groupValues[2]
-                if (ruby.length == 3) {
-                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
-                } else {
-                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
-                }
+
+            // Ruby pattern transformations
+            l = l.replace(Regex("[｜|](.+?)《(.+?)》")) { m ->
+                getRubyHtml(m.groupValues[1], m.groupValues[2])
             }
-            
-            // Regex for implicit Kanji《Ruby》 or Kanji(Ruby)
+            l = l.replace(Regex("[｜|](.+?)[(（](.+?)[)）]")) { m ->
+                getRubyHtml(m.groupValues[1], m.groupValues[2])
+            }
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》")) { m ->
-                val ruby = m.groupValues[2]
-                if (ruby.length == 3) {
-                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
-                } else {
-                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
-                }
+                getRubyHtml(m.groupValues[1], m.groupValues[2])
             }
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]")) { m ->
-                val ruby = m.groupValues[2]
-                if (ruby.length == 3) {
-                    "<ruby>${m.groupValues[1]}<rt><span class=\"ruby-3-inner\">$ruby</span></rt></ruby>"
-                } else {
-                    "<ruby>${m.groupValues[1]}<rt>$ruby</rt></ruby>"
-                }
+                getRubyHtml(m.groupValues[1], m.groupValues[2])
             }
 
             // Image tags - Case insensitive for extensions
@@ -242,20 +229,36 @@ object AozoraParser {
                         text-align: center;
                         margin: 1.5em 0;
                     }
-                    rt.ruby-scale {
-                        font-size: 0.75em;
-                        margin-left: -0.25em;
-                        margin-right: -0.25em;
+                    rt {
+                        font-size: 0.5em;
+                        text-align: center;
+                    }
+
+                    rt.ruby-wide {
+                        margin-left: -0.3em;
+                        margin-right: -0.3em;
+                    }
+
+                    rt.ruby-wide span {
+                        display: inline-block;
+                        transform: scaleX(0.75);
+                        transform-origin: center bottom;
+                        white-space: nowrap;
                     }
                     /* Table styling */
                     table {
-                        border-collapse: collapse;
                         width: 100%;
+                        table-layout: fixed;
+                        border-collapse: collapse;
                         margin: 1em 0;
                     }
                     th, td {
                         border: 1px solid #888;
                         padding: 8px;
+                        white-space: normal;
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                        vertical-align: top;
                     }
                     .table-container {
                         padding: 0 !important;
