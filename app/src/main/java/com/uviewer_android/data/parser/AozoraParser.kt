@@ -184,6 +184,18 @@ object AozoraParser {
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                <script>
+                    function jumpToBottom() {
+                        setTimeout(function() {
+                            var spacer = document.getElementById('end-marker');
+                            if (spacer) {
+                                spacer.scrollIntoView(false);
+                            } else {
+                                window.scrollTo(0, document.body.scrollHeight);
+                            }
+                        }, 50); 
+                    }
+                </script>
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&family=Sawarabi+Gothic&display=swap');
                     body {
@@ -196,10 +208,12 @@ object AozoraParser {
                         text-orientation: upright;
                         margin: 0;
                         padding: 0;
+                        padding-bottom: 50vh;
                         line-height: 1.8;
                         overflow-x: ${if (isVertical) "auto" else "hidden"};
-                        overflow-y: ${if (isVertical) "hidden" else "auto"};
-                        height: 100vh;
+                        overflow-y: ${if (isVertical) "hidden" else "visible"};
+                        height: ${if (isVertical) "100vh" else "auto"};
+                        min-height: 100vh;
                         width: ${if (isVertical) "auto" else "100%"};
                     }
                     p, div, h1, h2, h3 {
@@ -250,11 +264,14 @@ object AozoraParser {
                     /* Support for Vertical text centering and padding */
                     body.vertical {
                         padding: 2em 1.5em;
+                        padding-left: 50vh;
                     }
                 </style>
             </head>
             <body class="${if (isVertical) "vertical" else ""}">
                 $bodyContent
+                <div style="height: 50vh; width: 100%; clear: both;"></div>
+                <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
             </body>
             </html>
         """.trimIndent()

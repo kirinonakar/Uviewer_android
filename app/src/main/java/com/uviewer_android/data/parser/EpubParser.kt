@@ -130,8 +130,22 @@ object EpubParser {
     fun prepareHtmlForViewer(html: String, resetCss: String): Pair<String, Int> {
         val doc = Jsoup.parse(html)
         
-        // 1. Inject styling into head
+        // 1. Inject styling and scroll script into head
         doc.head().append(resetCss)
+        doc.head().append("""
+            <script>
+                function jumpToBottom() {
+                    setTimeout(function() {
+                        var spacer = document.getElementById('end-marker');
+                        if (spacer) {
+                            spacer.scrollIntoView(false);
+                        } else {
+                            window.scrollTo(0, document.body.scrollHeight);
+                        }
+                    }, 50);
+                }
+            </script>
+        """.trimIndent())
         
         // 2. Inject line IDs into body block elements
         val body = doc.body()
@@ -148,6 +162,12 @@ object EpubParser {
             body.html("<div id=\"line-1\">$content</div>")
             count = 1
         }
+        
+        // Append robust spacer and marker to prevent last line cutting. 
+        body.append("""
+            <div style="height: 50vh; width: 100%; clear: both;"></div>
+            <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
+        """.trimIndent())
         
         return doc.outerHtml() to count
     }

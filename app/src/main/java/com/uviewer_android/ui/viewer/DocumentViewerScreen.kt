@@ -4,6 +4,7 @@ import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.graphics.ColorUtils
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -79,96 +81,59 @@ fun DocumentViewerScreen(
         viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
     }
 
-    // Status Bar Logic
     val context = androidx.compose.ui.platform.LocalContext.current
     val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
-    
-    // Expose status bar appearance based on document background if it's "dark" or "custom" (if custom is dark enough)
-    // Simple heuristic for custom: if bg is dark, icons should be white.
-    fun isColorDark(colorHex: String?): Boolean {
-        if (colorHex == null) return false
-        return try {
-            val color = android.graphics.Color.parseColor(colorHex)
-            val grey = 0.2126 * android.graphics.Color.red(color) + 
-                       0.7152 * android.graphics.Color.green(color) + 
-                       0.0722 * android.graphics.Color.blue(color)
-            grey < 128
-        } catch (e: Exception) { false }
-    }
 
-    val useLightStatusBar = if (!isFullScreen) {
-        !isAppDark
-    } else {
-        when (docBackgroundColor) {
-            UserPreferencesRepository.DOC_BG_DARK -> false
-            UserPreferencesRepository.DOC_BG_CUSTOM -> !isColorDark(uiState.customDocBackgroundColor)
-            else -> true
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            val window = (context as? android.app.Activity)?.window
-            if (window != null) {
-                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = !isAppDark
+    // [추가] 문서 배경색을 Compose Color 객체로 변환
+    val targetDocColor = remember(docBackgroundColor, uiState.customDocBackgroundColor) {
+        val colorHex = when (docBackgroundColor) {
+            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
+            UserPreferencesRepository.DOC_BG_DARK -> "#121212"
+            UserPreferencesRepository.DOC_BG_CUSTOM -> {
+                val custom = uiState.customDocBackgroundColor
+                if (custom != null && custom.startsWith("#")) custom else "#FFFFFF"
             }
+            else -> "#FFFFFF"
+        }
+        try {
+            Color(android.graphics.Color.parseColor(colorHex))
+        } catch (e: Exception) {
+            Color.White
         }
     }
+    
+    // [추가] 상태바 아이콘 색상 결정 (배경이 어두우면 아이콘은 밝게)
+    val useDarkIcons = remember(targetDocColor, isFullScreen, isAppDark) {
+         if (isFullScreen) {
+             targetDocColor.luminance() > 0.5f // 배경이 밝으면(>0.5) 어두운 아이콘 사용
+         } else {
+             !isAppDark // 앱이 다크모드가 아니면 어두운 아이콘 사용
+         }
+    }
 
-    LaunchedEffect(isFullScreen, useLightStatusBar, docBackgroundColor, uiState.customDocBackgroundColor) {
+    // [수정] Window 설정 (상태바 색상 강제 적용 + 아이콘 색상)
+    LaunchedEffect(isFullScreen, targetDocColor, useDarkIcons) {
         val window = (context as? android.app.Activity)?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             
+            // 상태바 배경색 설정 (Legacy 지원 및 Edge-to-Edge가 아닌 경우 대비)
+            // 전체화면일 땐 문서색, 아닐 땐 투명(Scaffold 배경이 보임)
+            val statusBarColorInt = (if (isFullScreen) targetDocColor else Color.Transparent).toArgb()
+            
+            window.statusBarColor = statusBarColorInt
+            window.navigationBarColor = statusBarColorInt
+            
+            // 아이콘 밝기 설정
+            insetsController.isAppearanceLightStatusBars = useDarkIcons
+            insetsController.isAppearanceLightNavigationBars = useDarkIcons
+            
             if (isFullScreen) {
-                // Change status bar and navigation bar colors to match document background
-                val bgColorHex = when (docBackgroundColor) {
-                    UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
-                    UserPreferencesRepository.DOC_BG_DARK -> "#121212"
-                    UserPreferencesRepository.DOC_BG_CUSTOM -> {
-                        val custom = uiState.customDocBackgroundColor
-                        if (custom.startsWith("#")) custom else "#FFFFFF"
-                    }
-                    else -> "#FFFFFF"
-                }
-
-                try {
-                    val color = android.graphics.Color.parseColor(bgColorHex)
-                    window.statusBarColor = color
-                    window.navigationBarColor = color
-                    
-                    // Set status/navigation bar appearance (icon colors)
-                    insetsController.isAppearanceLightStatusBars = useLightStatusBar
-                    insetsController.isAppearanceLightNavigationBars = useLightStatusBar
-                } catch (e: Exception) {
-                    // Fallback to white or dark if parsing fails
-                    if (docBackgroundColor == UserPreferencesRepository.DOC_BG_DARK) {
-                        window.statusBarColor = android.graphics.Color.DKGRAY
-                        window.navigationBarColor = android.graphics.Color.DKGRAY
-                        insetsController.isAppearanceLightStatusBars = false
-                        insetsController.isAppearanceLightNavigationBars = false
-                    } else {
-                        window.statusBarColor = android.graphics.Color.WHITE
-                        window.navigationBarColor = android.graphics.Color.WHITE
-                        insetsController.isAppearanceLightStatusBars = true
-                        insetsController.isAppearanceLightNavigationBars = true
-                    }
-                }
-
-                // Hide navigation, keep status
                 insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                 insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
             } else {
-                // Reset to navigation defaults (Transparent + app theme icons)
-                window.statusBarColor = android.graphics.Color.TRANSPARENT
-                window.navigationBarColor = android.graphics.Color.TRANSPARENT
-                insetsController.isAppearanceLightStatusBars = !isAppDark
-                insetsController.isAppearanceLightNavigationBars = !isAppDark
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -262,6 +227,8 @@ fun DocumentViewerScreen(
         gesturesEnabled = false
     ) {
         Scaffold(
+            // [핵심 수정] 전체 화면일 때 Scaffold 배경색을 문서 배경색과 일치시킴
+            containerColor = if (isFullScreen) targetDocColor else MaterialTheme.colorScheme.background,
             topBar = {
                 if (!isFullScreen) {
                     TopAppBar(
@@ -538,11 +505,8 @@ fun DocumentViewerScreen(
                                         val jsScrollLogic = """
                                             // 1. Restore scroll position
                                             if ($targetLine === $totalLines && $totalLines > 1) {
-                                                 var el = document.getElementById('line-$targetLine');
-                                                 if (el) {
-                                                     var rect = el.getBoundingClientRect();
-                                                     var targetY = window.pageYOffset + rect.bottom - window.innerHeight;
-                                                     window.scrollTo(0, targetY);
+                                                 if (typeof jumpToBottom === 'function') {
+                                                     jumpToBottom();
                                                  } else {
                                                      window.scrollTo(0, document.documentElement.scrollHeight);
                                                  }
