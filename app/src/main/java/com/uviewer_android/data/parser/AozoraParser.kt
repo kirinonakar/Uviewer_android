@@ -54,25 +54,34 @@ object AozoraParser {
             marker
         }
 
-        // [수정 1] 마커를 마크다운 문법(__)과 겹치지 않는 특수 문자로 변경 (%%% 사용)
+        // [수정 1] 볼드체 처리 로직 강화
+        // 마커를 마크다운 문법(__)과 겹치지 않는 특수 문자로 변경 (%%% 사용)
         val markerStart = "%%%BOLD_START%%%"
         val markerEnd = "%%%BOLD_END%%%"
 
-        val boldStartPattern = "［＃(?:여기서 태그 시작 |ここから太字)］"
-        val boldEndPattern = "［＃(?:여기서 태그 끝 | 여기서 태그 끝 |太字終わり)］"
+        // Aozora 및 Narou 스타일 태그 패턴 정의
+        // 여러번 시작 태그가 나오면 마지막 것만 유효하게 처리하는 로직은 아래 markedText 블록에 있음
+        val boldStartPattern = "［＃(?:여기서 태그 시작|ここから太字)］"
+        val boldEndPattern = "［＃(?:여기서 태그 끝|ここで太字終わり|太字終わり)］"
+        
+        // DOT_MATCHES_ALL을 사용하여 줄바꿈이 있어도 태그 사이를 매칭
         val boldRegex = Regex("$boldStartPattern(.*?)$boldEndPattern", RegexOption.DOT_MATCHES_ALL)
 
         val markedText = boldRegex.replace(protectedText) { match: MatchResult ->
             val content = match.groupValues[1]
             val startRegex = Regex(boldStartPattern)
+            
+            // 내용 안에 또 다른 시작 태그가 있는지 확인
             val parts = content.split(startRegex)
             
             if (parts.size == 1) {
+                // 시작 태그가 하나뿐인 정상적인 경우
                 "$markerStart${content}$markerEnd"
             } else {
-                // 중복 태그 처리: 마지막 시작 태그만 유효
-                val prefix = parts.dropLast(1).joinToString("")
-                val boldContent = parts.last()
+                // 중복 태그 처리: 내용 중에 시작 태그가 또 있다면, 마지막 시작 태그 이전의 내용은 볼드 처리 안 함
+                // 예: A [Start] B [Start] C [End] -> A B <b>C</b>
+                val prefix = parts.dropLast(1).joinToString("") // 앞부분 (볼드 아님)
+                val boldContent = parts.last() // 마지막 태그 뒷부분 (볼드 적용)
                 "${prefix}$markerStart${boldContent}$markerEnd"
             }
         }
@@ -95,7 +104,33 @@ object AozoraParser {
                 }
             }
 
-            // Ruby logic
+            // [수정 2] 방점 (Bouten) 처리 - 로직 완전 변경
+            // 문제 해결: 복잡한 역참조 정규식 대신, 태그를 먼저 찾고 해당 단어를 타겟팅하여 치환
+            // 1. 방점 태그 패턴을 모두 찾음: ［＃「단어」에傍点］
+            val boutenRegex = Regex("［＃「(.+?)」に傍点］")
+            val boutenMatches = boutenRegex.findAll(l).toList() // 리스트로 변환하여 고정
+
+            // 2. 발견된 태그들에 대해 순차적으로 치환 수행
+            boutenMatches.forEach { match ->
+                val targetWord = match.groupValues[1] // 태그 안의 단어 (예: ズレ)
+                val fullTag = match.value             // 태그 전체 (예: ［＃「ズレ」に傍点］)
+                
+                // 정규식 특수문자가 단어에 포함될 경우를 대비해 quote 처리
+                val safeWord = Pattern.quote(targetWord)
+                val safeTag = Pattern.quote(fullTag)
+
+                // "단어" 바로 뒤에 "태그"가 붙어있는 패턴을 찾음 (예: ズレ［＃「ズレ」에傍点］)
+                val targetPattern = Regex("$safeWord$safeTag")
+
+                l = l.replace(targetPattern) {
+                    // 글자마다 루비 점 찍기 (단어를 글자 단위로 분리)
+                    targetWord.map { char ->
+                        "<ruby class=\"bouten\">$char<rt>﹅</rt></ruby>"
+                    }.joinToString("")
+                }
+            }
+
+            // Ruby logic (일반 루비)
             fun getRubyHtml(base: String, ruby: String): String {
                 val needCompression = when {
                     base.length == 1 && ruby.length >= 3 -> true
@@ -114,7 +149,7 @@ object AozoraParser {
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)《(.+?)》")) { m -> getRubyHtml(m.groupValues[1], m.groupValues[2]) }
             l = l.replace(Regex("([\\u4E00-\\u9FFF\\u3400-\\u4DBF]+)[(（]([\\u3040-\\u309F\\u30A0-\\u30FF]+)[)）]")) { m -> getRubyHtml(m.groupValues[1], m.groupValues[2]) }
 
-            // [수정] Aozora 스타일 이미지 태그 경로 수정
+            // Aozora 스타일 이미지 태그 경로 수정
             fun makeImgTag(fileName: String): String {
                 val fullPath = if (fileName.startsWith("http") || fileName.startsWith("file://") || imageRootPath.isEmpty()) {
                     fileName
@@ -141,7 +176,7 @@ object AozoraParser {
             l = l.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
             l = l.replace(Regex("__(.*?)__"), "<b>$1</b>")
             
-            // [수정 2] 변경된 마커(%%%)를 감지하여 실제 태그로 변환
+            // 변경된 마커(%%%)를 감지하여 실제 태그로 변환
             val wasBoldAtStart = isBold
             if (l.contains(markerStart)) {
                 isBold = true
@@ -162,8 +197,9 @@ object AozoraParser {
             }
 
             // Page Break & Indent
-            lineContent = lineContent.replace(Regex("［＃改페이지］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
-            lineContent = lineContent.replace(Regex("［＃改頁］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            // [수정 3] "改ページ" (가타카나) 추가 지원
+            lineContent = lineContent.replace(Regex("［＃(?:改ページ|改페이지|改頁)］"), "<div style=\"break-after: page; height: 100vh; width: 1px;\"></div>")
+            
             lineContent = lineContent.replace(Regex("［＃ここから(\\d+)字下げ］"), "<div style=\"margin-inline-start: $1em;\">")
             lineContent = lineContent.replace("［＃ここで字下げ終わり］", "</div>")
 
@@ -274,7 +310,6 @@ object AozoraParser {
                         vertical-align: middle;
                         object-fit: contain; /* 비율 유지 */
                     }
-                    /* 이미지가 로드되지 않았을 때의 스타일 보완 */
                     img[style*="display: none"] {
                         margin: 0 !important;
                         height: 0 !important;
@@ -291,6 +326,17 @@ object AozoraParser {
                     rt {
                         font-size: 0.5em;
                         text-align: center;
+                    }
+                    
+                    /* [수정 2-1] 방점 스타일: 행간 벌어짐 최소화 및 글자별 배치 */
+                    ruby.bouten {
+                        ruby-align: center; /* 점이 글자 중앙에 오도록 */
+                    }
+                    ruby.bouten rt {
+                        font-size: 0.4em; /* 점 크기 */
+                        line-height: 0;   /* rt가 행간에 영향을 주지 않도록 0으로 설정 */
+                        opacity: 0.8;
+                        transform: translateY(0.2em); /* 점을 글자 쪽으로 살짝 붙임 (필요시 조정) */
                     }
 
                     rt.ruby-wide {
