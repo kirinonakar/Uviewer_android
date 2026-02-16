@@ -45,6 +45,7 @@ fun SettingsScreen(
     val persistZoom by viewModel.persistZoom.collectAsState()
     val sharpeningAmount by viewModel.sharpeningAmount.collectAsState()
     val imageViewMode by viewModel.imageViewMode.collectAsState()
+    val cacheSize by viewModel.cacheSize.collectAsState()
 
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -267,9 +268,33 @@ fun SettingsScreen(
 
             item { HorizontalDivider() }
             item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.section_webdav), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.secondary) }
+                Text(
+                    text = stringResource(R.string.section_storage),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp)
                 )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.app_cache)) },
+                    supportingContent = { Text(stringResource(R.string.cache_size_fmt, cacheSize)) },
+                    trailingContent = {
+                        TextButton(onClick = { viewModel.clearCache() }) {
+                            Text(stringResource(R.string.clear_cache))
+                        }
+                    }
+                )
+            }
+
+            item { HorizontalDivider() }
+            item {
+                Text(
+                    text = stringResource(R.string.section_webdav),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
                     modifier = Modifier.clickable { showAddDialog = true }
@@ -577,14 +602,22 @@ fun AddServerDialog(
                 )
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                    Text("Use HTTPS", modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f))
                     Switch(checked = useHttps, onCheckedChange = { useHttps = it })
+                }
+                
+                if (!useHttps) {
+                    Text(
+                        text = stringResource(R.string.insecure_connection_warning),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.labelSmall
+                    )
                 }
 
                 OutlinedTextField(
                     value = host,
                     onValueChange = { host = it },
-                    label = { Text("Host (e.g. example.com/dav)") },
+                    label = { Text(stringResource(R.string.server_host_hint)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next)

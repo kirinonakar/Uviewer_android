@@ -70,6 +70,7 @@ object AppViewModelProvider {
         initializer {
             val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as UviewerApplication)
             com.uviewer_android.ui.settings.SettingsViewModel(
+                application = app,
                 webDavServerDao = app.container.database.webDavServerDao(),
                 credentialsManager = app.container.credentialsManager,
                 userPreferencesRepository = app.container.userPreferencesRepository

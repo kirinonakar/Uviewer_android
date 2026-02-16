@@ -40,7 +40,7 @@ fun ViewerScreen(
         val ext = filePath.substringAfterLast(".", "").lowercase()
         when (ext) {
             "png", "jpg", "jpeg", "webp", "gif", "bmp", "avif" -> FileEntry.FileType.IMAGE
-            "zip", "cbz", "rar" -> FileEntry.FileType.ZIP
+            "zip", "cbz", "rar", "7z" -> FileEntry.FileType.ZIP
             "txt", "md", "csv", "log", "aozora" -> FileEntry.FileType.TEXT
             "epub" -> FileEntry.FileType.EPUB
             "pdf" -> FileEntry.FileType.PDF

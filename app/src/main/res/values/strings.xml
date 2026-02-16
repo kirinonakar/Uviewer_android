@@ -88,6 +88,11 @@
     <string name="image_view_dual">Dual Page</string>
     <string name="image_view_split">Split View</string>
 
+    <string name="section_storage">Storage</string>
+    <string name="app_cache">App Cache</string>
+    <string name="cache_size_fmt">Current size: %s</string>
+    <string name="clear_cache">Clear</string>
+
     <string name="language">Language</string>
     <string name="lang_system">System Default</string>
     <string name="lang_en">English</string>
@@ -113,7 +118,7 @@
     <string name="use_https">Use HTTPS</string>
     <string name="server_host_hint">Host (e.g. example.com/dav)</string>
     <string name="server_port_hint">Port (Leave empty for default)</string>
-    <string name="insecure_connection_warning">보안되지 않은 연결입니다. 비밀번호가 노출될 수 있습니다.</string>
+    <string name="insecure_connection_warning">Warning: Insecure connection (HTTP) can expose your data.</string>
 
     <!-- Viewers -->
     <string name="unsupported_type_fmt">Unsupported file type: %1$s\nPath: %2$s</string>

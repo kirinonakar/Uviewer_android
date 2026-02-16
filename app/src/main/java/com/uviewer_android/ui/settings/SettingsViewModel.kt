@@ -1,21 +1,34 @@
 package com.uviewer_android.ui.settings
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.WebDavServer
 import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.repository.CredentialsManager
+import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.UserPreferencesRepository
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 class SettingsViewModel(
+    application: Application,
     private val webDavServerDao: WebDavServerDao,
     private val credentialsManager: CredentialsManager,
     private val userPreferencesRepository: UserPreferencesRepository
-) : ViewModel() {
+) : AndroidViewModel(application) {
+
+    private val _cacheSize = MutableStateFlow("0 B")
+    val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
+
+    init {
+        updateCacheSize()
+    }
 
     val servers: StateFlow<List<WebDavServer>> = webDavServerDao.getAllServers()
         .stateIn(
@@ -122,7 +135,32 @@ class SettingsViewModel(
         userPreferencesRepository.setImageViewMode(mode)
     }
 
+    fun updateCacheSize() {
+        viewModelScope.launch {
+            val size = calculateCacheSize()
+            _cacheSize.value = FileRepository.formatFileSize(size)
+        }
+    }
 
+    private fun calculateCacheSize(): Long {
+        val context = getApplication<Application>()
+        return dirSize(context.cacheDir) + dirSize(context.externalCacheDir ?: context.cacheDir)
+    }
+
+    private fun dirSize(dir: File): Long {
+        var size: Long = 0
+        dir.walkTopDown().forEach { if (it.isFile) size += it.length() }
+        return size
+    }
+
+    fun clearCache() {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            context.cacheDir.deleteRecursively()
+            context.externalCacheDir?.deleteRecursively()
+            updateCacheSize()
+        }
+    }
 
     fun addServer(name: String, url: String, username: String, password: String?) {
         viewModelScope.launch {
@@ -141,3 +179,4 @@ class SettingsViewModel(
         }
     }
 }
+

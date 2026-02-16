@@ -75,6 +75,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.androidx.security.crypto)
     implementation(libs.commons.io)
+    implementation(libs.junrar)
+    implementation(libs.commons.compress)
     implementation(libs.jsoup)
 
     testImplementation(libs.junit)

@@ -79,6 +79,7 @@
     <string name="use_https">HTTPS 사용</string>
     <string name="server_host_hint">호스트 (예: example.com/dav)</string>
     <string name="server_port_hint">포트 (비워두면 기본값 사용)</string>
+    <string name="insecure_connection_warning">보안되지 않은 연결(HTTP)입니다. 비밀번호 등 데이터가 노출될 수 있습니다.</string>
 
     <!-- Viewers -->
     <string name="add_server_menu">+ 서버 추가</string>
@@ -107,6 +108,11 @@
     <string name="image_view_single">한 장 보기</string>
     <string name="image_view_dual">두 장 보기</string>
     <string name="image_view_split">좌우 분할 보기</string>
+
+    <string name="section_storage">저장공간</string>
+    <string name="app_cache">앱 캐시</string>
+    <string name="cache_size_fmt">현재 용량: %s</string>
+    <string name="clear_cache">지우기</string>
     <string name="prev_file">이전 파일</string>
     <string name="next_file">다음 파일</string>
 </resources>

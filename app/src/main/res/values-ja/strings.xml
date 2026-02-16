@@ -79,6 +79,7 @@
     <string name="use_https">HTTPSを使用</string>
     <string name="server_host_hint">ホスト (例: example.com/dav)</string>
     <string name="server_port_hint">ポート (空欄の場合はデフォルトを使用)</string>
+    <string name="insecure_connection_warning">保護されていない接続(HTTP)です。パスワードなどのデータが漏洩する可能性があります。</string>
 
     <!-- Viewers -->
     <string name="add_server_menu">+ サーバーを追加</string>
@@ -107,6 +108,11 @@
     <string name="image_view_single">1枚表示</string>
     <string name="image_view_dual">2枚表示</string>
     <string name="image_view_split">左右分割表示</string>
+
+    <string name="section_storage">ストレージ</string>
+    <string name="app_cache">アプリキャッシュ</string>
+    <string name="cache_size_fmt">現在のサイズ: %s</string>
+    <string name="clear_cache">削除</string>
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
 </resources>

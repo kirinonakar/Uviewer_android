@@ -76,12 +76,13 @@ fun MediaPlayerScreen(
             if (fileType == FileEntry.FileType.VIDEO) {
                  if (isFullScreen) {
                      insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                     insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
                      insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                  } else {
                      insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                  }
-            } else {
+            }
+ else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
         }
@@ -234,8 +235,8 @@ fun MediaPlayerScreen(
                  controller.setMediaItems(mediaItems, currentIndex, uiState.savedPosition)
                  controller.prepare()
                  controller.playWhenReady = true
-            } else if (currentMediaId != expectedMediaId) {
-                controller.seekToDefaultPosition(currentIndex)
+            } else if (currentMediaId != expectedMediaId && expectedMediaId != null) {
+                controller.seekTo(currentIndex, androidx.media3.common.C.TIME_UNSET)
                 controller.playWhenReady = true
             }
             
@@ -269,13 +270,13 @@ fun MediaPlayerScreen(
                         actions = {
                             IconButton(onClick = { 
                                 mediaController?.seekToPrevious()
-                                viewModel.prev(isWebDav, serverId) 
+                                // viewModel.prev removed to avoid double navigation
                             }) {
                                 Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White)
                             }
                             IconButton(onClick = { 
                                 mediaController?.seekToNext()
-                                viewModel.next(isWebDav, serverId) 
+                                // viewModel.next removed to avoid double navigation
                             }) {
                                 Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
                             }
@@ -515,8 +516,8 @@ fun MediaPlayerScreen(
                             ) {
                                 IconButton(onClick = { 
                                     mediaController?.seekToPrevious()
-                                    viewModel.prev(isWebDav, serverId) 
-                                    showControls = true // Reset timer
+                                    // viewModel.prev removed
+                                    showControls = true 
                                 }) {
                                     Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(48.dp))
                                 }
@@ -527,7 +528,7 @@ fun MediaPlayerScreen(
                                     mediaController?.let {
                                         if (it.isPlaying) it.pause() else it.play()
                                     }
-                                    showControls = true // Reset timer
+                                    showControls = true 
                                 }) {
                                     Icon(
                                         if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, 
@@ -541,8 +542,8 @@ fun MediaPlayerScreen(
                                 
                                 IconButton(onClick = { 
                                     mediaController?.seekToNext()
-                                    viewModel.next(isWebDav, serverId) 
-                                    showControls = true // Reset timer
+                                    // viewModel.next removed
+                                    showControls = true 
                                 }) {
                                     Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
                                 }

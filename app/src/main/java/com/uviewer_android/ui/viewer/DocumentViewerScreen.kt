@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.List
@@ -189,12 +190,25 @@ fun DocumentViewerScreen(
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
-                HorizontalDivider()
-                LazyColumn {
+                val tocListState = rememberLazyListState()
+                LaunchedEffect(drawerState.isOpen) {
+                    if (drawerState.isOpen && uiState.currentChapterIndex >= 0) {
+                        tocListState.scrollToItem(uiState.currentChapterIndex)
+                    }
+                }
+                LazyColumn(state = tocListState) {
                     itemsIndexed(uiState.epubChapters) { index, item ->
+                        val isSelected = index == uiState.currentChapterIndex
                         NavigationDrawerItem(
-                            label = { Text(item.title ?: "Chapter ${index + 1}", maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
-                            selected = index == uiState.currentChapterIndex,
+                            label = { 
+                                Column {
+                                    Text(item.title ?: "Chapter ${index + 1}", maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                    if (isSelected) {
+                                        Text("Current Location: Line $currentLine", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            },
+                            selected = isSelected,
                         onClick = {
                             if (item.href.startsWith("line-")) {
                                 val line = item.href.replace("line-", "").toIntOrNull() ?: 1
@@ -241,9 +255,7 @@ fun DocumentViewerScreen(
                 if (!isFullScreen) {
                     TopAppBar(
                         title = { 
-                            if (!uiState.isLoading) {
-                                Text(uiState.fileName ?: stringResource(R.string.title_document_viewer), maxLines = 1) 
-                            }
+                            // Filename hidden as requested
                         },
                         navigationIcon = {
                             IconButton(onClick = onBack) {
@@ -330,14 +342,18 @@ fun DocumentViewerScreen(
             },
             bottomBar = {
                 if (!isFullScreen) {
-                    BottomAppBar {
-                        Column(modifier = Modifier.fillMaxWidth()) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        tonalElevation = 3.dp
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
                             if (!uiState.isLoading) {
                                 Text(
                                     uiState.fileName ?: "", 
                                     style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                                 )
                             } else {
                                 Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
@@ -369,14 +385,12 @@ fun DocumentViewerScreen(
                                  onValueChangeFinished = {
                                      val targetChunk = (currentLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
                                      
-                                     // Unlock navigation mode if chunk changes or jump distance is large
                                      if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(currentLine - uiState.currentLine) > 50) {
                                          isNavigating = true
                                          isPageLoading = true
                                      }
                                      viewModel.jumpToLine(currentLine)
                                      
-                                     // If same chunk, manual scroll and release lock after delay
                                      if (targetChunk == uiState.currentChunkIndex) {
                                          val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
                                          webViewRef?.evaluateJavascript(js) {
@@ -389,7 +403,7 @@ fun DocumentViewerScreen(
                                  },
                                  valueRange = 1f..uiState.totalLines.toFloat().coerceAtLeast(1f),
                                  interactionSource = sliderInteractionSource,
-                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                 modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 16.dp)
                             )
                          }
                          if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {

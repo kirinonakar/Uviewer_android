@@ -140,7 +140,7 @@ enum class ViewMode {
             currentPath = filePath
             currentIsWebDav = isWebDav
             currentServerId = serverId
-            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
             currentIsZip = isZip
 
             viewModelScope.launch {
@@ -175,7 +175,8 @@ enum class ViewMode {
                     val contentIsWebDav = isWebDav && !isZip
 
                     val images = if (isZip) {
-                        if (isWebDav && serverId != null) {
+                        val isStreamable = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") }
+                        if (isWebDav && serverId != null && isStreamable) {
                             // Streaming for WebDAV Zip
                             val zipSize = webDavRepository.getFileSize(serverId, filePath)
                             val manager = com.uviewer_android.data.utils.RemoteZipManager(webDavRepository, serverId, filePath, zipSize)
@@ -209,17 +210,44 @@ enum class ViewMode {
                                 throw Exception("No images found in the zip file.")
                             }
                             zipImages
+                        } else if (isWebDav && serverId != null) {
+                            // Non-ZIP Archive on WebDAV (RAR, 7Z) -> Download then extract
+                            val context = getApplication<Application>()
+                            val cacheDir = context.cacheDir
+                            val tempFile = File(cacheDir, "temp_archive_${System.currentTimeMillis()}.${filePath.substringAfterLast('.')}")
+                            webDavRepository.downloadFile(serverId, filePath, tempFile)
+                            
+                            val unzipDir = File(cacheDir, "zip_${tempFile.name}_unzipped")
+                            if (unzipDir.exists()) unzipDir.deleteRecursively()
+                            unzipDir.mkdirs()
+                            
+                            com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
+                            tempFile.delete() // Clean up the archive file
+                            
+                            unzipDir.walkTopDown()
+                                .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
+                                .map { file ->
+                                    FileEntry(
+                                        name = file.name,
+                                        path = file.absolutePath,
+                                        isDirectory = false,
+                                        type = FileEntry.FileType.IMAGE,
+                                        lastModified = file.lastModified(),
+                                        size = file.length()
+                                    )
+                                }
+                                .sortedBy { it.name.lowercase() }
+                                .toList()
                         } else {
                             // Local Zip logic
                             val context = getApplication<Application>()
                             val cacheDir = context.cacheDir
                             val zipFile = File(filePath)
-
                             val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
                             if (unzipDir.exists()) unzipDir.deleteRecursively()
                             unzipDir.mkdirs()
                             
-                            EpubParser.unzip(zipFile, unzipDir)
+                            com.uviewer_android.data.utils.ArchiveExtractor.extract(zipFile, unzipDir)
                             
                             unzipDir.walkTopDown()
                                 .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }

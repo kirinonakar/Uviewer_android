@@ -21,6 +21,8 @@ jsoup = "1.18.1"
 folioreader = "0.5.4" # Or alternative
 ksp = "2.0.21-1.0.27"
 appcompat = "1.7.1"
+junrar = "7.5.5"
+commonsCompress = "1.26.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -53,6 +55,8 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 commons-io = { group = "commons-io", name = "commons-io", version.ref = "commonsIo" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+junrar = { group = "com.github.junrar", name = "junrar", version.ref = "junrar" }
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

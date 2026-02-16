@@ -340,13 +340,15 @@ fun FileItemRow(
     onTogglePin: () -> Unit,
     onClick: () -> Unit
 ) {
+    val typography = MaterialTheme.typography
+    var textStyle by remember { mutableStateOf(typography.bodyLarge) }
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
             val icon = when {
                 file.path.startsWith("server:") -> Icons.Default.Dns
                 file.type == FileEntry.FileType.FOLDER -> Icons.Filled.Folder
-                file.type == FileEntry.FileType.ZIP -> Icons.Filled.Archive
+                file.type == FileEntry.FileType.ZIP || file.type == FileEntry.FileType.RAR || file.type == FileEntry.FileType.SEVEN_ZIP -> Icons.Filled.Archive
                 file.type == FileEntry.FileType.IMAGE -> Icons.Filled.Image
                 file.type == FileEntry.FileType.AUDIO -> Icons.Filled.MusicNote
                 file.type == FileEntry.FileType.VIDEO -> Icons.Filled.Movie
@@ -362,9 +364,9 @@ fun FileItemRow(
         headlineContent = { 
             Text(
                 file.name, 
-                maxLines = 10, 
-                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
-                style = MaterialTheme.typography.bodyLarge
+                maxLines = Int.MAX_VALUE, 
+                style = textStyle,
+                onTextLayout = { if (it.lineCount >= 3) textStyle = typography.bodyMedium }
             ) 
         },
         supportingContent = {
@@ -404,6 +406,8 @@ fun FileItemGridCard(
     onTogglePin: () -> Unit,
     onClick: () -> Unit
 ) {
+    val typography = MaterialTheme.typography
+    var textStyle by remember { mutableStateOf(typography.labelMedium) }
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -430,7 +434,7 @@ fun FileItemGridCard(
                     val icon = when {
                         file.path.startsWith("server:") -> Icons.Default.Dns
                         file.isDirectory -> Icons.Filled.Folder
-                        file.type == FileEntry.FileType.ZIP -> Icons.Filled.Archive
+                        file.type == FileEntry.FileType.ZIP || file.type == FileEntry.FileType.RAR || file.type == FileEntry.FileType.SEVEN_ZIP -> Icons.Filled.Archive
                         file.type == FileEntry.FileType.IMAGE -> Icons.Filled.Image
                         file.type == FileEntry.FileType.AUDIO -> Icons.Filled.MusicNote
                         file.type == FileEntry.FileType.VIDEO -> Icons.Filled.Movie
@@ -471,11 +475,11 @@ fun FileItemGridCard(
             Column(modifier = Modifier.padding(8.dp)) {
                 Text(
                     file.name,
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    style = textStyle,
+                    maxLines = Int.MAX_VALUE,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    onTextLayout = { if (it.lineCount >= 3) textStyle = typography.labelSmall }
                 )
                 if (!file.isDirectory) {
                     Text(

@@ -259,14 +259,7 @@ fun ImageViewerScreen(
                     Column {
                         TopAppBar(
                             title = {
-                                Column {
-                                    if (containerName != null) {
-                                        Text(containerName, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                                        Text(imageTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall)
-                                    } else {
-                                        Text(imageTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                                    }
-                                }
+                                // Filename hidden as requested
                             }, 
                             navigationIcon = {
                                 IconButton(onClick = onBack) {
@@ -372,9 +365,9 @@ fun ImageViewerScreen(
             },
             bottomBar = {
                 if (!isFullScreen && uiState.images.size > 1) {
-                    BottomAppBar(
-                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        contentPadding = PaddingValues(0.dp),
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        tonalElevation = 3.dp,
                         modifier = Modifier.height(intrinsicSize = IntrinsicSize.Min)
                     ) {
                         Column(
@@ -390,13 +383,14 @@ fun ImageViewerScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
                             }
                             
-                            // Image Name and Progress
+                            // Image Name (2 lines possible)
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -405,8 +399,8 @@ fun ImageViewerScreen(
                                 
                                 Text(
                                     text = imageName,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f)
                                 )
@@ -436,7 +430,7 @@ fun ImageViewerScreen(
                                     }
                                 },
                                 valueRange = 0f..(uiState.images.size - 1).coerceAtLeast(0).toFloat(),
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth().height(32.dp)
                             )
                         }
                     }
