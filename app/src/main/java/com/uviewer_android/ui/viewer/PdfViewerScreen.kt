@@ -36,6 +36,8 @@ import com.uviewer_android.MainActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.ui.AppViewModelProvider
 
+import androidx.activity.compose.BackHandler
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PdfViewerScreen(
@@ -47,6 +49,7 @@ fun PdfViewerScreen(
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {}
 ) {
+    BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     var renderer: PdfRenderer? by remember { mutableStateOf(null) }
     var fileDescriptor: ParcelFileDescriptor? by remember { mutableStateOf(null) }

@@ -54,6 +54,7 @@
     <string name="doc_bg_sepia">Sepia</string>
     <string name="doc_bg_dark">Dark</string>
     <string name="doc_bg_custom">Custom</string>
+    <string name="doc_bg_comfort">Comfort</string>
     <string name="select_doc_bg">Select Document Background</string>
 
     <!-- Settings: Reading -->
@@ -128,4 +129,6 @@
     <string name="encoding_euckr">EUC-KR (Korea)</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="side_margin_fmt">Side Margin: %d</string>
+    <string name="prev_file">Previous File</string>
+    <string name="next_file">Next File</string>
 </resources>

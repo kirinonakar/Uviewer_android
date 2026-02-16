@@ -112,6 +112,7 @@ fun SettingsScreen(
                     UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
                     UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
                     UserPreferencesRepository.DOC_BG_DARK -> stringResource(R.string.doc_bg_dark)
+                    UserPreferencesRepository.DOC_BG_COMFORT -> stringResource(R.string.doc_bg_comfort)
                     UserPreferencesRepository.DOC_BG_CUSTOM -> stringResource(R.string.doc_bg_custom)
                     else -> stringResource(R.string.doc_bg_white)
                 }
@@ -445,6 +446,7 @@ fun DocBgSelectionDialog(
             Column {
                 ThemeOptionRow(stringResource(R.string.doc_bg_white), UserPreferencesRepository.DOC_BG_WHITE, currentBg, onSelect)
                 ThemeOptionRow(stringResource(R.string.doc_bg_sepia), UserPreferencesRepository.DOC_BG_SEPIA, currentBg, onSelect)
+                ThemeOptionRow(stringResource(R.string.doc_bg_comfort), UserPreferencesRepository.DOC_BG_COMFORT, currentBg, onSelect)
                 ThemeOptionRow(stringResource(R.string.doc_bg_dark), UserPreferencesRepository.DOC_BG_DARK, currentBg, onSelect)
                 ThemeOptionRow(stringResource(R.string.doc_bg_custom), UserPreferencesRepository.DOC_BG_CUSTOM, currentBg, onSelect)
             }
@@ -471,7 +473,6 @@ fun FontSelectionDialog(
             Column {
                 ThemeOptionRow(stringResource(R.string.font_serif), "serif", currentFamily, onSelect)
                 ThemeOptionRow(stringResource(R.string.font_sans_serif), "sans-serif", currentFamily, onSelect)
-                ThemeOptionRow(stringResource(R.string.font_monospace), "monospace", currentFamily, onSelect)
             }
         },
         confirmButton = {
@@ -683,25 +684,34 @@ fun HSLColorPicker(
         }
 
         // Hue
-        Slider(
-            value = h,
-            onValueChange = { h = it; onColorChanged(hslToHex(h, s, l)) },
-            valueRange = 0f..360f,
-            modifier = Modifier.height(32.dp)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("H", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
+            Slider(
+                value = h,
+                onValueChange = { h = it; onColorChanged(hslToHex(h, s, l)) },
+                valueRange = 0f..360f,
+                modifier = Modifier.weight(1f).height(32.dp)
+            )
+        }
         // Saturation
-        Slider(
-            value = s,
-            onValueChange = { s = it; onColorChanged(hslToHex(h, s, l)) },
-            valueRange = 0f..1f,
-            modifier = Modifier.height(32.dp)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("S", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
+            Slider(
+                value = s,
+                onValueChange = { s = it; onColorChanged(hslToHex(h, s, l)) },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f).height(32.dp)
+            )
+        }
         // Lightness
-        Slider(
-            value = l,
-            onValueChange = { l = it; onColorChanged(hslToHex(h, s, l)) },
-            valueRange = 0f..1f,
-            modifier = Modifier.height(32.dp)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("L", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
+            Slider(
+                value = l,
+                onValueChange = { l = it; onColorChanged(hslToHex(h, s, l)) },
+                valueRange = 0f..1f,
+                modifier = Modifier.weight(1f).height(32.dp)
+            )
+        }
     }
 }

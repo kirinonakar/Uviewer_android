@@ -16,6 +16,8 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -45,6 +47,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 
+import androidx.activity.compose.BackHandler
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentViewerScreen(
@@ -55,10 +59,13 @@ fun DocumentViewerScreen(
     initialLine: Int? = null,
     viewModel: DocumentViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
+    onNavigateToNext: () -> Unit = {},
+    onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
     activity: com.uviewer_android.MainActivity? = null
 ) {
+    BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -90,6 +97,7 @@ fun DocumentViewerScreen(
         val colorHex = when (docBackgroundColor) {
             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
             UserPreferencesRepository.DOC_BG_DARK -> "#121212"
+            UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4"
             UserPreferencesRepository.DOC_BG_CUSTOM -> {
                 val custom = uiState.customDocBackgroundColor
                 if (custom != null && custom.startsWith("#")) custom else "#FFFFFF"
@@ -243,6 +251,12 @@ fun DocumentViewerScreen(
                             }
                         },
                         actions = {
+                            IconButton(onClick = onNavigateToPrev) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
+                            }
+                            IconButton(onClick = onNavigateToNext) {
+                                Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                            }
                             IconButton(onClick = { showEncodingDialog = true }) {
                                 Icon(Icons.Default.Translate, contentDescription = "Encoding")
                             }
@@ -496,10 +510,8 @@ fun DocumentViewerScreen(
                                 settings.allowUniversalAccessFromFileURLs = true
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
-                                settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
-                                settings.useWideViewPort = true
-                                settings.loadWithOverviewMode = true
-                                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                isHorizontalScrollBarEnabled = false
+                                isVerticalScrollBarEnabled = true
                                 
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -598,7 +610,7 @@ fun DocumentViewerScreen(
                                         """.trimIndent()
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
-                                            view.postDelayed({
+                                            webViewRef?.postDelayed({
                                                 isPageLoading = false
                                                 isNavigating = false
                                             }, 100)
@@ -654,6 +666,7 @@ fun DocumentViewerScreen(
                              val (bgColor, textColor) = when (uiState.docBackgroundColor) {
             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
+            UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4" to "#343426"
             UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
             else -> "#ffffff" to "#000000"
         }
@@ -666,6 +679,8 @@ fun DocumentViewerScreen(
                                           color: $textColor !important;
                                           writing-mode: horizontal-tb !important;
                                           -webkit-writing-mode: horizontal-tb !important;
+                                          overflow-x: hidden !important;
+                                          width: 100vw !important;
                                       }
                                       body {
                                           font-family: ${uiState.fontFamily} !important;
@@ -675,9 +690,9 @@ fun DocumentViewerScreen(
                                           box-sizing: border-box !important;
                                           word-wrap: break-word !important;
                                           overflow-wrap: break-word !important;
-                                          /* Ensure safe area for cutouts if needed */
                                           padding-top: env(safe-area-inset-top, 0);
-                                          padding-bottom: calc(env(safe-area-inset-bottom, 0) + 10vh); /* Allow scrolling past end */
+                                          padding-bottom: 100vh !important; /* Allow scrolling past end with full page of whitespace */
+                                          min-height: 101vh !important; /* Ensure scrollable even if chapter is empty */
                                       }
                                       /* Padding for text elements to keep them readable */
                                       p, div, h1, h2, h3, h4, h5, h6 {
@@ -764,78 +779,78 @@ fun DocumentViewerScreen(
                                   }
                              }
                           )
-                          
-
-                }
-                }
+                                         }
             }
+        }
+    }
+    }
+    }
 
-            if (uiState.isLoading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+    if (uiState.isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
+                tonalElevation = 4.dp
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f),
-                        tonalElevation = 4.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularProgressIndicator()
-                            if (uiState.loadProgress < 1f) {
-                                Spacer(Modifier.height(12.dp))
-                                Text(
-                                    "Indexing: ${(uiState.loadProgress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
+                    CircularProgressIndicator()
+                    if (uiState.loadProgress < 1f) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Indexing: ${(uiState.loadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
                     }
                 }
             }
         }
     }
-    
+
     if (showGoToLineDialog) {
-             var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
-             AlertDialog(
-                 onDismissRequest = { showGoToLineDialog = false },
-                 title = { Text("Go to Line") },
-                 text = {
-                     Column {
-                         Text("Enter line number (1 - ${uiState.totalLines})")
-                         OutlinedTextField(
-                             value = targetLineStr, 
-                             onValueChange = { if (it.all { c -> c.isDigit() }) targetLineStr = it },
-                             singleLine = true
-                         )
-                     }
-                 },
-                 confirmButton = {
-                     TextButton(onClick = {  
-                           val line = targetLineStr.toIntOrNull()
-                           if (line != null) {
-                                viewModel.jumpToLine(line)
-                               showGoToLineDialog = false 
-                           }
-                     }) { Text("Go") }
-                 },
-                 dismissButton = {
-                     TextButton(onClick = { showGoToLineDialog = false }) { Text("Cancel") }
-                 }
-             )
-         }
-         if (showFontSettingsDialog) {
-            FontSettingsDialog(
-                viewModel = viewModel,
-                onDismiss = { showFontSettingsDialog = false }
-            )
-         }
+        var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
+        AlertDialog(
+            onDismissRequest = { showGoToLineDialog = false },
+            title = { Text("Go to Line") },
+            text = {
+                Column {
+                    Text("Enter line number (1 - ${uiState.totalLines})")
+                    OutlinedTextField(
+                        value = targetLineStr,
+                        onValueChange = { if (it.all { c -> c.isDigit() }) targetLineStr = it },
+                        singleLine = true
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val line = targetLineStr.toIntOrNull()
+                    if (line != null) {
+                        viewModel.jumpToLine(line)
+                        showGoToLineDialog = false
+                    }
+                }) { Text("Go") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGoToLineDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showFontSettingsDialog) {
+        FontSettingsDialog(
+            viewModel = viewModel,
+            onDismiss = { showFontSettingsDialog = false }
+        )
     }
 }
+
 @Composable
 fun FontSettingsDialog(
     viewModel: DocumentViewerViewModel,
@@ -882,9 +897,9 @@ fun FontSettingsDialog(
                     Text(stringResource(R.string.document_background))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(
-                            UserPreferencesRepository.DOC_BG_WHITE to "White",
-                            UserPreferencesRepository.DOC_BG_SEPIA to "Sepia",
-                            UserPreferencesRepository.DOC_BG_DARK to "Dark"
+                            UserPreferencesRepository.DOC_BG_WHITE to stringResource(R.string.doc_bg_white),
+                            UserPreferencesRepository.DOC_BG_SEPIA to stringResource(R.string.doc_bg_sepia),
+                            UserPreferencesRepository.DOC_BG_COMFORT to stringResource(R.string.doc_bg_comfort)
                         ).forEach { (bg, label) ->
                             FilterChip(
                                 selected = docBackgroundColor == bg,
@@ -894,11 +909,16 @@ fun FontSettingsDialog(
                         }
                     }
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = docBackgroundColor == UserPreferencesRepository.DOC_BG_CUSTOM,
-                            onClick = { viewModel.setDocBackgroundColor(UserPreferencesRepository.DOC_BG_CUSTOM) },
-                            label = { Text("Custom") }
-                        )
+                        listOf(
+                            UserPreferencesRepository.DOC_BG_DARK to stringResource(R.string.doc_bg_dark),
+                            UserPreferencesRepository.DOC_BG_CUSTOM to stringResource(R.string.doc_bg_custom)
+                        ).forEach { (bg, label) ->
+                            FilterChip(
+                                selected = docBackgroundColor == bg,
+                                onClick = { viewModel.setDocBackgroundColor(bg) },
+                                label = { Text(label) }
+                            )
+                        }
                     }
                 }
 
@@ -922,3 +942,4 @@ fun FontSettingsDialog(
         }
     )
 }
+

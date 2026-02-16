@@ -240,7 +240,7 @@ object AozoraParser {
                         text-orientation: upright;
                         margin: 0;
                         padding: 0;
-                        padding-bottom: 50vh;
+                        padding-bottom: 100vh;
                         line-height: 1.8;
                         overflow-x: ${if (isVertical) "auto" else "hidden"};
                         overflow-y: ${if (isVertical) "hidden" else "visible"};

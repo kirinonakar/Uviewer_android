@@ -188,7 +188,7 @@ object EpubParser {
         
         // Append robust spacer and marker to prevent last line cutting. 
         body.append("""
-            <div style="height: 50vh; width: 100%; clear: both;"></div>
+            <div style="height: 100vh; width: 100%; clear: both;"></div>
             <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
         """.trimIndent())
         

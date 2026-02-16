@@ -45,6 +45,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import android.widget.Toast
 import android.util.Log
 
+import androidx.activity.compose.BackHandler
+
 @OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
 @Composable
 fun MediaPlayerScreen(
@@ -57,6 +59,7 @@ fun MediaPlayerScreen(
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {}
 ) {
+    BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     
@@ -121,6 +124,19 @@ fun MediaPlayerScreen(
     
     var mediaController by remember { mutableStateOf<androidx.media3.session.MediaController?>(null) }
     
+    var currentPosition by remember { mutableLongStateOf(0L) }
+    var duration by remember { mutableLongStateOf(0L) }
+
+    LaunchedEffect(mediaController) {
+        if (mediaController != null) {
+            while (true) {
+                currentPosition = mediaController?.currentPosition ?: 0L
+                duration = mediaController?.duration?.coerceAtLeast(0L) ?: 0L
+                kotlinx.coroutines.delay(1000)
+            }
+        }
+    }
+
     DisposableEffect(controllerFuture) {
         controllerFuture.addListener({
             mediaController = controllerFuture.get().apply {
@@ -251,6 +267,18 @@ fun MediaPlayerScreen(
                             }
                         },
                         actions = {
+                            IconButton(onClick = { 
+                                mediaController?.seekToPrevious()
+                                viewModel.prev(isWebDav, serverId) 
+                            }) {
+                                Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White)
+                            }
+                            IconButton(onClick = { 
+                                mediaController?.seekToNext()
+                                viewModel.next(isWebDav, serverId) 
+                            }) {
+                                Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
+                            }
                             if (fileType == FileEntry.FileType.VIDEO) {
                                 var showSubtitleMenu by remember { mutableStateOf(false) }
                                 IconButton(onClick = { showSubtitleMenu = true }) {
@@ -518,6 +546,22 @@ fun MediaPlayerScreen(
                                 }) {
                                     Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
                                 }
+                            }
+
+                            // Time Display
+                            fun formatTime(ms: Long): String {
+                                val totalSeconds = ms / 1000
+                                val minutes = totalSeconds / 60
+                                val seconds = totalSeconds % 60
+                                return String.format("%02d:%02d", minutes, seconds)
+                            }
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                                Text(formatTime(duration), color = Color.White, style = MaterialTheme.typography.labelSmall)
                             }
                             
                             // Progress Slider (Using PlayerControlView purely for slider/time)

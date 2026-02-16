@@ -92,7 +92,22 @@ fun LibraryScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(stringResource(R.string.nav_library), style = MaterialTheme.typography.titleMedium, maxLines = 1) 
+                    val title = if (uiState.currentPath == rootPath) {
+                        stringResource(R.string.local)
+                    } else if (uiState.currentPath == "WebDAV") {
+                        stringResource(R.string.remote)
+                    } else if (uiState.selectedTabIndex == 2) {
+                        stringResource(R.string.pinned)
+                    } else {
+                        // Extract parent or current folder name
+                        val file = java.io.File(uiState.currentPath)
+                        if (uiState.selectedTabIndex == 1 && uiState.currentPath == "/") {
+                             "Root"
+                        } else {
+                             file.name.ifEmpty { uiState.currentPath }
+                        }
+                    }
+                    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) 
                 },
                 navigationIcon = {
                     if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
@@ -340,8 +355,8 @@ fun FileItemRow(
         headlineContent = { 
             Text(
                 file.name, 
-                maxLines = 2, 
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                maxLines = 10, 
+                overflow = androidx.compose.ui.text.style.TextOverflow.Clip,
                 style = MaterialTheme.typography.bodyLarge
             ) 
         },

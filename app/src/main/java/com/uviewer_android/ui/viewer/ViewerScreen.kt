@@ -24,6 +24,8 @@ fun ViewerScreen(
     serverId: Int?,
     initialPosition: Int? = null,
     onBack: () -> Unit = {},
+    onNavigateToNext: () -> Unit = {},
+    onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
     activity: com.uviewer_android.MainActivity? = null
@@ -54,10 +56,10 @@ fun ViewerScreen(
 
     when (resolvedType) {
         FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> {
-            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
-            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen)
         FileEntry.FileType.PDF -> {

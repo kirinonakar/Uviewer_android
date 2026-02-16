@@ -26,7 +26,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import androidx.navigation.NavType
@@ -46,6 +47,7 @@ fun MainScreen(
     val navController = rememberNavController()
     val libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.uviewer_android.ui.AppViewModelProvider.Factory)
     val libraryUiState by libraryViewModel.uiState.collectAsState()
+    val scope = rememberCoroutineScope()
     var isFullScreen by remember { androidx.compose.runtime.mutableStateOf(false) }
 
     androidx.compose.runtime.LaunchedEffect(initialIntentPath) {
@@ -281,6 +283,30 @@ fun MainScreen(
                         navController.navigate(route) {
                             popUpTo(navController.graph.findStartDestination().id)
                             launchSingleTop = true
+                        }
+                    },
+                    onNavigateToNext = {
+                        scope.launch {
+                             val nextFile = libraryViewModel.getNextFile(filePath, isWebDav, serverId)
+                             if (nextFile != null) {
+                                 val encodedPath = android.net.Uri.encode(nextFile.path, null)
+                                 val route = "viewer?path=$encodedPath&type=${nextFile.type.name}&isWebDav=${nextFile.isWebDav}&serverId=${nextFile.serverId ?: -1}&position=-1"
+                                 navController.navigate(route) {
+                                     popUpTo("viewer?path={path}&type={type}&isWebDav={isWebDav}&serverId={serverId}&position={position}") { inclusive = true }
+                                 }
+                             }
+                        }
+                    },
+                    onNavigateToPrev = {
+                        scope.launch {
+                             val prevFile = libraryViewModel.getPrevFile(filePath, isWebDav, serverId)
+                             if (prevFile != null) {
+                                 val encodedPath = android.net.Uri.encode(prevFile.path, null)
+                                 val route = "viewer?path=$encodedPath&type=${prevFile.type.name}&isWebDav=${prevFile.isWebDav}&serverId=${prevFile.serverId ?: -1}&position=-1"
+                                 navController.navigate(route) {
+                                     popUpTo("viewer?path={path}&type={type}&isWebDav={isWebDav}&serverId={serverId}&position={position}") { inclusive = true }
+                                 }
+                             }
                         }
                     },
                     isFullScreen = isFullScreen,

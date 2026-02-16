@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clipToBounds
 import com.uviewer_android.ui.AppViewModelProvider
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import androidx.activity.compose.BackHandler
 
 class SharpenTransformation(private val intensity: Int) : coil.transform.Transformation {
     override val cacheKey: String = "sharpen_$intensity"
@@ -84,10 +85,13 @@ fun ImageViewerScreen(
     initialIndex: Int? = null,
     viewModel: ImageViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
+    onNavigateToNext: () -> Unit = {},
+    onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
     activity: com.uviewer_android.MainActivity? = null
 ) {
+    BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
@@ -267,6 +271,12 @@ fun ImageViewerScreen(
                                 }
                             },
                             actions = {
+                                IconButton(onClick = onNavigateToPrev) {
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
+                                }
+                                IconButton(onClick = onNavigateToNext) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                                }
                                 val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
                                 val currentImageIndex = when (viewMode) {
                                     ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)

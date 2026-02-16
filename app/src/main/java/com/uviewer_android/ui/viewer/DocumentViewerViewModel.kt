@@ -582,6 +582,8 @@ class DocumentViewerViewModel(
                                 font-family: $fontFamily !important;
                                 font-size: ${_uiState.value.fontSize}px !important;
                                 padding: 1.2em ${_uiState.value.sideMargin / 20.0}em !important;
+                                padding-bottom: 100vh !important;
+                                min-height: 101vh !important;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -715,6 +717,7 @@ class DocumentViewerViewModel(
         return when (_uiState.value.docBackgroundColor) {
              UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
              UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
+             UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4" to "#343426"
              UserPreferencesRepository.DOC_BG_CUSTOM -> _uiState.value.customDocBackgroundColor to _uiState.value.customDocTextColor
              else -> "#ffffff" to "#000000"
         }

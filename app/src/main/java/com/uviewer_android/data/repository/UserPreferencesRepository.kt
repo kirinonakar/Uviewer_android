@@ -231,6 +231,7 @@ class UserPreferencesRepository(context: Context) {
         const val DOC_BG_WHITE = "white"
         const val DOC_BG_SEPIA = "sepia"
         const val DOC_BG_DARK = "dark"
+        const val DOC_BG_COMFORT = "comfort"
         const val DOC_BG_CUSTOM = "custom"
 
 

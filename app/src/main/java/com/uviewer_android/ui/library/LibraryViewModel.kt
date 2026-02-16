@@ -356,4 +356,36 @@ class LibraryViewModel(
             }
         }
     }
+
+    suspend fun getSiblings(path: String, isWebDav: Boolean, serverId: Int?): List<FileEntry> {
+        val parentPath = if (isWebDav) {
+            val p = if (path.endsWith("/")) path.dropLast(1) else path
+            val lastSlash = p.lastIndexOf('/')
+            if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
+        } else {
+            java.io.File(path).parent ?: "/"
+        }
+
+        return try {
+            if (isWebDav && serverId != null) {
+                webDavRepository.listFiles(serverId, parentPath)
+            } else {
+                fileRepository.listFiles(parentPath)
+            }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getNextFile(currentPath: String, isWebDav: Boolean, serverId: Int?): FileEntry? {
+        val siblings = getSiblings(currentPath, isWebDav, serverId).filter { !it.isDirectory }
+        val index = siblings.indexOfFirst { it.path == currentPath }
+        return if (index != -1 && index < siblings.size - 1) siblings[index + 1] else null
+    }
+
+    suspend fun getPrevFile(currentPath: String, isWebDav: Boolean, serverId: Int?): FileEntry? {
+        val siblings = getSiblings(currentPath, isWebDav, serverId).filter { !it.isDirectory }
+        val index = siblings.indexOfFirst { it.path == currentPath }
+        return if (index > 0) siblings[index - 1] else null
+    }
 }
