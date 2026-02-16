@@ -4,7 +4,7 @@
     <!-- Navigation -->
     <string name="nav_library">ライブラリ</string>
     <string name="nav_favorites">お気に入り</string>
-    <string name="nav_recent">最近のファイル</string>
+    <string name="nav_recent">最近の</string>
     <string name="nav_settings">設定</string>
 
     <!-- General -->
