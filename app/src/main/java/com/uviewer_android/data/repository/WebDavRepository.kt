@@ -142,11 +142,25 @@ class WebDavRepository(
         return client.buildUrl(path)
     }
 
+    suspend fun getFileSize(serverId: Int, path: String): Long {
+        val client = getClient(serverId) ?: return 0L
+        val password = credentialsManager.getPassword(serverId) ?: return 0L
+        return client.getFileSize(password, path)
+    }
+
     suspend fun readFileContent(serverId: Int, path: String): ByteArray {
         return withContext(Dispatchers.IO) {
             val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
             val password = credentialsManager.getPassword(serverId) ?: throw Exception("Password not found")
             client.downloadContent(password, path)
+        }
+    }
+
+    suspend fun readRange(serverId: Int, path: String, start: Long, end: Long): ByteArray {
+        return withContext(Dispatchers.IO) {
+            val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
+            val password = credentialsManager.getPassword(serverId) ?: throw Exception("Password not found")
+            client.downloadRange(password, path, start, end)
         }
     }
 

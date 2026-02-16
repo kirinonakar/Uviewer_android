@@ -39,6 +39,9 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import androidx.activity.compose.BackHandler
 
+data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
+
+
 class SharpenTransformation(private val intensity: Int) : coil.transform.Transformation {
     override val cacheKey: String = "sharpen_$intensity"
     override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
@@ -366,7 +369,80 @@ fun ImageViewerScreen(
                         }
                     }
                 }
-            }
+            },
+            bottomBar = {
+                if (!isFullScreen && uiState.images.size > 1) {
+                    BottomAppBar(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                        contentPadding = PaddingValues(0.dp),
+                        modifier = Modifier.height(intrinsicSize = IntrinsicSize.Min)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            // File Name (Archive Name)
+                            val containerName = uiState.containerName
+                            if (containerName != null) {
+                                Text(
+                                    text = containerName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            
+                            // Image Name and Progress
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val currentImgIdx = currentPageIndex.coerceIn(0, uiState.images.size - 1)
+                                val imageName = uiState.images[currentImgIdx].name
+                                
+                                Text(
+                                    text = imageName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                
+                                Spacer(modifier = Modifier.width(8.dp))
+                                
+                                Text(
+                                    text = "${currentImgIdx + 1} / ${uiState.images.size} (${((currentImgIdx + 1) * 100 / uiState.images.size)}%)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            
+                            // Slider for navigation
+                            Slider(
+                                value = currentPageIndex.toFloat(),
+                                onValueChange = { 
+                                    val targetIdx = it.toInt()
+                                    if (targetIdx != currentPageIndex) {
+                                        scope.launch {
+                                            val targetPage = when (viewMode) {
+                                                ViewMode.SINGLE -> targetIdx
+                                                ViewMode.DUAL -> targetIdx / 2
+                                                ViewMode.SPLIT -> targetIdx * 2
+                                            }
+                                            pagerState.scrollToPage(targetPage.coerceIn(0, pageCount - 1))
+                                        }
+                                    }
+                                },
+                                valueRange = 0f..(uiState.images.size - 1).coerceAtLeast(0).toFloat(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            },
+            snackbarHost = {}
         ) { innerPadding ->
             Box(
                 modifier = Modifier
@@ -420,25 +496,25 @@ fun ImageViewerScreen(
                     reverseLayout = invertImageControl,
                     beyondViewportPageCount = 1
                 ) { page ->
-                    val (firstIdx, secondIdx, isSplit, isRight) = when (viewMode) {
+                    val quad = when (viewMode) {
                         ViewMode.DUAL -> {
                             val p1 = page * 2
                             val p2 = page * 2 + 1
-                            if (dualPageOrder == 1) Triple(p2, p1, false).let { Quad(it.first, it.second, it.third, false) } 
-                            else Triple(p1, p2, false).let { Quad(it.first, it.second, it.third, false) }
+                            if (dualPageOrder == 1) Quad(p2, p1, false, false)
+                            else Quad(p1, p2, false, false)
                         }
                         ViewMode.SPLIT -> {
                             val imgIdx = page / 2
                             val right = page % 2 == 1
-                            // Reversing split logic if RTL order? 
-                            // Usually split is Left then Right. 
-                            // Request says: "다음이미지 방향에 있는 반쪽 나뉜 이미지를 다음 이미지로 표시"
-                            // If LTR, Next is Right. If RTL, Next is Left.
                             val actualRight = if (dualPageOrder == 1) !right else right
                             Quad(imgIdx, -1, true, actualRight)
                         }
                         else -> Quad(page, -1, false, false)
                     }
+                    val firstIdx = quad.first
+                    val secondIdx = quad.second
+                    val isSplit = quad.third
+                    val isRight = quad.fourth
 
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -484,8 +560,6 @@ fun ImageViewerScreen(
         }
     }
 }
-
-data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @Composable
 fun ZoomableImage(
@@ -592,7 +666,22 @@ fun ZoomableImage(
             
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
-                Log.d("ImageViewer", "ZoomableImage: buildRequest: url=$url, isWebDav=$isWebDav, serverUrl=$serverUrl, authHeader=${authHeader != null}")
+                Log.d("ImageViewer", "ZoomableImage: buildRequest: url=$url, isWebDav=$isWebDav")
+                
+                if (url.startsWith("webdav-zip://")) {
+                     return ImageRequest.Builder(context)
+                        .data(android.net.Uri.parse(url))
+                        .crossfade(true)
+                        .apply {
+                            val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                            if (sharpeningAmount > 0 && !isAnimated) {
+                                transformations(SharpenTransformation(sharpeningAmount))
+                            }
+                        }
+                        .allowHardware(false)
+                        .build()
+                }
+
                 val loaderBuilder = if (isWebDav && serverUrl != null) {
                    val fullUrl = try {
                         val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()
@@ -815,7 +904,22 @@ fun ZoomableDualImage(
             
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
-                Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav, serverUrl=$serverUrl, authHeader=${authHeader != null}")
+                Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav")
+
+                if (url.startsWith("webdav-zip://")) {
+                     return ImageRequest.Builder(context)
+                        .data(android.net.Uri.parse(url))
+                        .crossfade(true)
+                        .apply {
+                            val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                            if (sharpeningAmount > 0 && !isAnimated) {
+                                transformations(SharpenTransformation(sharpeningAmount))
+                            }
+                        }
+                        .allowHardware(false)
+                        .build()
+                }
+                
                 val loaderBuilder = if (isWebDav && serverUrl != null) {
                    val fullUrl = try {
                         val baseHttpUrl = serverUrl.trimEnd('/').toHttpUrl()

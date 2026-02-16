@@ -83,6 +83,29 @@ class WebDavClient(
         }
     }
 
+    suspend fun getFileSize(password: String, path: String): Long {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val url = buildUrl(path)
+            val request = Request.Builder()
+                .url(url)
+                .header("Depth", "0")
+                .header("Authorization", getAuthHeader(password))
+                .method("PROPFIND", null)
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) return@withContext 0L
+
+                val body = response.body?.string() ?: return@withContext 0L
+                val files = parseWebDavXml(body)
+                files.firstOrNull()?.size ?: 0L
+            } catch (e: Exception) {
+                0L
+            }
+        }
+    }
+
     private fun parseWebDavXml(xml: String): List<WebDavFile> {
         val files = mutableListOf<WebDavFile>()
         try {
@@ -184,6 +207,25 @@ class WebDavClient(
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
+            
+            response.body?.bytes() ?: byteArrayOf()
+        }
+    }
+
+    suspend fun downloadRange(password: String, path: String, start: Long, end: Long): ByteArray {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val url = buildUrl(path)
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", getAuthHeader(password))
+                .header("Range", "bytes=$start-$end")
+                .get()
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful && response.code != 206) {
+                throw IOException("Failed to download range ($url): ${response.code}")
+            }
             
             response.body?.bytes() ?: byteArrayOf()
         }

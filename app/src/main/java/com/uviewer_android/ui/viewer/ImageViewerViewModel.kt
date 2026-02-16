@@ -175,52 +175,67 @@ enum class ViewMode {
                     val contentIsWebDav = isWebDav && !isZip
 
                     val images = if (isZip) {
-                        val context = getApplication<Application>()
-                        val cacheDir = context.cacheDir
-                        
-                        val zipFile = if (isWebDav && serverId != null) {
-                            val fileName = File(filePath).name
-                            val tempFile = File(cacheDir, "temp_$fileName")
-                            if (!tempFile.exists() || tempFile.length() == 0L) { // optimized check?
-                                webDavRepository.downloadFile(serverId, filePath, tempFile)
-                            }
-                            // Re-download logic might be needed if forced? For now assume cache if exists? 
-                            // Actually dangerous if file changed. Let's stick to original logic: download.
-                            // But original logic didn't query existence efficiently.
-                            // Let's stick to original safe download for now.
-                            webDavRepository.downloadFile(serverId, filePath, tempFile)
-                            tempFile
-                        } else {
-                            File(filePath)
-                        }
-
-                        val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
-                        // Smart Unzip? If already unzipped and valid?
-                        // For now, re-unzip safely.
-                        if (unzipDir.exists()) unzipDir.deleteRecursively()
-                        unzipDir.mkdirs()
-                        
-                        EpubParser.unzip(zipFile, unzipDir)
-                        
-                        val zipImages = unzipDir.walkTopDown()
-                            .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
-                            .map { file ->
+                        if (isWebDav && serverId != null) {
+                            // Streaming for WebDAV Zip
+                            val zipSize = webDavRepository.getFileSize(serverId, filePath)
+                            val manager = com.uviewer_android.data.utils.RemoteZipManager(webDavRepository, serverId, filePath, zipSize)
+                            val entries = manager.getEntries()
+                            val imageExtensions = listOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
+                            val zipImages = entries.filter { !it.isDirectory && it.name.lowercase().let { n -> 
+                                imageExtensions.any { ext -> n.endsWith(".$ext") }
+                            } }.map { entry ->
+                                val uri = android.net.Uri.Builder()
+                                    .scheme("webdav-zip")
+                                    .authority(serverId.toString())
+                                    .path(filePath)
+                                    .appendQueryParameter("entry", entry.name)
+                                    .build()
+                                    
                                 FileEntry(
-                                    name = file.name,
-                                    path = file.absolutePath,
+                                    name = entry.name.substringAfterLast('/'),
+                                    path = uri.toString(),
                                     isDirectory = false,
                                     type = FileEntry.FileType.IMAGE,
-                                    lastModified = file.lastModified(),
-                                    size = file.length()
+                                    lastModified = 0L,
+                                    size = entry.uncompressedSize,
+                                    serverId = serverId,
+                                    isWebDav = true
                                 )
+                            }.sortedBy { it.name.lowercase() }
+                            
+                            Log.d("ImageViewer", "Remote ZIP parsing complete. Found ${zipImages.size} images.")
+                            if (zipImages.isEmpty()) {
+                                Log.e("ImageViewer", "No images found in Remote ZIP! Total entries: ${entries.size}")
+                                throw Exception("No images found in the zip file.")
                             }
-                            .sortedBy { it.name.lowercase() }
-                            .toList()
+                            zipImages
+                        } else {
+                            // Local Zip logic
+                            val context = getApplication<Application>()
+                            val cacheDir = context.cacheDir
+                            val zipFile = File(filePath)
 
-                        if (zipImages.isEmpty()) {
-                            throw Exception("No images found in the zip file.")
+                            val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
+                            if (unzipDir.exists()) unzipDir.deleteRecursively()
+                            unzipDir.mkdirs()
+                            
+                            EpubParser.unzip(zipFile, unzipDir)
+                            
+                            unzipDir.walkTopDown()
+                                .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
+                                .map { file ->
+                                    FileEntry(
+                                        name = file.name,
+                                        path = file.absolutePath,
+                                        isDirectory = false,
+                                        type = FileEntry.FileType.IMAGE,
+                                        lastModified = file.lastModified(),
+                                        size = file.length()
+                                    )
+                                }
+                                .sortedBy { it.name.lowercase() }
+                                .toList()
                         }
-                        zipImages
                     } else {
                         val parentPath = if (isWebDav) {
                             if (filePath.endsWith("/")) filePath.dropLast(1).substringBeforeLast("/")
