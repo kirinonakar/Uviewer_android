@@ -251,11 +251,10 @@ class DocumentViewerViewModel(
                         val chunkIdx = (startLine - 1) / LINES_PER_CHUNK
 
                         // Set Base URL for WebDAV to support relative remote images
-                        var baseUrl: String? = null
-                        if (isWebDav && serverId != null) {
-                            val parentPath = if (filePath.contains("/")) filePath.substringBeforeLast("/") else ""
-                            baseUrl = webDavRepository.buildUrl(serverId, if (parentPath.isEmpty()) "" else "$parentPath/")
-                        }
+                        // [Modification] Use local cache dir as base for WebDAV to allow file:// resources
+                        var baseUrl: String? = "file://${file.parentFile.absolutePath}/"
+                        // If it's WebDAV, we still might need the remote URL for some cases, but for images and basic security, file:// base is better.
+                        // val remoteBaseUrl = if (isWebDav && serverId != null) { ... } else null
                         
                         _uiState.value = _uiState.value.copy(
                             currentChunkIndex = chunkIdx,
@@ -814,6 +813,15 @@ class DocumentViewerViewModel(
         val imgRegex = Regex("<img\\s+[^>]*src=\"([^\"]+)\"[^>]*>")
         val matches = imgRegex.findAll(content).toList()
         
+        fun encodeFileName(path: String): String {
+            return try {
+                path.split("/").joinToString("/") { segment ->
+                    if (segment.endsWith(":") && segment.length <= 6) segment
+                    else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                }
+            } catch (e: Exception) { path }
+        }
+
         for (match in matches) {
             val originalSrc = match.groups[1]?.value ?: continue
             if (originalSrc.startsWith("http") || originalSrc.startsWith("data:")) continue
@@ -824,39 +832,55 @@ class DocumentViewerViewModel(
                 val cacheBase = File(context.cacheDir, "webdav_img_cache/$serverId")
                 if (!cacheBase.exists()) cacheBase.mkdirs()
                 
-                val webDavPath = if (parentPath.isEmpty()) originalSrc else "$parentPath/$originalSrc"
+                // If it's already an encoded path from AozoraParser, we should decode it first
+                // because webDavRepository and File API expect raw paths.
+                val decodedSrc = try { java.net.URLDecoder.decode(originalSrc, "UTF-8") } catch(e: Exception) { originalSrc }
+                val cleanSrc = decodedSrc.removePrefix("file://").removePrefix("/")
+                val webDavPath = if (parentPath.isEmpty()) cleanSrc else "$parentPath/$cleanSrc"
                 val fileName = java.net.URLEncoder.encode(webDavPath, "UTF-8").takeLast(100)
                 val cachedFile = File(cacheBase, fileName)
                 
                 if (cachedFile.exists()) {
-                    result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
+                    val encoded = encodeFileName("file://${cachedFile.absolutePath}")
+                    result = result.replace(match.value, match.value.replace(originalSrc, encoded))
                 } else {
                     try {
                         webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
-                        result = result.replace(match.value, match.value.replace(originalSrc, "file://${cachedFile.absolutePath}"))
+                        val encoded = encodeFileName("file://${cachedFile.absolutePath}")
+                        result = result.replace(match.value, match.value.replace(originalSrc, encoded))
                     } catch (e: Exception) {
                         // Failed to download from WebDAV. 
-                        // Leave the original tag so it can be resolved via baseUrl 
-                        // (if anonymous access is allowed) or hidden by onerror.
                     }
                 }
             } else if (parentDir != null) {
                 // Local resolution
-                var imgFile = java.io.File(parentDir, originalSrc)
+                val decodedSrc = try { java.net.URLDecoder.decode(originalSrc, "UTF-8") } catch(e: Exception) { originalSrc }
+                // Strip file:// if present to check existence via File API
+                val cleanSrc = decodedSrc.removePrefix("file://")
+                var imgFile = java.io.File(parentDir, cleanSrc)
+                
                 if (!imgFile.exists()) {
-                    // Search in subfolders as requested
+                    // Try as absolute path if it looks like one
+                    if (cleanSrc.startsWith("/")) {
+                        val absFile = java.io.File(cleanSrc)
+                        if (absFile.exists()) imgFile = absFile
+                    }
+                }
+
+                if (!imgFile.exists()) {
+                    // Search in subfolders
+                    val searchName = cleanSrc.substringAfterLast("/")
+                    val decodedSearchName = try { java.net.URLDecoder.decode(searchName, "UTF-8") } catch(e: Exception) { searchName }
+                    
                     val found = parentDir.walkTopDown()
-                        .maxDepth(3) // limit depth to avoid excessive search
-                        .find { it.name == originalSrc.substringAfterLast("/") }
+                        .maxDepth(3)
+                        .find { it.name == searchName || it.name == decodedSearchName }
                     if (found != null) imgFile = found
                 }
 
                 if (imgFile.exists()) {
-                    result = result.replace(match.value, match.value.replace(originalSrc, "file://${imgFile.absolutePath}"))
-                } else {
-                    // File not found locally. 
-                    // Leave the tag alone so onerror="this.style.display='none';" can trigger 
-                    // or and WebView might still try to resolve it via baseUrl.
+                    val encoded = encodeFileName("file://${imgFile.absolutePath}")
+                    result = result.replace(match.value, match.value.replace(originalSrc, encoded))
                 }
             }
         }

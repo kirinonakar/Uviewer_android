@@ -10,9 +10,16 @@ object AozoraParser {
     // Helper to encode filename segments while preserving path structure and protocols
     private fun encodeFileName(path: String): String {
         return try {
+            if (path.startsWith("http")) {
+                val protocol = if (path.startsWith("https")) "https://" else "http://"
+                val rest = path.removePrefix(protocol)
+                return protocol + rest.split("/").joinToString("/") { segment ->
+                    URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                }
+            }
             path.split("/").joinToString("/") { segment ->
-                // Skip protocol parts (e.g., "file:", "http:")
-                if (segment.endsWith(":")) segment 
+                // Skip protocol parts (e.g., "file:")
+                if (segment.endsWith(":") && segment.length <= 6) segment 
                 else URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
             }
         } catch (e: Exception) {
@@ -31,8 +38,8 @@ object AozoraParser {
             val src = match.groupValues[1]
             val marker = "%%%IMG_MARKER_${imgTagMap.size}%%%"
             
-            // 이미지가 http나 file로 시작하지 않으면 경로 추가
-            val newSrc = if (src.startsWith("http") || src.startsWith("file://")) {
+            // 이미지가 http나 file로 시작하지 않고 imageRootPath가 있으면 경로 추가
+            val newSrc = if (src.startsWith("http") || src.startsWith("file://") || imageRootPath.isEmpty()) {
                 src
             } else {
                 val rootPath = imageRootPath.removePrefix("file://")
@@ -109,7 +116,7 @@ object AozoraParser {
 
             // [수정] Aozora 스타일 이미지 태그 경로 수정
             fun makeImgTag(fileName: String): String {
-                val fullPath = if (fileName.startsWith("http") || fileName.startsWith("file://")) {
+                val fullPath = if (fileName.startsWith("http") || fileName.startsWith("file://") || imageRootPath.isEmpty()) {
                     fileName
                 } else {
                     val rootPath = imageRootPath.removePrefix("file://")

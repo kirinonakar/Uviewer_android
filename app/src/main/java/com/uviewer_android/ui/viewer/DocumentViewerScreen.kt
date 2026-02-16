@@ -510,6 +510,10 @@ fun DocumentViewerScreen(
                                 settings.allowUniversalAccessFromFileURLs = true
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
+                                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                    settings.safeBrowsingEnabled = false
+                                }
                                 isHorizontalScrollBarEnabled = false
                                 isVerticalScrollBarEnabled = true
                                 

@@ -138,7 +138,10 @@ object EpubParser {
                 // http나 file로 시작하지 않는 상대 경로만 처리
                 if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
                     val imgFile = File(baseDir, src) // 상대 경로 결합
-                    img.attr("src", "file://${imgFile.canonicalPath}")
+                    val encodedPath = imgFile.canonicalPath.split("/").joinToString("/") { segment ->
+                        java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                    }
+                    img.attr("src", "file://$encodedPath")
                 }
             }
             
@@ -148,7 +151,10 @@ object EpubParser {
                 val href = svg.attr("xlink:href")
                 if (href.isNotEmpty() && !href.startsWith("http") && !href.startsWith("file://")) {
                     val imgFile = File(baseDir, href)
-                    svg.attr("xlink:href", "file://${imgFile.canonicalPath}")
+                    val encodedPath = imgFile.canonicalPath.split("/").joinToString("/") { segment ->
+                        java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                    }
+                    svg.attr("xlink:href", "file://$encodedPath")
                 }
             }
         }
