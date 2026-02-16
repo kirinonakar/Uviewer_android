@@ -573,27 +573,94 @@ fun DocumentViewerScreen(
                                                          else window.scrollTo(0, 0);
                                                      }
                                                  }
-                                                 
-                                                 // 1.5. Dynamic tagging for ruby based on rules
-                                                 document.querySelectorAll('rt').forEach(function(el) {
-                                                     var rubyText = el.textContent.trim();
-                                                     var baseNode = el.previousSibling || el.parentElement.firstChild;
-                                                     var baseText = baseNode ? baseNode.textContent.trim() : "";
-                                                     var baseLen = baseText.length;
-                                                     var rubyLen = rubyText.length;
-                                                     
-                                                     var needCompression = false;
-                                                     if (baseLen === 1 && rubyLen >= 3) needCompression = true;
-                                                     else if (baseLen === 2 && rubyLen >= 5) needCompression = true;
-                                                     else if (baseLen === 3 && rubyLen >= 7) needCompression = true;
-                                                     
-                                                     if (needCompression) {
-                                                         el.classList.add('ruby-wide');
-                                                         if (el.children.length === 0) {
-                                                             el.innerHTML = '<span>' + rubyText + '</span>';
-                                                         }
-                                                     }
-                                                 });
+                                                                                                  // 1.5. 루비 병합 및 자간 벌어짐 방지 (세로쓰기 전용)
+                                                  if (isVertical) {
+                                                      var rubies = Array.from(document.querySelectorAll('ruby'));
+                                                      for (var i = 0; i < rubies.length; i++) {
+                                                          var ruby = rubies[i];
+                                                          if (!ruby.parentNode) continue;
+                                                          var baseText = Array.from(ruby.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
+                                                          var rubyText = Array.from(ruby.querySelectorAll('rt')).map(function(r) { return r.textContent; }).join('');
+                                                          if (rubyText.length === 0) continue;
+
+                                                          // 구조 정규화 (순서 꼬임 방지)
+                                                          while (ruby.firstChild) ruby.removeChild(ruby.firstChild);
+                                                          ruby.appendChild(document.createTextNode(baseText));
+                                                          var rt = document.createElement('rt');
+                                                          rt.textContent = rubyText;
+                                                          ruby.appendChild(rt);
+
+                                                          var baseLen = baseText.length;
+                                                          var rubyLen = rubyText.length;
+                                                          var needsMerge = (baseLen === 1 && rubyLen >= 2) || 
+                                                                           (baseLen === 2 && rubyLen >= 4) || 
+                                                                           (baseLen === 3 && rubyLen >= 6) ||
+                                                                           (baseLen >= 4 && rubyLen >= baseLen * 1.5);
+          
+                                                          if (needsMerge) {
+                                                              // 1. 앞쪽 인접 루비 병합
+                                                              while (ruby.previousSibling && ruby.previousSibling.tagName === 'RUBY') {
+                                                                  var prev = ruby.previousSibling;
+                                                                  var pRts = Array.from(prev.querySelectorAll('rt'));
+                                                                  var pRubyText = pRts.map(function(r) { return r.textContent; }).join('');
+                                                                  var pBase = Array.from(prev.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
+                                                                  ruby.insertBefore(document.createTextNode(pBase), ruby.firstChild);
+                                                                  rt.textContent = pRubyText + rt.textContent;
+                                                                  prev.parentNode.removeChild(prev);
+                                                              }
+                                                              // 2. 뒤쪽 인접 루비 병합
+                                                              while (ruby.nextSibling && ruby.nextSibling.tagName === 'RUBY') {
+                                                                  var next = ruby.nextSibling;
+                                                                  var nRts = Array.from(next.querySelectorAll('rt'));
+                                                                  var nRubyText = nRts.map(function(r) { return r.textContent; }).join('');
+                                                                  var nBase = Array.from(next.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
+                                                                  ruby.insertBefore(document.createTextNode(nBase), rt);
+                                                                  rt.textContent = rt.textContent + nRubyText;
+                                                                  next.parentNode.removeChild(next);
+                                                              }
+                                                              // 3. 앞쪽 일반 글자 1자 흡수 (중앙 정렬)
+                                                              var finalPrev = ruby.previousSibling;
+                                                              if (finalPrev && finalPrev.nodeType === 3) {
+                                                                  var txt = finalPrev.textContent;
+                                                                  if (txt.length > 0) {
+                                                                      ruby.insertBefore(document.createTextNode(txt[txt.length - 1]), ruby.firstChild);
+                                                                      finalPrev.textContent = txt.substring(0, txt.length - 1);
+                                                                  }
+                                                              }
+                                                              // 4. 뒤쪽 일반 글자 1자 흡수
+                                                              var finalNext = ruby.nextSibling;
+                                                              if (finalNext && finalNext.nodeType === 3) {
+                                                                  var txt = finalNext.textContent;
+                                                                  if (txt.length > 0) {
+                                                                      ruby.insertBefore(document.createTextNode(txt[0]), rt);
+                                                                      finalNext.textContent = txt.substring(1);
+                                                                  }
+                                                              }
+                                                          }
+                                                      }
+                                                  } else {
+                                                      // 가폭모드(기존 압축 로직 유지)
+                                                      document.querySelectorAll('rt').forEach(function(el) {
+                                                          var rubyText = el.textContent.trim();
+                                                          var baseNode = el.previousSibling || el.parentElement.firstChild;
+                                                          var baseText = baseNode ? baseNode.textContent.trim() : "";
+                                                          var baseLen = baseText.length;
+                                                          var rubyLen = rubyText.length;
+                                                          
+                                                          var needCompression = false;
+                                                          if (baseLen === 1 && rubyLen >= 2) needCompression = true;
+                                                          else if (baseLen === 2 && rubyLen >= 4) needCompression = true;
+                                                          else if (baseLen === 3 && rubyLen >= 6) needCompression = true;
+                                                          else if (baseLen >= 4 && rubyLen >= baseLen * 1.5) needCompression = true;
+                                                          
+                                                          if (needCompression) {
+                                                              el.classList.add('ruby-wide');
+                                                              if (el.children.length === 0) {
+                                                                  el.innerHTML = '<span>' + rubyText + '</span>';
+                                                              }
+                                                          }
+                                                      });
+                                                  }
                                                                                                   // 2. 정확한 페이지 이동 함수 (딱 한 페이지씩)
                                                   window.detectAndReportLine = function() {
                                                       var width = window.innerWidth;
