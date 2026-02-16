@@ -113,6 +113,7 @@
     <string name="use_https">Use HTTPS</string>
     <string name="server_host_hint">Host (e.g. example.com/dav)</string>
     <string name="server_port_hint">Port (Leave empty for default)</string>
+    <string name="insecure_connection_warning">보안되지 않은 연결입니다. 비밀번호가 노출될 수 있습니다.</string>
 
     <!-- Viewers -->
     <string name="unsupported_type_fmt">Unsupported file type: %1$s\nPath: %2$s</string>

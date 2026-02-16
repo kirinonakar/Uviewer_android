@@ -77,7 +77,6 @@ class WebDavClient(
                 val body = response.body?.string() ?: return@withContext emptyList()
                 parseWebDavXml(body)
             } catch (e: Exception) {
-                e.printStackTrace()
                 emptyList()
             }
         }
@@ -173,7 +172,7 @@ class WebDavClient(
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            // Log error safely if needed
         }
         return files
     }
@@ -191,7 +190,6 @@ class WebDavClient(
             val response = client.newCall(request).execute()
             response.isSuccessful
         } catch (e: IOException) {
-            e.printStackTrace()
             false
         }
     }

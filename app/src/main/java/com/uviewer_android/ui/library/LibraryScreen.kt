@@ -285,6 +285,13 @@ fun LibraryScreen(
                                 Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f))
                                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                             }
+                            if (!useHttps) {
+                                Text(
+                                    stringResource(R.string.insecure_connection_warning),
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
                             OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(stringResource(R.string.server_host_hint)) }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(
                                 value = port, 
