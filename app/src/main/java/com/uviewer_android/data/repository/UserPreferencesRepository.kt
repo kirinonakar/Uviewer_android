@@ -50,7 +50,7 @@ class UserPreferencesRepository(context: Context) {
 
 
     private val _invertImageControl = MutableStateFlow(
-        sharedPreferences.getBoolean("invert_image_control", false)
+        getSafeBoolean("invert_image_control", false)
     )
     val invertImageControl: StateFlow<Boolean> = _invertImageControl.asStateFlow()
 
@@ -60,7 +60,7 @@ class UserPreferencesRepository(context: Context) {
     val dualPageOrder: StateFlow<Int> = _dualPageOrder.asStateFlow()
 
     private val _persistZoom = MutableStateFlow(
-        sharedPreferences.getBoolean("persist_zoom", false)
+        getSafeBoolean("persist_zoom", false)
     )
     val persistZoom: StateFlow<Boolean> = _persistZoom.asStateFlow()
 
@@ -81,7 +81,7 @@ class UserPreferencesRepository(context: Context) {
     val sideMargin: StateFlow<Int> = _sideMargin.asStateFlow()
 
     private val _subtitleEnabled = MutableStateFlow(
-        sharedPreferences.getBoolean("subtitle_enabled", true)
+        getSafeBoolean("subtitle_enabled", true)
     )
     val subtitleEnabled: StateFlow<Boolean> = _subtitleEnabled.asStateFlow()
 
@@ -221,7 +221,22 @@ class UserPreferencesRepository(context: Context) {
     fun setLibraryViewMode(isGrid: Boolean) {
         sharedPreferences.edit().putBoolean("library_view_mode", isGrid).apply()
     }
-    fun getLibraryViewMode(): Boolean = sharedPreferences.getBoolean("library_view_mode", false)
+    fun getLibraryViewMode(): Boolean = getSafeBoolean("library_view_mode", false)
+
+    private fun getSafeBoolean(key: String, defaultValue: Boolean): Boolean {
+        return try {
+            sharedPreferences.getBoolean(key, defaultValue)
+        } catch (e: Exception) {
+            val value = sharedPreferences.all[key]
+            if (value is Int) {
+                val boolValue = value != 0
+                sharedPreferences.edit().putBoolean(key, boolValue).apply()
+                boolValue
+            } else {
+                defaultValue
+            }
+        }
+    }
 
     companion object {
         const val THEME_SYSTEM = "system"
