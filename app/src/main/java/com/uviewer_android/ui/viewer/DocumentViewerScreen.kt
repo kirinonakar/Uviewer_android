@@ -230,7 +230,7 @@ fun DocumentViewerScreen(
                                         webViewRef?.postDelayed({
                                             isNavigating = false
                                             isPageLoading = false
-                                        }, 100)
+                                        }, 500) // 100 -> 500ms
                                     }
                                 }
                             } else {
@@ -268,6 +268,13 @@ fun DocumentViewerScreen(
                             }
                             IconButton(onClick = onNavigateToNext) {
                                 Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                            }
+                            IconButton(onClick = { viewModel.toggleVerticalReading() }) {
+                                Text(
+                                    "V",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = if (uiState.isVertical) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                )
                             }
                             IconButton(onClick = { showEncodingDialog = true }) {
                                 Icon(Icons.Default.Translate, contentDescription = "Encoding")
@@ -397,7 +404,7 @@ fun DocumentViewerScreen(
                                              webViewRef?.postDelayed({
                                                  isPageLoading = false
                                                  isNavigating = false
-                                             }, 100)
+                                             }, 500) // 100 -> 500ms
                                          }
                                      }
                                  },
@@ -473,12 +480,16 @@ fun DocumentViewerScreen(
                             object : WebView(context) {
                                 fun getHorizontalScrollRangePublic(): Int = computeHorizontalScrollRange()
                             }.apply {
+                                layoutParams = android.view.ViewGroup.LayoutParams(
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                )
                                 addJavascriptInterface(object {
                                     @android.webkit.JavascriptInterface
                                     fun onLineChanged(line: Int) {
                                         post {
                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
-
+                                            
                                             // Bypass chunk check for EPUB as it doesn't use chunks the same way
                                             if (type != FileEntry.FileType.EPUB) {
                                                 val reportedChunkIndex = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
@@ -528,8 +539,11 @@ fun DocumentViewerScreen(
                                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                                     settings.safeBrowsingEnabled = false
                                 }
-                                isHorizontalScrollBarEnabled = false
-                                isVerticalScrollBarEnabled = true
+                                settings.useWideViewPort = true
+                                settings.loadWithOverviewMode = true
+                                settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
+                                isHorizontalScrollBarEnabled = uiState.isVertical
+                                isVerticalScrollBarEnabled = !uiState.isVertical
                                 
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -537,106 +551,171 @@ fun DocumentViewerScreen(
                                         val targetLine = viewModel.uiState.value.currentLine
                                         val totalLines = viewModel.uiState.value.totalLines
                                         val enableAutoLoading = type == FileEntry.FileType.TEXT
+                                        val isVertical = uiState.isVertical
 
-                                        val jsScrollLogic = """
-                                            // 1. Restore scroll position
-                                            if ($targetLine === $totalLines && $totalLines > 1) {
-                                                 if (typeof jumpToBottom === 'function') {
-                                                      jumpToBottom();
+                                         val jsScrollLogic = """
+                                             (function() {
+                                                 var isVertical = $isVertical;
+                                                 
+                                                 // 1. 초기 스크롤 위치 복원
+                                                 if ($targetLine === $totalLines && $totalLines > 1) {
+                                                      if (typeof jumpToBottom === 'function') { jumpToBottom(); }
+                                                      else {
+                                                           if (isVertical) window.scrollTo(-1000000, 0); // Left end
+                                                           else window.scrollTo(0, 1000000);
+                                                      }
                                                  } else {
-                                                      window.scrollTo(0, document.documentElement.scrollHeight);
+                                                     var el = document.getElementById('line-$targetLine'); 
+                                                     if(el) {
+                                                         el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                                                     } else if ($targetLine === 1) {
+                                                         if (isVertical) window.scrollTo(1000000, 0); // Right end (start)
+                                                         else window.scrollTo(0, 0);
+                                                     }
                                                  }
-                                            } else {
-                                                var el = document.getElementById('line-$targetLine'); 
-                                                if(el) {
-                                                    el.scrollIntoView({ behavior: 'instant', block: 'start' });
-                                                } else if ($targetLine === 1) {
-                                                    window.scrollTo(0, 0);
-                                                }
-                                            }
-                                            
-                                            // 1.5. Dynamic tagging for ruby based on rules
-                                            document.querySelectorAll('rt').forEach(function(el) {
-                                                var rubyText = el.textContent.trim();
-                                                var baseNode = el.previousSibling || el.parentElement.firstChild;
-                                                var baseText = baseNode ? baseNode.textContent.trim() : "";
-                                                var baseLen = baseText.length;
-                                                var rubyLen = rubyText.length;
-                                                
-                                                var needCompression = false;
-                                                if (baseLen === 1 && rubyLen >= 3) needCompression = true;
-                                                else if (baseLen === 2 && rubyLen >= 5) needCompression = true;
-                                                else if (baseLen === 3 && rubyLen >= 7) needCompression = true;
-                                                
-                                                if (needCompression) {
-                                                    el.classList.add('ruby-wide');
-                                                    if (el.children.length === 0) {
-                                                        el.innerHTML = '<span>' + rubyText + '</span>';
-                                                    }
-                                                }
-                                            });
-                                            
-                                            // 2. 정확한 JS 기반 페이지 넘김 함수 생성
-                                            window.pageDown = function() {
-                                                var oldY = window.pageYOffset;
-                                                window.scrollBy({ top: window.innerHeight - 40, behavior: 'instant' });
-                                                // If Y didn't change, we're at the very bottom
-                                                if (window.pageYOffset === oldY) {
-                                                    Android.autoLoadNext();
-                                                }
-                                            };
-                                            
-                                            window.pageUp = function() {
-                                                var oldY = window.pageYOffset;
-                                                window.scrollBy({ top: -(window.innerHeight - 40), behavior: 'instant' });
-                                                // If Y didn't change and we're at the top
-                                                if (window.pageYOffset === oldY && oldY === 0) {
-                                                    Android.autoLoadPrev();
-                                                }
-                                            };
+                                                 
+                                                 // 1.5. Dynamic tagging for ruby based on rules
+                                                 document.querySelectorAll('rt').forEach(function(el) {
+                                                     var rubyText = el.textContent.trim();
+                                                     var baseNode = el.previousSibling || el.parentElement.firstChild;
+                                                     var baseText = baseNode ? baseNode.textContent.trim() : "";
+                                                     var baseLen = baseText.length;
+                                                     var rubyLen = rubyText.length;
+                                                     
+                                                     var needCompression = false;
+                                                     if (baseLen === 1 && rubyLen >= 3) needCompression = true;
+                                                     else if (baseLen === 2 && rubyLen >= 5) needCompression = true;
+                                                     else if (baseLen === 3 && rubyLen >= 7) needCompression = true;
+                                                     
+                                                     if (needCompression) {
+                                                         el.classList.add('ruby-wide');
+                                                         if (el.children.length === 0) {
+                                                             el.innerHTML = '<span>' + rubyText + '</span>';
+                                                         }
+                                                     }
+                                                 });
+                                                                                                  // 2. 정확한 페이지 이동 함수 (딱 한 페이지씩)
+                                                  window.detectAndReportLine = function() {
+                                                      var width = window.innerWidth;
+                                                      var height = window.innerHeight;
+                                                      
+                                                      var points = [];
+                                                      if (isVertical) {
+                                                          // 세로쓰기: 화면 오른쪽 가장자리가 현재 읽는 위치
+                                                          var rx = width - 50; // 오른쪽에서 50px 지점
+                                                          points = [
+                                                              {x: rx, y: height * 0.2},
+                                                              {x: rx, y: height * 0.4},
+                                                              {x: rx, y: height * 0.5},
+                                                              {x: rx, y: height * 0.6},
+                                                              {x: rx, y: height * 0.8}
+                                                          ];
+                                                      } else {
+                                                          // 가로쓰기: 화면 상단 중앙이 현재 읽는 위치
+                                                          var cx = width / 2;
+                                                          var cy = height / 2;
+                                                          points = [
+                                                              {x: cx, y: cy},
+                                                              {x: cx + 20, y: cy}, {x: cx - 20, y: cy},
+                                                              {x: cx, y: cy + 20}, {x: cx, y: cy - 20}
+                                                          ];
+                                                      }
+                                                      
+                                                      var foundLine = -1;
+                                                      for (var i = 0; i < points.length; i++) {
+                                                          var el = document.elementFromPoint(points[i].x, points[i].y);
+                                                          while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                                                              if (el.id && el.id.startsWith('line-')) {
+                                                                  foundLine = parseInt(el.id.replace('line-', ''));
+                                                                  break;
+                                                              }
+                                                              el = el.parentElement;
+                                                          }
+                                                          if (foundLine > 0) break;
+                                                      }
+                                                      if (foundLine > 0) {
+                                                          Android.onLineChanged(foundLine);
+                                                      }
+                                                  };
 
-                                            // 3. Set up scroll listener with delay and accurate bottom detection
-                                            setTimeout(function() {
-                                                var isScrolling = false;
-                                                window.onscroll = function() {
-                                                    // Line detection
-                                                    var el = document.elementFromPoint(window.innerWidth/2, 20);
-                                                    while (el && (!el.id || !el.id.startsWith('line-'))) {
-                                                        el = el.parentElement;
-                                                    }
-                                                    if (el && el.id.startsWith('line-')) {
-                                                        var line = parseInt(el.id.replace('line-', ''));
-                                                        Android.onLineChanged(line);
-                                                    }
-                                                    
-                                                    // [수정 2] EPUB일 때는 스크롤만으로 챕터를 넘기지 않도록 차단
-                                                    if ($enableAutoLoading) {
-                                                        // Accurate bottom detection
-                                                        var scrollPosition = window.innerHeight + window.pageYOffset;
-                                                        var bottomPosition = document.documentElement.scrollHeight;
-                                                        
-                                                        if (scrollPosition >= bottomPosition - 5) {
-                                                           if (!isScrolling) {
-                                                               isScrolling = true;
-                                                               Android.autoLoadNext();
-                                                           }
-                                                        }
-                                                        if (window.pageYOffset <= 0) {
-                                                           if (!isScrolling) {
-                                                               isScrolling = true;
-                                                               Android.autoLoadPrev();
-                                                           }
-                                                        }
-                                                    }
-                                                };
-                                            }, 500); 
-                                        """.trimIndent()
+                                                  window.pageDown = function() {
+                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
+                                                      var overlap = 40; // 겹침 거리 (약 한 글자)
+                                                      var moveSize = pageSize - overlap;
+                                                      
+                                                      if (isVertical) {
+                                                          var oldX = window.pageXOffset;
+                                                          window.scrollBy({ left: -moveSize, behavior: 'instant' });
+                                                          // 끝에 도달하여 이동량이 적을 때 다음 청크 로드
+                                                          if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadNext();
+                                                      } else {
+                                                          var oldY = window.pageYOffset;
+                                                          window.scrollBy({ top: moveSize, behavior: 'instant' });
+                                                          if (Math.abs(window.pageYOffset - oldY) < 10) Android.autoLoadNext();
+                                                      }
+                                                      window.detectAndReportLine();
+                                                  };
+                                                                                                  window.pageUp = function() {
+                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
+                                                      var overlap = 40;
+                                                      var moveSize = pageSize - overlap;
+          
+                                                      if (isVertical) {
+                                                          var oldX = window.pageXOffset;
+                                                          window.scrollBy({ left: moveSize, behavior: 'instant' });
+                                                          if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadPrev();
+                                                      } else {
+                                                          var oldY = window.pageYOffset;
+                                                          window.scrollBy({ top: -moveSize, behavior: 'instant' });
+                                                          if (Math.abs(window.pageYOffset - oldY) < 10 && oldY === 0) Android.autoLoadPrev();
+                                                      }
+                                                      window.detectAndReportLine();
+                                                  };
+         
+                                                 // 3. 스크롤 감지 및 라인 번호 업데이트 (그리드 서치 적용)
+                                                 var scrollTimer = null;
+                                                  window.onscroll = function() {
+                                                      if (scrollTimer) clearTimeout(scrollTimer);
+                                                      scrollTimer = setTimeout(function() {
+                                                          window.detectAndReportLine();
+                                                          
+                                                          var isScrolling = false; // Guard for autoload calls
+                                                         
+                                                         // 자동 로딩 로직
+                                                         if ($enableAutoLoading) {
+                                                             if (isVertical) {
+                                                                 var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
+                                                                 // Chromium vertical-rl: 0 is Right (Start), Negative max is Left (End)
+                                                                 // 왼쪽 끝 도달 시 다음 챕터
+                                                                 if (window.pageXOffset <= -(maxScrollX - 10)) {
+                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadNext(); }
+                                                                 }
+                                                                 // 오른쪽 끝 도달 시 이전 챕터
+                                                                 else if (window.pageXOffset >= -10) { 
+                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadPrev(); }
+                                                                 }
+                                                             } else {
+                                                                 // 가로 모드
+                                                                 var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                                 var bottomPosition = document.documentElement.scrollHeight;
+                                                                 if (scrollPosition >= bottomPosition - 5) {
+                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadNext(); }
+                                                                 }
+                                                                 else if (window.pageYOffset <= 0) {
+                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadPrev(); }
+                                                                 }
+                                                             }
+                                                         }
+                                                     }, 100);
+                                                 };
+                                             })();
+                                         """.trimIndent()
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
                                             webViewRef?.postDelayed({
                                                 isPageLoading = false
                                                 isNavigating = false
-                                            }, 100)
+                                            }, 500) // 100 -> 500ms
                                         }
                                     }
                                 }
@@ -647,17 +726,20 @@ fun DocumentViewerScreen(
                                         val width = width
                                         val x = e.x
                                         // Custom instant scrolling via JS to avoid animation
-                                        if (false) {
-                                            // Vertical Text (Removed)
-                                        } else {
-                                            // Standard Text (Vertical Scroll)
-                                            // Left side = Prev
-                                            // Right side = Next
+                                        if (uiState.isVertical) {
+                                            // 세로쓰기: 오른쪽 터치 = 이전(pageUp), 왼쪽 터치 = 다음(pageDown)
                                             if (x < width / 3) {
-                                                // Left touch: pageUp
+                                                webViewRef?.evaluateJavascript("window.pageDown();", null) // 앞으로
+                                            } else if (x > width * 2 / 3) {
+                                                webViewRef?.evaluateJavascript("window.pageUp();", null)   // 뒤로
+                                            } else {
+                                                onToggleFullScreen()
+                                            }
+                                        } else {
+                                            // 가로쓰기: 왼쪽 터치 = 이전(pageUp), 오른쪽 터치 = 다음(pageDown)
+                                            if (x < width / 3) {
                                                 webViewRef?.evaluateJavascript("window.pageUp();", null)
                                             } else if (x > width * 2 / 3) {
-                                                // Right touch: pageDown
                                                 webViewRef?.evaluateJavascript("window.pageDown();", null)
                                             } else {
                                                 onToggleFullScreen()
@@ -693,50 +775,82 @@ fun DocumentViewerScreen(
             UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
             else -> "#ffffff" to "#000000"
         }
-                                  val style = """
-                                  <style>
-                                      html, body {
-                                          margin: 0;
-                                          padding: 0 !important;
-                                          background-color: $bgColor !important;
-                                          color: $textColor !important;
-                                          writing-mode: horizontal-tb !important;
-                                          -webkit-writing-mode: horizontal-tb !important;
-                                          overflow-x: hidden !important;
-                                          width: 100vw !important;
-                                      }
-                                      body {
-                                          font-family: ${uiState.fontFamily} !important;
-                                          font-size: ${uiState.fontSize}px !important;
-                                          line-height: 1.6 !important;
-                                          padding: 0 !important; /* Remove body padding for full-width images */
-                                          box-sizing: border-box !important;
-                                          word-wrap: break-word !important;
-                                          overflow-wrap: break-word !important;
-                                          padding-top: env(safe-area-inset-top, 0);
-                                          padding-bottom: 100vh !important; /* Allow scrolling past end with full page of whitespace */
-                                          min-height: 101vh !important; /* Ensure scrollable even if chapter is empty */
-                                      }
-                                      /* Padding for text elements to keep them readable */
-                                      p, div, h1, h2, h3, h4, h5, h6 {
-                                          padding-left: ${uiState.sideMargin / 20.0}em !important;
-                                          padding-right: ${uiState.sideMargin / 20.0}em !important;
-                                      }
-                                      /* Remove padding for images to make them edge-to-edge */
-                                      div:has(img), p:has(img) {
-                                          padding: 0 !important;
-                                      }
-                                      img {
-                                          max-width: 100% !important;
-                                          height: auto !important;
-                                          display: block !important;
-                                          margin: 1em auto !important;
-                                          object-fit: contain !important;
-                                      }
-                                      img[style*="display: none"] {
-                                          margin: 0 !important;
-                                          height: 0 !important;
-                                      }
+                                   val style = """
+                                   <style>
+                                       /* 1. 스크롤 방향 강제 및 오버스크롤(튕김) 방지 */
+                                       html {
+                                           width: 100vw !important;
+                                           height: 100vh !important;
+                                           margin: 0 !important;
+                                           padding: 0 !important;
+                                           /* 세로쓰기일 땐 X축만, 가로쓰기일 땐 Y축만 허용 */
+                                           overflow-x: ${if (uiState.isVertical) "scroll" else "hidden"} !important;
+                                           overflow-y: ${if (uiState.isVertical) "hidden" else "scroll"} !important;
+                                           /* 튕김 효과 방지 */
+                                           overscroll-behavior: none !important;
+                                           /* 터치 동작 제한 (세로쓰기면 좌우 스크롤만 허용) */
+                                           touch-action: ${if (uiState.isVertical) "pan-x" else "pan-y"} !important;
+                                           
+                                           /* [중요] html에도 writing-mode 적용하여 브라우저 좌표축 동기화 */
+                                           writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                           -webkit-writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                       }
+                                   
+                                       body {
+                                           height: 100vh !important;
+                                           min-height: 100vh !important;
+                                           width: ${if (uiState.isVertical) "auto" else "100%"} !important;
+                                           margin: 0 !important;
+                                           padding: 0 !important; /* body 패딩 제거 (좌표 계산 오차 원인) */
+                                           
+                                           background-color: $bgColor !important;
+                                           color: $textColor !important;
+                                           
+                                           writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                           -webkit-writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                           
+                                           font-family: ${uiState.fontFamily} !important;
+                                           font-size: ${uiState.fontSize}px !important;
+                                           line-height: 1.8 !important;
+                                           
+                                           /* 안전 영역 패딩 */
+                                           padding-top: env(safe-area-inset-top, 0) !important;
+                                           padding-bottom: env(safe-area-inset-bottom, 0) !important;
+                                       }
+                                       
+                                       /* 2. 문단 설정: 여백이 터치 감지를 방해하지 않도록 조정 */
+                                       p, div, h1, h2, h3, h4, h5, h6 {
+                                           display: block !important; 
+                                           height: auto !important;
+                                           width: auto !important;
+                                           margin-top: 0 !important;
+                                           /* 줄 간격 */
+                                           margin-bottom: ${if (uiState.isVertical) "0" else "0.5em"} !important;
+                                           margin-left: ${if (uiState.isVertical) "1em" else "0"} !important;
+                                           
+                                           /* 전체 여백 적용 */
+                                           padding-left: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
+                                           padding-right: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
+                                           padding-top: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                           padding-bottom: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                           
+                                           box-sizing: border-box !important;
+                                       }
+                                       /* Remove padding for images to make them edge-to-edge */
+                                       div:has(img), p:has(img) {
+                                           padding: 0 !important;
+                                       }
+                                       img {
+                                           max-width: 100% !important;
+                                           height: auto !important;
+                                           display: block !important;
+                                           margin: 1em auto !important;
+                                           object-fit: contain !important;
+                                       }
+                                       img[style*="display: none"] {
+                                           margin: 0 !important;
+                                           height: 0 !important;
+                                       }
                                       /* Table wrapping support */
                                       table {
                                           width: 100% !important;
@@ -771,12 +885,32 @@ fun DocumentViewerScreen(
                                       }
                                       </style>
                                   """
-                                  // Inject style intelligently
-                                  val contentWithStyle = if (uiState.content.contains("</head>")) {
-                                      uiState.content.replace("</head>", "$style</head>")
-                                  } else {
-                                      "$style${uiState.content}"
-                                  }
+                                   // Inject style intelligently and prevent Quirks Mode
+                                   val contentWithStyle = if (uiState.content.contains("</head>")) {
+                                       uiState.content.replace("</head>", "$style</head>")
+                                   } else if (uiState.content.contains("<body")) {
+                                       val match = "<body[^>]*>".toRegex().find(uiState.content)
+                                       if (match != null) {
+                                           uiState.content.substring(0, match.range.last + 1) + style + uiState.content.substring(match.range.last + 1)
+                                       } else {
+                                           "$style${uiState.content}"
+                                       }
+                                   } else {
+                                       // 태그가 없는 순수 텍스트라면, 표준 HTML 뼈대를 만들어 감싸줌 (높이 확보의 핵심)
+                                       """
+                                       <!DOCTYPE html>
+                                       <html>
+                                       <head>
+                                           <meta charset="utf-8">
+                                           <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                                           $style
+                                       </head>
+                                       <body>
+                                           ${uiState.content}
+                                       </body>
+                                       </html>
+                                       """.trimIndent()
+                                   }
       
                                   if (contentWithStyle.hashCode() != previousHash) {
                                       wv.tag = contentWithStyle.hashCode()
@@ -854,8 +988,23 @@ fun DocumentViewerScreen(
             confirmButton = {
                 TextButton(onClick = {
                     val line = targetLineStr.toIntOrNull()
-                    if (line != null) {
+                    if (line != null && line in 1..uiState.totalLines) {
+                        val targetChunk = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                        if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(line - currentLine) > 50) {
+                            isNavigating = true
+                            isPageLoading = true
+                        }
                         viewModel.jumpToLine(line)
+                        currentLine = line // 즉시 로컬 상태 업데이트
+                        if (targetChunk == uiState.currentChunkIndex && webViewRef != null) {
+                            val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                            webViewRef?.evaluateJavascript(js) {
+                                webViewRef?.postDelayed({
+                                    isPageLoading = false
+                                    isNavigating = false
+                                }, 500)
+                            }
+                        }
                         showGoToLineDialog = false
                     }
                 }) { Text("Go") }

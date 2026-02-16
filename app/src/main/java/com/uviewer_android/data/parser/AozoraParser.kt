@@ -244,7 +244,7 @@ object AozoraParser {
     }
 
     fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8): String {
-        val writingMode = "horizontal-tb"
+        val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
         val fontFamily = when(font) {
             "serif" -> "'Sawarabi Mincho', serif"
             "sans-serif" -> "'Sawarabi Gothic', sans-serif"
@@ -273,6 +273,19 @@ object AozoraParser {
                 </script>
                 <style>
                     @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&family=Sawarabi+Gothic&display=swap');
+                    
+                    html {
+                        width: 100vw !important;
+                        height: 100vh !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        overflow-x: ${if (isVertical) "scroll" else "hidden"} !important;
+                        overflow-y: ${if (isVertical) "hidden" else "scroll"} !important;
+                        overscroll-behavior: none !important;
+                        touch-action: ${if (isVertical) "pan-x" else "pan-y"} !important;
+                        writing-mode: $writingMode !important;
+                        -webkit-writing-mode: $writingMode !important;
+                    }
                     body {
                         font-family: $fontFamily;
                         font-size: ${fontSize}px;
@@ -280,20 +293,27 @@ object AozoraParser {
                         color: $textColor;
                         writing-mode: $writingMode;
                         -webkit-writing-mode: $writingMode;
-                        text-orientation: upright;
+                        text-orientation: mixed;
                         margin: 0;
-                        padding: 0;
-                        padding-bottom: 100vh;
+                        padding: 0 !important;
                         line-height: 1.8;
-                        overflow-x: ${if (isVertical) "auto" else "hidden"};
-                        overflow-y: ${if (isVertical) "hidden" else "visible"};
-                        height: ${if (isVertical) "100vh" else "auto"};
-                        min-height: 100vh;
+                        overflow: visible !important;
+                        height: 100vh !important;
+                        min-height: 100vh !important;
                         width: ${if (isVertical) "auto" else "100%"};
                     }
-                    p, div, h1, h2, h3 {
-                        padding: 0 ${marginEm}em;
-                        min-height: 1.2em;
+                    p, div, h1, h2, h3, h4, h5, h6 {
+                        display: block !important;
+                        height: auto !important;
+                        width: auto !important;
+                        margin-top: 0 !important;
+                        margin-bottom: ${if (isVertical) "0" else "0.5em"} !important;
+                        margin-left: ${if (isVertical) "1em" else "0"} !important;
+                        padding-left: ${if (isVertical) "0" else "${marginEm}em"} !important;
+                        padding-right: ${if (isVertical) "0" else "${marginEm}em"} !important;
+                        padding-top: ${if (isVertical) "${marginEm}em" else "0"} !important;
+                        padding-bottom: ${if (isVertical) "${marginEm}em" else "0"} !important;
+                        box-sizing: border-box !important;
                     }
 
                     div:has(img), p:has(img) {
@@ -304,11 +324,13 @@ object AozoraParser {
                     }
                     img {
                         max-width: 100% !important;
+                        max-height: 100% !important;
+                        width: auto !important;
                         height: auto !important;
                         display: block;
                         margin: 1em auto;
                         vertical-align: middle;
-                        object-fit: contain; /* 비율 유지 */
+                        object-fit: contain;
                     }
                     img[style*="display: none"] {
                         margin: 0 !important;
@@ -369,17 +391,14 @@ object AozoraParser {
                         padding: 0 !important;
                         margin: 1em 0;
                     }
-                    /* Support for Vertical text centering and padding */
-                    body.vertical {
-                        padding: 2em 1.5em;
-                        padding-left: 50vh;
-                    }
                 </style>
             </head>
             <body class="${if (isVertical) "vertical" else ""}">
                 $bodyContent
-                <div style="height: 50vh; width: 100%; clear: both;"></div>
-                <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
+                ${if (isVertical) 
+                    """<div id="end-marker" style="display:inline-block; width:1px; height:100vh;"></div>"""
+                  else 
+                    """<div style="height: 50vh; width: 100%; clear: both;"></div><div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>"""}
             </body>
             </html>
         """.trimIndent()

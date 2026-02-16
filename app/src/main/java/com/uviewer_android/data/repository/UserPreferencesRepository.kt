@@ -85,6 +85,11 @@ class UserPreferencesRepository(context: Context) {
     )
     val subtitleEnabled: StateFlow<Boolean> = _subtitleEnabled.asStateFlow()
 
+    private val _isVerticalReading = MutableStateFlow(
+        getSafeBoolean("is_vertical_reading", false)
+    )
+    val isVerticalReading: StateFlow<Boolean> = _isVerticalReading.asStateFlow()
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -168,6 +173,13 @@ class UserPreferencesRepository(context: Context) {
             putBoolean("subtitle_enabled", enabled)
         }
         _subtitleEnabled.value = enabled
+    }
+
+    fun setIsVerticalReading(enabled: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("is_vertical_reading", enabled)
+        }
+        _isVerticalReading.value = enabled
     }
 
     fun setCustomDocBackgroundColor(color: String) {

@@ -62,6 +62,7 @@ class DocumentViewerViewModel(
     val fontFamily = userPreferencesRepository.fontFamily
     val docBackgroundColor = userPreferencesRepository.docBackgroundColor
     val sideMargin = userPreferencesRepository.sideMargin
+    val isVerticalReading = userPreferencesRepository.isVerticalReading
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
@@ -82,7 +83,8 @@ class DocumentViewerViewModel(
                     userPreferencesRepository.docBackgroundColor,
                     userPreferencesRepository.customDocBackgroundColor,
                     userPreferencesRepository.customDocTextColor,
-                    userPreferencesRepository.sideMargin
+                    userPreferencesRepository.sideMargin,
+                    userPreferencesRepository.isVerticalReading
                 )
             ) { args: Array<Any> ->
                 val size = args[0] as Int
@@ -91,6 +93,7 @@ class DocumentViewerViewModel(
                 val customBg = args[3] as String
                 val customText = args[4] as String
                 val margin = args[5] as Int
+                val vertical = args[6] as Boolean
                 
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
@@ -98,7 +101,8 @@ class DocumentViewerViewModel(
                     docBackgroundColor = color,
                     customDocBackgroundColor = customBg,
                     customDocTextColor = customText,
-                    sideMargin = margin
+                    sideMargin = margin,
+                    isVertical = vertical
                 )
                 if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -326,37 +330,76 @@ class DocumentViewerViewModel(
                 }
                 val resetCss = """
                     <style>
-                        /* Ignore fixed layout constraints aggressively, but spare ruby elements */
-                        *:not(ruby):not(rt):not(rp) { 
-                            max-width: 100% !important; 
+                        /* 모든 요소 box-sizing 적용 */
+                        * { 
                             box-sizing: border-box !important; 
-                            overflow-wrap: break-word !important; 
                         }
-                        html, body {
-                            width: 100% !important;
-                            height: auto !important;
-                            overflow-x: hidden !important;
+                        
+                        html {
+                            width: 100vw !important;
+                            height: 100vh !important;
                             margin: 0 !important;
                             padding: 0 !important;
+                            overflow-x: ${if (_uiState.value.isVertical) "scroll" else "hidden"} !important;
+                            overflow-y: ${if (_uiState.value.isVertical) "hidden" else "scroll"} !important;
+                            overscroll-behavior: none !important;
+                            touch-action: ${if (_uiState.value.isVertical) "pan-x" else "pan-y"} !important;
+                            
+                            /* [추가] 뷰포트 스크롤 좌표계를 위해 html에도 writing-mode 적용 */
+                            writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                            -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                         }
+                        
                         body { 
+                            /* 세로쓰기 설정 */
+                            writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                            -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                            
+                            height: 100vh !important;
+                            min-height: 100vh !important;
+                            width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
+                            
+                            margin: 0 !important;
+                            padding: 0 !important;
+                            
+                            overflow: visible !important;
+                            
                             background-color: ${colors.first} !important; 
                             color: ${colors.second} !important; 
                             font-family: $fontFamily !important;
                             font-size: ${_uiState.value.fontSize}px !important;
-                            padding: 1.2em ${_uiState.value.sideMargin / 20.0}em !important;
-                            display: block !important;
                             line-height: 1.8 !important;
-                        }
-                        p, div, article, section, h1, h2, h3, h4, h5, h6 {
-                            width: 100% !important;
+                            
+                            /* 안전 영역 설정 (여백은 문단으로 이동) */
+                            padding-top: env(safe-area-inset-top, 0) !important;
+                            padding-bottom: env(safe-area-inset-bottom, 0) !important;
                             display: block !important;
-                            margin-top: 0.5em !important;
-                            margin-bottom: 0.5em !important;
                         }
+                        
+                        /* [문제 해결의 핵심] 문단(div, p)의 높이를 100%로 강제해야 함. */
+                        p, div, article, section, h1, h2, h3, h4, h5, h6 {
+                            display: block !important;
+                            height: auto !important;
+                            width: auto !important;
+                            margin-top: 0 !important;
+                            margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
+                            margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
+                            
+                            padding-left: ${if (_uiState.value.isVertical) "0" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                            padding-right: ${if (_uiState.value.isVertical) "0" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                            padding-top: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
+                            padding-bottom: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
+                            
+                            white-space: normal !important;
+                            overflow-wrap: break-word !important;
+                            box-sizing: border-box !important;
+                        }
+                        
                         img { 
                             max-width: 100% !important; 
-                            height: auto !important; 
+                            max-height: 100% !important; 
+                            width: auto !important;
+                            height: auto !important;
                             display: block !important; 
                             margin: 1em auto !important; 
                         }
@@ -395,7 +438,19 @@ class DocumentViewerViewModel(
                     </style>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                 """.trimIndent()
-                resetCss + chunkText
+                """
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                        $resetCss
+                    </head>
+                    <body>
+                        $chunkText
+                    </body>
+                    </html>
+                """.trimIndent()
             } else {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     val imageRootPath = if (!isWebDavContext) {
@@ -420,7 +475,7 @@ class DocumentViewerViewModel(
                     val colors = getColors()
                     AozoraParser.wrapInHtml(
                         htmlBody, 
-                        false, 
+                        _uiState.value.isVertical, 
                         _uiState.value.fontFamily, 
                         _uiState.value.fontSize, 
                         colors.first, 
@@ -570,19 +625,32 @@ class DocumentViewerViewModel(
                                 box-sizing: border-box !important; 
                                 overflow-wrap: break-word !important; 
                             }
-                            html, body {
-                                width: 100% !important;
+                            html {
+                                width: 100vw !important;
+                                height: 100vh !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                overflow-x: ${if (_uiState.value.isVertical) "auto" else "hidden"} !important;
+                                overflow-y: ${if (_uiState.value.isVertical) "hidden" else "auto"} !important;
+                            }
+                            body { 
+                                width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
+                                height: 100vh !important;
+                                min-height: 100vh !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
                                 background-color: ${colors.first} !important;
                                 color: ${colors.second} !important;
-                            }
-                            body { 
                                 font-family: $fontFamily !important;
                                 font-size: ${_uiState.value.fontSize}px !important;
-                                padding: 1.2em ${_uiState.value.sideMargin / 20.0}em !important;
-                                padding-bottom: 100vh !important;
-                                min-height: 101vh !important;
+                                writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                text-orientation: mixed !important;
+                                overflow: visible !important;
+                                padding-top: env(safe-area-inset-top, 0) !important;
+                                padding-bottom: env(safe-area-inset-bottom, 0) !important;
+                                padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                                padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -613,6 +681,24 @@ class DocumentViewerViewModel(
                                 table-layout: fixed !important;
                                 border-collapse: collapse !important;
                                 margin: 1em 0 !important;
+                            }
+                            p, div, article, section, h1, h2, h3, h4, h5, h6 {
+                                display: block !important;
+                                height: auto !important;
+                                width: auto !important;
+                                margin-top: 0 !important;
+                                margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
+                                margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
+                                white-space: normal !important;
+                                overflow-wrap: break-word !important;
+                            }
+                            img { 
+                                max-width: 100% !important; 
+                                max-height: 100% !important; 
+                                width: auto !important;
+                                height: auto !important;
+                                display: block !important; 
+                                margin: 1em auto !important; 
                             }
                             th, td {
                                 border: 1px solid #888 !important;
@@ -701,6 +787,12 @@ class DocumentViewerViewModel(
     fun setCustomDocTextColor(color: String) {
         viewModelScope.launch {
             userPreferencesRepository.setCustomDocTextColor(color)
+        }
+    }
+
+    fun toggleVerticalReading() {
+        viewModelScope.launch {
+            userPreferencesRepository.setIsVerticalReading(!_uiState.value.isVertical)
         }
     }
 
