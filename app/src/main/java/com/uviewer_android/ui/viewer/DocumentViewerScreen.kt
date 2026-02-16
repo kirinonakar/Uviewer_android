@@ -518,13 +518,15 @@ fun DocumentViewerScreen(
                                         super.onPageFinished(view, url)
                                         val targetLine = viewModel.uiState.value.currentLine
                                         val totalLines = viewModel.uiState.value.totalLines
+                                        val enableAutoLoading = type == FileEntry.FileType.TEXT
+
                                         val jsScrollLogic = """
                                             // 1. Restore scroll position
                                             if ($targetLine === $totalLines && $totalLines > 1) {
                                                  if (typeof jumpToBottom === 'function') {
-                                                     jumpToBottom();
+                                                      jumpToBottom();
                                                  } else {
-                                                     window.scrollTo(0, document.documentElement.scrollHeight);
+                                                      window.scrollTo(0, document.documentElement.scrollHeight);
                                                  }
                                             } else {
                                                 var el = document.getElementById('line-$targetLine'); 
@@ -589,21 +591,24 @@ fun DocumentViewerScreen(
                                                         Android.onLineChanged(line);
                                                     }
                                                     
-                                                    // Accurate bottom detection
-                                                    var scrollPosition = window.innerHeight + window.pageYOffset;
-                                                    var bottomPosition = document.documentElement.scrollHeight;
-                                                    
-                                                    if (scrollPosition >= bottomPosition - 5) {
-                                                       if (!isScrolling) {
-                                                           isScrolling = true;
-                                                           Android.autoLoadNext();
-                                                       }
-                                                    }
-                                                    if (window.pageYOffset <= 0) {
-                                                       if (!isScrolling) {
-                                                           isScrolling = true;
-                                                           Android.autoLoadPrev();
-                                                       }
+                                                    // [수정 2] EPUB일 때는 스크롤만으로 챕터를 넘기지 않도록 차단
+                                                    if ($enableAutoLoading) {
+                                                        // Accurate bottom detection
+                                                        var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                        var bottomPosition = document.documentElement.scrollHeight;
+                                                        
+                                                        if (scrollPosition >= bottomPosition - 5) {
+                                                           if (!isScrolling) {
+                                                               isScrolling = true;
+                                                               Android.autoLoadNext();
+                                                           }
+                                                        }
+                                                        if (window.pageYOffset <= 0) {
+                                                           if (!isScrolling) {
+                                                               isScrolling = true;
+                                                               Android.autoLoadPrev();
+                                                           }
+                                                        }
                                                     }
                                                 };
                                             }, 500); 
