@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
+import android.content.pm.ActivityInfo
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
@@ -62,7 +63,9 @@ fun MediaPlayerScreen(
     BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val activity = context as? android.app.Activity
     
+    var currentOrientation by remember { mutableIntStateOf(activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
     // Ensure status bar icons are visible (white) on dark background even in light theme
     // For Video: Hide status bar when isFullScreen is true
     // For Audio: Keep status bar visible
@@ -98,10 +101,12 @@ fun MediaPlayerScreen(
 
     // Keep Screen On
     DisposableEffect(Unit) {
-        val window = (context as? android.app.Activity)?.window
+        val window = activity?.window
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Reset orientation when leaving
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
     
@@ -281,6 +286,21 @@ fun MediaPlayerScreen(
                                 Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
                             }
                             if (fileType == FileEntry.FileType.VIDEO) {
+                                IconButton(onClick = {
+                                    val newOrientation = if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                                        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                    } else {
+                                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                    }
+                                    activity?.requestedOrientation = newOrientation
+                                    currentOrientation = newOrientation
+                                }) {
+                                    Icon(
+                                        if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
+                                        contentDescription = "Rotate Screen",
+                                        tint = Color.White
+                                    )
+                                }
                                 var showSubtitleMenu by remember { mutableStateOf(false) }
                                 IconButton(onClick = { showSubtitleMenu = true }) {
                                     Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
@@ -516,13 +536,12 @@ fun MediaPlayerScreen(
                             ) {
                                 IconButton(onClick = { 
                                     mediaController?.seekToPrevious()
-                                    // viewModel.prev removed
                                     showControls = true 
                                 }) {
                                     Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(48.dp))
                                 }
                                 
-                                Spacer(Modifier.width(48.dp))
+                                Spacer(Modifier.width(24.dp))
                                 
                                 IconButton(onClick = { 
                                     mediaController?.let {
@@ -538,14 +557,34 @@ fun MediaPlayerScreen(
                                     )
                                 }
                                 
-                                Spacer(Modifier.width(48.dp))
+                                Spacer(Modifier.width(24.dp))
                                 
                                 IconButton(onClick = { 
                                     mediaController?.seekToNext()
-                                    // viewModel.next removed
                                     showControls = true 
                                 }) {
                                     Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(48.dp))
+                                }
+
+                                if (fileType == FileEntry.FileType.VIDEO) {
+                                    Spacer(Modifier.width(24.dp))
+                                    IconButton(onClick = {
+                                        val newOrientation = if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                        } else {
+                                            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                        }
+                                        activity?.requestedOrientation = newOrientation
+                                        currentOrientation = newOrientation
+                                        showControls = true
+                                    }) {
+                                        Icon(
+                                            if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
+                                            contentDescription = "Rotate Screen",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    }
                                 }
                             }
 
