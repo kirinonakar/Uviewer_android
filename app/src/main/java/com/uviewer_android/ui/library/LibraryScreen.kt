@@ -92,12 +92,12 @@ fun LibraryScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    val title = if (uiState.currentPath == rootPath) {
+                    val title = if (uiState.selectedTabIndex == 2) {
+                        stringResource(R.string.pinned)
+                    } else if (uiState.currentPath == rootPath) {
                         stringResource(R.string.local)
                     } else if (uiState.currentPath == "WebDAV") {
                         stringResource(R.string.remote)
-                    } else if (uiState.selectedTabIndex == 2) {
-                        stringResource(R.string.pinned)
                     } else {
                         // Extract parent or current folder name
                         val file = java.io.File(uiState.currentPath)
@@ -110,7 +110,10 @@ fun LibraryScreen(
                     Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) 
                 },
                 navigationIcon = {
-                    if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
+                    val showBack = uiState.selectedTabIndex != 2 && 
+                                 uiState.currentPath != rootPath && 
+                                 uiState.currentPath != "WebDAV"
+                    if (showBack) {
                         IconButton(onClick = { viewModel.navigateUp() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                         }

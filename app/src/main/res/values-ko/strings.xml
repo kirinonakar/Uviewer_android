@@ -29,6 +29,8 @@
     <!-- Favorites -->
     <string name="title_favorites">즐겨찾기</string>
     <string name="no_favorites">즐겨찾기가 없습니다</string>
+    <string name="tab_folders">폴더</string>
+    <string name="tab_files">파일</string>
 
     <!-- Recent -->
     <string name="title_recent_files">최근 파일</string>

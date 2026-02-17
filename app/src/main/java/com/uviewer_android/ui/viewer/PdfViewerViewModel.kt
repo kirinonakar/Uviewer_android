@@ -7,6 +7,7 @@ import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -85,18 +86,36 @@ class PdfViewerViewModel(
                 )
             )
 
-            // Favorite (File)
-            favoriteDao.insertFavorite(
-                com.uviewer_android.data.FavoriteItem(
-                    title = bookmarkTitle,
-                    path = path,
-                    isWebDav = isWebDav,
-                    serverId = serverId,
-                    type = "PDF",
-                    position = page,
-                    timestamp = System.currentTimeMillis()
+            // Add to Favorites (File) with new rules
+            val favorites = favoriteDao.getAllFavorites().first()
+            val existing = favorites.find { it.path == path && it.position == page }
+            
+            if (existing != null) {
+                // Rule 1: Same file and same page -> Move to top
+                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+            } else {
+                // Rule 2: Same document, different location/page -> Max 3
+                val sameDocFavorites = favorites.filter { 
+                    it.path == path || it.title == fileName || it.title.startsWith("$fileName - ") 
+                }
+                if (sameDocFavorites.size >= 3) {
+                    val oldest = sameDocFavorites.minByOrNull { it.timestamp }
+                    if (oldest != null) {
+                        favoriteDao.deleteFavorite(oldest)
+                    }
+                }
+                favoriteDao.insertFavorite(
+                    com.uviewer_android.data.FavoriteItem(
+                        title = bookmarkTitle,
+                        path = path,
+                        isWebDav = isWebDav,
+                        serverId = serverId,
+                        type = "PDF",
+                        position = page,
+                        timestamp = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,13 +31,32 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
     val favorites by viewModel.favorites.collectAsState()
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf(stringResource(R.string.tab_folders), stringResource(R.string.tab_files))
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.title_favorites)) })
+            Column {
+                TopAppBar(title = { Text(stringResource(R.string.title_favorites)) })
+                TabRow(selectedTabIndex = selectedTabIndex) {
+                    tabs.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTabIndex == index,
+                            onClick = { selectedTabIndex = index },
+                            text = { Text(text = title) }
+                        )
+                    }
+                }
+            }
         }
     ) { innerPadding ->
-        if (favorites.isEmpty()) {
+        val filteredFavorites = if (selectedTabIndex == 0) {
+            favorites.filter { it.type == "FOLDER" }
+        } else {
+            favorites.filter { it.type != "FOLDER" }
+        }
+
+        if (filteredFavorites.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -51,49 +71,12 @@ fun FavoritesScreen(
                     .fillMaxSize()
                     .padding(innerPadding)
             ) {
-                item { HorizontalDivider() }
-                
-                val folders = favorites.filter { it.type == "FOLDER" }
-                val files = favorites.filter { it.type != "FOLDER" }
-                
-                if (folders.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Folders",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(16.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(folders) { item ->
-                        FavoriteItemRow(
-                            item = item,
-                            onClick = { onNavigateToViewer(item) },
-                            onDelete = { viewModel.deleteFavorite(item) }
-                        )
-                    }
-                }
-                
-                if (folders.isNotEmpty() && files.isNotEmpty()) {
-                    item { HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp)) }
-                }
-                
-                if (files.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Files",
-                            style = MaterialTheme.typography.titleSmall,
-                            modifier = Modifier.padding(16.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    items(files) { item ->
-                        FavoriteItemRow(
-                            item = item,
-                            onClick = { onNavigateToViewer(item) },
-                            onDelete = { viewModel.deleteFavorite(item) }
-                        )
-                    }
+                items(filteredFavorites) { item ->
+                    FavoriteItemRow(
+                        item = item,
+                        onClick = { onNavigateToViewer(item) },
+                        onDelete = { viewModel.deleteFavorite(item) }
+                    )
                 }
             }
         }

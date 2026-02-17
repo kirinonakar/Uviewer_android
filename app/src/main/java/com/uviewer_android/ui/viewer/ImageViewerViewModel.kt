@@ -11,6 +11,7 @@ import com.uviewer_android.data.repository.WebDavRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -101,19 +102,37 @@ enum class ViewMode {
                         )
                     )
 
-                    // Add to Favorites (File)
-                    favoriteDao.insertFavorite(
-                        com.uviewer_android.data.FavoriteItem(
-                            title = bookmarkTitle,
-                            path = path,
-                            isWebDav = isWebDav,
-                            serverId = serverId,
-                            type = type,
-                            position = index,
-                            positionTitle = imageName,
-                            timestamp = System.currentTimeMillis()
+                    // Add to Favorites (File) with new rules
+                    val favorites = favoriteDao.getAllFavorites().first()
+                    val existing = favorites.find { it.path == path && it.position == index }
+                    
+                    if (existing != null) {
+                        // Rule 1: Exactly same file and position -> Move to top
+                        favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+                    } else {
+                        // Rule 2: Same document/archive, different location/position -> Max 3
+                        val sameDocFavorites = favorites.filter { 
+                            it.path == path || it.title == archiveName || it.title.startsWith("$archiveName - ")
+                        }
+                        if (sameDocFavorites.size >= 3) {
+                            val oldest = sameDocFavorites.minByOrNull { it.timestamp }
+                            if (oldest != null) {
+                                favoriteDao.deleteFavorite(oldest)
+                            }
+                        }
+                        favoriteDao.insertFavorite(
+                            com.uviewer_android.data.FavoriteItem(
+                                title = bookmarkTitle,
+                                path = path,
+                                isWebDav = isWebDav,
+                                serverId = serverId,
+                                type = type,
+                                position = index,
+                                positionTitle = imageName,
+                                timestamp = System.currentTimeMillis()
+                            )
                         )
-                    )
+                    }
                 } catch (e: Exception) {
                     // Log or handle error silently to prevent crash
                     e.printStackTrace()

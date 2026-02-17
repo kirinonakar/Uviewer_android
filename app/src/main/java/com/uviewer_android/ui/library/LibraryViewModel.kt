@@ -263,8 +263,20 @@ class LibraryViewModel(
             val favorites = favoriteDao.getAllFavorites().first()
             val existing = favorites.find { it.path == entry.path }
             if (existing != null) {
-                favoriteDao.deleteFavorite(existing)
+                // Rule: Exactly same file -> Move to top
+                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
             } else {
+                // Rule: Same document name, different location -> Max 3
+                val sameDocFavorites = favorites.filter { 
+                    it.title == entry.name || it.title.startsWith("${entry.name} - ") 
+                }
+                if (sameDocFavorites.size >= 3) {
+                    val oldest = sameDocFavorites.minByOrNull { it.timestamp }
+                    if (oldest != null) {
+                        favoriteDao.deleteFavorite(oldest)
+                    }
+                }
+                
                 favoriteDao.insertFavorite(
                     FavoriteItem(
                         title = entry.name,
@@ -272,7 +284,8 @@ class LibraryViewModel(
                         isWebDav = entry.isWebDav,
                         serverId = entry.serverId,
                         type = entry.type.name,
-                        isPinned = false // Default to false when starring
+                        isPinned = false,
+                        timestamp = System.currentTimeMillis()
                     )
                 )
             }

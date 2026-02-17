@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 import java.nio.charset.Charset
@@ -606,17 +607,36 @@ class DocumentViewerViewModel(
                 )
             )
 
-            // Favorite (File)
-            favoriteDao.insertFavorite(
-                com.uviewer_android.data.FavoriteItem(
-                    title = bookmarkTitle,
-                    path = path,
-                    isWebDav = isWebDav,
-                    serverId = serverId,
-                    type = type,
-                    position = savePosition
+            // Add to Favorites (File) with new rules
+            val favorites = favoriteDao.getAllFavorites().first()
+            val existing = favorites.find { it.path == path && it.position == savePosition }
+            
+            if (existing != null) {
+                // Rule 1: Same file and same position -> Move to top
+                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+            } else {
+                // Rule 2: Same document, different location/position -> Max 3
+                val sameDocFavorites = favorites.filter { 
+                    it.path == path || it.title == fileName || it.title.startsWith("$fileName - ") 
+                }
+                if (sameDocFavorites.size >= 3) {
+                    val oldest = sameDocFavorites.minByOrNull { it.timestamp }
+                    if (oldest != null) {
+                        favoriteDao.deleteFavorite(oldest)
+                    }
+                }
+                favoriteDao.insertFavorite(
+                    com.uviewer_android.data.FavoriteItem(
+                        title = bookmarkTitle,
+                        path = path,
+                        isWebDav = isWebDav,
+                        serverId = serverId,
+                        type = type,
+                        position = savePosition,
+                        timestamp = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
         }
     }
 

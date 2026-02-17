@@ -33,6 +33,8 @@
     <!-- Favorites -->
     <string name="title_favorites">Favorites</string>
     <string name="no_favorites">No favorites yet</string>
+    <string name="tab_folders">Folders</string>
+    <string name="tab_files">Files</string>
 
     <!-- Recent -->
     <string name="title_recent_files">Recent Files</string>
