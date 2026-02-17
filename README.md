@@ -36,14 +36,11 @@
 - **Integrated Playback**: Powerful video and music playback based on ExoPlayer.
 - **Background Playback**: Service-based background playback support for music and audiobooks.
 
-
 ### 🌐 Network & Library
 - **WebDAV Support**: Integration with private clouds (NAS, Nextcloud, etc.) for seamless file streaming.
 - **Library Management**: Features for Recent Files, Favorites, and Pinning.
 - **Data Security**: Secure storage of user settings and history using `SharedPreferences` and `Room` DB.
-
 ---
-
 ## 🛠 Tech Stack
 
 Uviewer is built with the latest Android development technologies for a robust and fast experience.

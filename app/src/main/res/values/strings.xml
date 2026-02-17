@@ -140,4 +140,6 @@
     <string name="side_margin_fmt">Side Margin: %d</string>
     <string name="prev_file">Previous File</string>
     <string name="next_file">Next File</string>
+    <string name="volume_key_paging">Volume keys turn pages</string>
+    <string name="volume_key_paging_desc">Use physical volume buttons for paging</string>
 </resources>

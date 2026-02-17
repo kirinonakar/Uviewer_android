@@ -96,11 +96,13 @@ fun PdfViewerScreen(
         false // PDF full screen background is black
     }
     
-    DisposableEffect(Unit) {
+    DisposableEffect(activity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        activity?.volumeKeyPagingActive = true
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity?.volumeKeyPagingActive = false
             try {
                 renderer?.close()
                 fileDescriptor?.close()

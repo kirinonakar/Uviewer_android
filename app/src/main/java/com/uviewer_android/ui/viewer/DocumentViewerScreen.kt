@@ -37,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.repository.UserPreferencesRepository
+import com.uviewer_android.MainActivity
 import kotlinx.coroutines.launch
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
@@ -94,11 +95,13 @@ fun DocumentViewerScreen(
     val context = LocalContext.current
 
     // Keep screen on while viewing document
-    DisposableEffect(Unit) {
+    DisposableEffect(activity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        activity?.volumeKeyPagingActive = true
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity?.volumeKeyPagingActive = false
         }
     }
     val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f

@@ -81,6 +81,9 @@ class SettingsViewModel(
     val imageViewMode: StateFlow<Int> = userPreferencesRepository.imageViewMode
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
+    val volumeKeyPaging: StateFlow<Boolean> = userPreferencesRepository.volumeKeyPaging
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
 
 
     fun setThemeMode(mode: String) {
@@ -133,6 +136,10 @@ class SettingsViewModel(
 
     fun setImageViewMode(mode: Int) {
         userPreferencesRepository.setImageViewMode(mode)
+    }
+
+    fun setVolumeKeyPaging(enabled: Boolean) {
+        userPreferencesRepository.setVolumeKeyPaging(enabled)
     }
 
     fun updateCacheSize() {

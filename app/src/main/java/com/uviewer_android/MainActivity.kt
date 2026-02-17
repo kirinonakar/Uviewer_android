@@ -31,12 +31,19 @@ class MainActivity : AppCompatActivity() {
     private val _keyEvents = MutableSharedFlow<Int>()
     val keyEvents = _keyEvents.asSharedFlow()
 
+    var volumeKeyPagingActive = false
+
     override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
         if (keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
-            lifecycleScope.launch {
-                _keyEvents.emit(keyCode)
+            val appContainer = (application as UviewerApplication).container
+            val pagingEnabled = appContainer.userPreferencesRepository.volumeKeyPaging.value
+            
+            if (pagingEnabled && volumeKeyPagingActive) {
+                lifecycleScope.launch {
+                    _keyEvents.emit(keyCode)
+                }
+                return true
             }
-            return true
         }
         return super.onKeyDown(keyCode, event)
     }
@@ -55,6 +62,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
         
         var intentPath: String? = null

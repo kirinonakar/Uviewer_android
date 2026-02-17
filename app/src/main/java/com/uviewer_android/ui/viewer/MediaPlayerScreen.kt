@@ -36,6 +36,7 @@ import com.uviewer_android.R
 import com.uviewer_android.PlaybackService
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
+import com.uviewer_android.MainActivity
 import androidx.core.view.isVisible
 import androidx.compose.material3.*
 import androidx.compose.ui.platform.LocalContext
@@ -100,9 +101,10 @@ fun MediaPlayerScreen(
     }
 
     // Keep Screen On
-    DisposableEffect(Unit) {
+    DisposableEffect(activity) {
         val window = activity?.window
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        (activity as? MainActivity)?.volumeKeyPagingActive = false
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             // Reset orientation when leaving

@@ -45,6 +45,7 @@ fun SettingsScreen(
     val persistZoom by viewModel.persistZoom.collectAsState()
     val sharpeningAmount by viewModel.sharpeningAmount.collectAsState()
     val imageViewMode by viewModel.imageViewMode.collectAsState()
+    val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsState()
     val cacheSize by viewModel.cacheSize.collectAsState()
 
 
@@ -199,6 +200,18 @@ fun SettingsScreen(
                     headlineContent = { Text(stringResource(R.string.font_family)) },
                     supportingContent = { Text(fontLabel) },
                     modifier = Modifier.clickable { showFontDialog = true }
+                )
+            }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.volume_key_paging)) },
+                    supportingContent = { Text(stringResource(R.string.volume_key_paging_desc)) },
+                    trailingContent = {
+                        Switch(
+                            checked = volumeKeyPaging,
+                            onCheckedChange = { viewModel.setVolumeKeyPaging(it) }
+                        )
+                    }
                 )
             }
             item { HorizontalDivider() }

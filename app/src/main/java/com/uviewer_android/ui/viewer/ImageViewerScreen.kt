@@ -35,6 +35,7 @@ import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import androidx.compose.ui.draw.clipToBounds
 import com.uviewer_android.ui.AppViewModelProvider
+import com.uviewer_android.MainActivity
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import androidx.activity.compose.BackHandler
@@ -113,11 +114,13 @@ fun ImageViewerScreen(
         false // PDF full screen background is black
     }
     
-    DisposableEffect(Unit) {
+    DisposableEffect(activity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        activity?.volumeKeyPagingActive = true
         onDispose {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            activity?.volumeKeyPagingActive = false
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())

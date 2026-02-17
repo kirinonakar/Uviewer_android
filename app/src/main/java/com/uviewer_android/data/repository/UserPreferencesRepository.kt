@@ -90,6 +90,11 @@ class UserPreferencesRepository(context: Context) {
     )
     val isVerticalReading: StateFlow<Boolean> = _isVerticalReading.asStateFlow()
 
+    private val _volumeKeyPaging = MutableStateFlow(
+        getSafeBoolean("volume_key_paging", true)
+    )
+    val volumeKeyPaging: StateFlow<Boolean> = _volumeKeyPaging.asStateFlow()
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -180,6 +185,13 @@ class UserPreferencesRepository(context: Context) {
             putBoolean("is_vertical_reading", enabled)
         }
         _isVerticalReading.value = enabled
+    }
+
+    fun setVolumeKeyPaging(enabled: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("volume_key_paging", enabled)
+        }
+        _volumeKeyPaging.value = enabled
     }
 
     fun setCustomDocBackgroundColor(color: String) {
