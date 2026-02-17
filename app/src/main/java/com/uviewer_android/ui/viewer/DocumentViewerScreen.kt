@@ -273,7 +273,7 @@ fun DocumentViewerScreen(
                                 Text(
                                     "V",
                                     style = MaterialTheme.typography.titleLarge,
-                                    color = if (uiState.isVertical) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                    color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
                                 )
                             }
                             IconButton(onClick = { showEncodingDialog = true }) {
@@ -413,44 +413,7 @@ fun DocumentViewerScreen(
                                  modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 16.dp)
                             )
                          }
-                         if (type == FileEntry.FileType.EPUB && uiState.epubChapters.size > 1) {
-                             Row(
-                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                                 horizontalArrangement = Arrangement.SpaceBetween,
-                                 verticalAlignment = Alignment.CenterVertically
-                             ) {
-                                 TextButton(
-                                     onClick = { 
-                                         isNavigating = true
-                                         isPageLoading = true
-                                         viewModel.prevChapter() 
-                                     },
-                                     enabled = uiState.currentChapterIndex > 0
-                                 ) {
-                                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                                     Spacer(Modifier.width(8.dp))
-                                     Text(stringResource(R.string.prev_chapter))
-                                 }
-                                 
-                                 Text(
-                                     "${uiState.currentChapterIndex + 1} / ${uiState.epubChapters.size}",
-                                     style = MaterialTheme.typography.bodyMedium
-                                 )
- 
-                                 TextButton(
-                                     onClick = { 
-                                         isNavigating = true
-                                         isPageLoading = true
-                                         viewModel.nextChapter() 
-                                     },
-                                     enabled = uiState.currentChapterIndex < uiState.epubChapters.size - 1
-                                 ) {
-                                     Text(stringResource(R.string.next_chapter))
-                                     Spacer(Modifier.width(8.dp))
-                                     Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null)
-                                 }
-                             }
-                         }
+
                     }
                 }
             },
