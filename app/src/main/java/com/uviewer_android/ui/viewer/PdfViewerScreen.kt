@@ -45,6 +45,7 @@ fun PdfViewerScreen(
     filePath: String,
     isWebDav: Boolean,
     serverId: Int?,
+    initialPage: Int? = null,
     viewModel: PdfViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
@@ -64,7 +65,7 @@ fun PdfViewerScreen(
     val activity = context as? MainActivity
 
     LaunchedEffect(filePath) {
-        viewModel.loadPdf(filePath, isWebDav, serverId)
+        viewModel.loadPdf(filePath, isWebDav, serverId, initialPage)
     }
 
     // Initialize Renderer when local file is ready
@@ -130,6 +131,13 @@ fun PdfViewerScreen(
             } else {
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             }
+        }
+    }
+
+    // Scroll to initial position
+    LaunchedEffect(renderer) {
+        if (renderer != null && uiState.initialPage > 0) {
+            listState.scrollToItem(uiState.initialPage)
         }
     }
 

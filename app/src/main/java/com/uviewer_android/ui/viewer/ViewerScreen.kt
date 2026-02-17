@@ -67,6 +67,7 @@ fun ViewerScreen(
                  filePath = filePath, 
                  isWebDav = isWebDav, 
                  serverId = serverId, 
+                 initialPage = initialPosition,
                  onBack = onBack, 
                  isFullScreen = isFullScreen, 
                  onToggleFullScreen = onToggleFullScreen

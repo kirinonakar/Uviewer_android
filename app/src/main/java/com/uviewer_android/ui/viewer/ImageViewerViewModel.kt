@@ -106,9 +106,22 @@ enum class ViewMode {
                     val favorites = favoriteDao.getAllFavorites().first()
                     val existing = favorites.find { it.path == path && it.position == index }
                     
+                    // Check if any favorite with the same title/archive is already pinned
+                    val pinnedItem = favorites.find { 
+                        (it.path == path || it.title == archiveName || it.title.startsWith("$archiveName - ")) && it.isPinned 
+                    }
+                    val wasPinned = pinnedItem != null
+
                     if (existing != null) {
                         // Rule 1: Exactly same file and position -> Move to top
-                        favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+                        favoriteDao.updateFavorite(existing.copy(
+                            timestamp = System.currentTimeMillis(),
+                            isPinned = wasPinned || existing.isPinned
+                        ))
+                        // If a DIFFERENT item was pinned, unpin it
+                        if (wasPinned && pinnedItem?.id != existing.id) {
+                            favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                        }
                     } else {
                         // Rule 2: Same document/archive, different location/position -> Max 3
                         val sameDocFavorites = favorites.filter { 
@@ -129,9 +142,14 @@ enum class ViewMode {
                                 type = type,
                                 position = index,
                                 positionTitle = imageName,
+                                isPinned = wasPinned, // Transfer pin status
                                 timestamp = System.currentTimeMillis()
                             )
                         )
+                        // Unpin the old one if it was different
+                        if (wasPinned) {
+                            favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                        }
                     }
                 } catch (e: Exception) {
                     // Log or handle error silently to prevent crash
@@ -316,7 +334,7 @@ enum class ViewMode {
                          }
                     } else {
                         val found = images.indexOfFirst { it.path.trimEnd('/') == normalizedFilePath }
-                         if (found != -1) found else 0
+                        if (found != -1) found else savedIndex.coerceIn(0, images.size - 1)
                     }
                     
                     val auth = if (contentIsWebDav && serverId != null) {

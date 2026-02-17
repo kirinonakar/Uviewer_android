@@ -226,6 +226,7 @@ fun LibraryScreen(
                                 FileItemGridCard(
                                     file = file,
                                     isFavorite = isFavorite,
+                                    isPinnedTab = selectedTab == 2,
                                     onToggleFavorite = { viewModel.toggleFavorite(file) },
                                     onTogglePin = { viewModel.togglePin(file) },
                                     onClick = {
@@ -249,6 +250,7 @@ fun LibraryScreen(
                                 FileItemRow(
                                     file = file,
                                     isFavorite = isFavorite,
+                                    isPinnedTab = selectedTab == 2,
                                     onToggleFavorite = { viewModel.toggleFavorite(file) },
                                     onTogglePin = { viewModel.togglePin(file) },
                                     onClick = {
@@ -339,6 +341,7 @@ fun LibraryScreen(
 fun FileItemRow(
     file: FileEntry,
     isFavorite: Boolean,
+    isPinnedTab: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -381,20 +384,30 @@ fun FileItemRow(
             }
         },
         trailingContent = {
-            Row {
+            if (isPinnedTab) {
                 IconButton(onClick = onTogglePin) {
                     Icon(
-                        imageVector = if (file.isPinned) Icons.Filled.LocationOn else Icons.Outlined.LocationOn,
-                        contentDescription = if (file.isPinned) "Unpin" else "Pin",
-                        tint = if (file.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Unpin",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = onToggleFavorite) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                        contentDescription = if (isFavorite) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
-                        tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            } else {
+                Row {
+                    IconButton(onClick = onTogglePin) {
+                        Icon(
+                            imageVector = if (file.isPinned) Icons.Filled.LocationOn else Icons.Outlined.LocationOn,
+                            contentDescription = if (file.isPinned) "Unpin" else "Pin",
+                            tint = if (file.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(onClick = onToggleFavorite) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
+                            contentDescription = if (isFavorite) stringResource(R.string.remove_from_favorites) else stringResource(R.string.add_to_favorites),
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -405,6 +418,7 @@ fun FileItemRow(
 fun FileItemGridCard(
     file: FileEntry,
     isFavorite: Boolean,
+    isPinnedTab: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -457,13 +471,13 @@ fun FileItemGridCard(
                     Row(modifier = Modifier.align(Alignment.TopEnd)) {
                         if (file.isPinned) {
                             Icon(
-                                Icons.Default.LocationOn,
+                                if (isPinnedTab) Icons.Default.Delete else Icons.Default.LocationOn,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp),
-                                tint = MaterialTheme.colorScheme.secondary
+                                modifier = Modifier.size(if (isPinnedTab) 20.dp else 16.dp).clickable { if (isPinnedTab) onTogglePin() },
+                                tint = if (isPinnedTab) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                             )
                         }
-                        if (isFavorite) {
+                        if (isFavorite && !isPinnedTab) {
                             Icon(
                                 Icons.Default.Star,
                                 contentDescription = null,

@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -75,7 +77,8 @@ fun FavoritesScreen(
                     FavoriteItemRow(
                         item = item,
                         onClick = { onNavigateToViewer(item) },
-                        onDelete = { viewModel.deleteFavorite(item) }
+                        onDelete = { viewModel.deleteFavorite(item) },
+                        onTogglePin = { viewModel.togglePin(item) }
                     )
                 }
             }
@@ -87,7 +90,8 @@ fun FavoritesScreen(
 fun FavoriteItemRow(
     item: FavoriteItem,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onTogglePin: () -> Unit
 ) {
     var useSmallFont by remember { mutableStateOf(false) }
     val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
@@ -114,8 +118,17 @@ fun FavoriteItemRow(
             Text(parentPath) 
         },
         trailingContent = {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
+            Row {
+                IconButton(onClick = onTogglePin) {
+                    Icon(
+                        imageVector = if (item.isPinned) Icons.Filled.LocationOn else Icons.Outlined.LocationOn,
+                        contentDescription = if (item.isPinned) "Unpin" else "Pin",
+                        tint = if (item.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
+                }
             }
         },
         modifier = Modifier.clickable(onClick = onClick)

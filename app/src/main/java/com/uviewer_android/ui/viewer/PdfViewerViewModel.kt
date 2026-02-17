@@ -14,7 +14,8 @@ import java.io.File
 data class PdfViewerUiState(
     val localFilePath: String? = null,
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val initialPage: Int = 0
 )
 
 class PdfViewerViewModel(
@@ -28,11 +29,19 @@ class PdfViewerViewModel(
     private val _uiState = MutableStateFlow(PdfViewerUiState())
     val uiState: StateFlow<PdfViewerUiState> = _uiState.asStateFlow()
 
-    fun loadPdf(filePath: String, isWebDav: Boolean, serverId: Int?) {
+    fun loadPdf(filePath: String, isWebDav: Boolean, serverId: Int?, initialPage: Int? = null) {
         viewModelScope.launch {
             _uiState.value = PdfViewerUiState(isLoading = true)
 
-            // Add to Recent
+            // Add to Recent (and retrieve saved position)
+            var savedIndex = initialPage ?: try {
+                val existing = recentFileDao.getFile(filePath)
+                existing?.pageIndex ?: 0
+            } catch (e: Exception) {
+                0
+            }
+            if (savedIndex < 0) savedIndex = 0
+
             try {
                 val title = filePath.substringAfterLast("/")
                 recentFileDao.insertRecent(
@@ -42,7 +51,8 @@ class PdfViewerViewModel(
                         isWebDav = isWebDav,
                         serverId = serverId,
                         type = "PDF",
-                        lastAccessed = System.currentTimeMillis()
+                        lastAccessed = System.currentTimeMillis(),
+                        pageIndex = savedIndex
                     )
                 )
             } catch (e: Exception) {}
@@ -58,7 +68,11 @@ class PdfViewerViewModel(
                 }
 
                 if (localFile.exists()) {
-                    _uiState.value = PdfViewerUiState(localFilePath = localFile.absolutePath, isLoading = false)
+                    _uiState.value = PdfViewerUiState(
+                        localFilePath = localFile.absolutePath, 
+                        isLoading = false,
+                        initialPage = savedIndex
+                    )
                 } else {
                     _uiState.value = PdfViewerUiState(error = "File not found", isLoading = false)
                 }
@@ -90,9 +104,22 @@ class PdfViewerViewModel(
             val favorites = favoriteDao.getAllFavorites().first()
             val existing = favorites.find { it.path == path && it.position == page }
             
+            // Check if any favorite with the same document is already pinned
+            val pinnedItem = favorites.find { 
+                (it.path == path || it.title == fileName || it.title.startsWith("$fileName - ")) && it.isPinned 
+            }
+            val wasPinned = pinnedItem != null
+
             if (existing != null) {
                 // Rule 1: Same file and same page -> Move to top
-                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+                favoriteDao.updateFavorite(existing.copy(
+                    timestamp = System.currentTimeMillis(),
+                    isPinned = wasPinned || existing.isPinned
+                ))
+                // If a DIFFERENT item was pinned, unpin it
+                if (wasPinned && pinnedItem?.id != existing.id) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                }
             } else {
                 // Rule 2: Same document, different location/page -> Max 3
                 val sameDocFavorites = favorites.filter { 
@@ -112,9 +139,14 @@ class PdfViewerViewModel(
                         serverId = serverId,
                         type = "PDF",
                         position = page,
+                        isPinned = wasPinned, // Transfer pin status
                         timestamp = System.currentTimeMillis()
                     )
                 )
+                // Unpin the old one if it was different
+                if (wasPinned) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                }
             }
         }
     }

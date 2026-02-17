@@ -126,7 +126,9 @@ class LibraryViewModel(
                     size = 0L,
                     isWebDav = it.isWebDav,
                     serverId = it.serverId,
-                    isPinned = it.isPinned
+                    isPinned = it.isPinned,
+                    position = it.position,
+                    positionTitle = it.positionTitle
                 ) 
             } catch (e: Exception) {
                 // If it's a legacy "DOCUMENT" type or invalid, map to TEXT or ignore
@@ -140,7 +142,9 @@ class LibraryViewModel(
                         size = 0L,
                         isWebDav = it.isWebDav,
                         serverId = it.serverId,
-                        isPinned = it.isPinned
+                        isPinned = it.isPinned,
+                        position = it.position,
+                        positionTitle = it.positionTitle
                     )
                 } else null
             }
@@ -148,9 +152,13 @@ class LibraryViewModel(
 
         state.copy(
             fileList = sortedList.map { file ->
-                // Update isPinned status for current file list
+                // Update isPinned status and position for current file list
                 val favorite = favorites.find { it.path == file.path }
-                file.copy(isPinned = favorite?.isPinned == true)
+                file.copy(
+                    isPinned = favorite?.isPinned == true,
+                    position = favorite?.position ?: -1,
+                    positionTitle = favorite?.positionTitle
+                )
             },
             favoritePaths = favorites.map { it.path }.toSet(),
             pinnedFiles = favoriteEntries.filter { it.isPinned }.sortedBy { it.name.lowercase() },
@@ -262,11 +270,17 @@ class LibraryViewModel(
         viewModelScope.launch {
             val favorites = favoriteDao.getAllFavorites().first()
             val existing = favorites.find { it.path == entry.path }
+            
             if (existing != null) {
-                // Rule: Exactly same file -> Move to top
-                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+                // Rule: If already favorited, remove it (Toggle OFF)
+                favoriteDao.deleteFavoriteByPath(entry.path)
             } else {
-                // Rule: Same document name, different location -> Max 3
+                // Rule: Same document name, different location (Transfer Pin / Duplicates)
+                val pinnedItem = favorites.find { 
+                    (it.title == entry.name || it.title.startsWith("${entry.name} - ")) && it.isPinned 
+                }
+                val wasPinned = pinnedItem != null
+
                 val sameDocFavorites = favorites.filter { 
                     it.title == entry.name || it.title.startsWith("${entry.name} - ") 
                 }
@@ -284,10 +298,15 @@ class LibraryViewModel(
                         isWebDav = entry.isWebDav,
                         serverId = entry.serverId,
                         type = entry.type.name,
-                        isPinned = false,
+                        isPinned = wasPinned, // Transfer pin status
                         timestamp = System.currentTimeMillis()
                     )
                 )
+                
+                // Unpin the old one if it was different
+                if (wasPinned && pinnedItem?.path != entry.path) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                }
             }
         }
     }
@@ -296,11 +315,21 @@ class LibraryViewModel(
         viewModelScope.launch {
             val favorites = favoriteDao.getAllFavorites().first()
             val existing = favorites.find { it.path == entry.path }
+            
+            // When pinning, if another item with same title is pinned, unpin it
+            val isPinning = if (existing != null) !existing.isPinned else true
+            if (isPinning) {
+                val otherPinned = favorites.find { 
+                    (it.title == entry.name || it.title.startsWith("${entry.name} - ")) && it.isPinned && it.path != entry.path 
+                }
+                otherPinned?.let {
+                    favoriteDao.updateFavorite(it.copy(isPinned = false))
+                }
+            }
+
             if (existing != null) {
-                // Update existing favorite
                 favoriteDao.updateFavorite(existing.copy(isPinned = !existing.isPinned))
             } else {
-                // If pinning from file list and not yet favorited, insert as Favorite AND Pinned
                 favoriteDao.insertFavorite(
                     FavoriteItem(
                         title = entry.name,

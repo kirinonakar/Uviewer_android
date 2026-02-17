@@ -29,4 +29,10 @@ class FavoritesViewModel(
             favoriteDao.deleteFavorite(item)
         }
     }
+
+    fun togglePin(item: FavoriteItem) {
+        viewModelScope.launch {
+            favoriteDao.updateFavorite(item.copy(isPinned = !item.isPinned))
+        }
+    }
 }

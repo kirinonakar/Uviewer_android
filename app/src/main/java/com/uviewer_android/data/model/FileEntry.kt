@@ -9,7 +9,9 @@ data class FileEntry(
     val size: Long,
     val isWebDav: Boolean = false,
     val serverId: Int? = null,
-    val isPinned: Boolean = false
+    val isPinned: Boolean = false,
+    val position: Int = -1,
+    val positionTitle: String? = null
 ) {
     enum class FileType {
         FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV, IMAGE_ZIP, RAR, SEVEN_ZIP

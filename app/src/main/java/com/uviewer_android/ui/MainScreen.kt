@@ -208,9 +208,7 @@ fun MainScreen(
                     viewModel = libraryViewModel,
                     onNavigateToViewer = { entry ->
                         val encodedPath = android.net.Uri.encode(entry.path, null)
-                        // Note: For library entry, we don't have pageIndex easily here unless we query DB, 
-                        // but DocumentViewerViewModel will fallback to DB if position is -1.
-                        val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}&position=-1"
+                        val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}&position=${entry.position}"
                         navController.navigate(route)
                     }
                 ) 

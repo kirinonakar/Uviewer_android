@@ -611,9 +611,22 @@ class DocumentViewerViewModel(
             val favorites = favoriteDao.getAllFavorites().first()
             val existing = favorites.find { it.path == path && it.position == savePosition }
             
+            // Check if any favorite with the same document is already pinned
+            val pinnedItem = favorites.find { 
+                (it.path == path || it.title == fileName || it.title.startsWith("$fileName - ")) && it.isPinned 
+            }
+            val wasPinned = pinnedItem != null
+
             if (existing != null) {
                 // Rule 1: Same file and same position -> Move to top
-                favoriteDao.updateFavorite(existing.copy(timestamp = System.currentTimeMillis()))
+                favoriteDao.updateFavorite(existing.copy(
+                    timestamp = System.currentTimeMillis(),
+                    isPinned = wasPinned || existing.isPinned
+                ))
+                // If a DIFFERENT item was pinned, unpin it
+                if (wasPinned && pinnedItem?.id != existing.id) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                }
             } else {
                 // Rule 2: Same document, different location/position -> Max 3
                 val sameDocFavorites = favorites.filter { 
@@ -633,9 +646,14 @@ class DocumentViewerViewModel(
                         serverId = serverId,
                         type = type,
                         position = savePosition,
+                        isPinned = wasPinned, // Transfer pin status
                         timestamp = System.currentTimeMillis()
                     )
                 )
+                // Unpin the old one if it was different
+                if (wasPinned) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                }
             }
         }
     }
