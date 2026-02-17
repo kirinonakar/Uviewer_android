@@ -38,6 +38,7 @@ import com.uviewer_android.ui.AppViewModelProvider
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import androidx.activity.compose.BackHandler
+import android.view.WindowManager
 
 data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
@@ -113,8 +114,10 @@ fun ImageViewerScreen(
     }
     
     DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
-            val window = (context as? android.app.Activity)?.window
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())

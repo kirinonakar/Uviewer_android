@@ -47,6 +47,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalContext
 
 import androidx.activity.compose.BackHandler
 
@@ -89,7 +91,16 @@ fun DocumentViewerScreen(
         viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
     }
 
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
+
+    // Keep screen on while viewing document
+    DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
     val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
 

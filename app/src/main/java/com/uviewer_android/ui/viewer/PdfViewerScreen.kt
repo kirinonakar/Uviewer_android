@@ -37,6 +37,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.ui.AppViewModelProvider
 
 import androidx.activity.compose.BackHandler
+import android.view.WindowManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -96,7 +97,10 @@ fun PdfViewerScreen(
     }
     
     DisposableEffect(Unit) {
+        val window = (context as? android.app.Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             try {
                 renderer?.close()
                 fileDescriptor?.close()
