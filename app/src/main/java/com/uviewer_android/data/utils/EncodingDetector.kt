@@ -205,7 +205,16 @@ object EncodingDetector {
                 b and 0xF8 == 0xF0 -> 3
                 else -> return false
             }
-            if (i + count >= bytes.size) return false
+            
+            if (i + count >= bytes.size) {
+                // If truncated, check the remaining bytes
+                for (j in 1 until (bytes.size - i)) {
+                    val nextB = bytes[i + j].toInt() and 0xFF
+                    if (nextB and 0xC0 != 0x80) return false
+                }
+                return true
+            }
+            
             for (j in 1..count) {
                 val nextB = bytes[i + j].toInt() and 0xFF
                 if (nextB and 0xC0 != 0x80) return false

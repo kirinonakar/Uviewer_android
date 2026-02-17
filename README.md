@@ -15,8 +15,8 @@
 ### 📚 Document Viewer
 - **Multiple Formats**: Support for `epub`, `aozora` (Aozora Bunko), `txt`, and `pdf`.
 - **Smart Parsing**: Full support for Aozora Bunko format, including Ruby text, vertical writing, and emphasis dots (Bouten).
-- **Auto Encoding Detection**: Automatically detects text encodings like `UTF-8`, `EUC-KR`, and `Shift-JIS` to prevent broken characters.
-- **Custom Themes**: White, Sepia, Dark, and fully customizable background colors and font settings.
+- **Auto Encoding Detection**: Automatically detects text encodings like `UTF-8`, `EUC-KR`, `Johab` and `Shift-JIS` to prevent broken characters.
+- **Custom Themes**: White, Sepia, Comfort, Dark, and fully customizable background colors and font settings.
 
 ### 🖼️ Image & Manga Viewer
 - **Archive Support**: Instantly View images inside `zip`, `cbz`, `rar`, and `7z` files without extraction.
@@ -27,7 +27,7 @@
 ### 🎬 Media Player
 - **Integrated Playback**: Powerful video and music playback based on ExoPlayer.
 - **Background Playback**: Service-based background playback support for music and audiobooks.
-- **Gesture Controls**: Intuitive volume and seeking controls.
+
 
 ### 🌐 Network & Library
 - **WebDAV Support**: Integration with private clouds (NAS, Nextcloud, etc.) for seamless file streaming.
@@ -54,6 +54,9 @@ Uviewer is built with the latest Android development technologies for a robust a
 
 ### Prerequisites
 - Android 8.0 (API Level 26) or higher
+
+### 📥 Download
+You can download the latest version from the [Releases Page](https://github.com/kirinonakar/Uviewer_android/releases).
 
 ### Build & Run
 1. Clone this repository.
