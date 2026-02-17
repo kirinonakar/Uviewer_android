@@ -284,8 +284,8 @@ object AozoraParser {
                         for (var i = 0; i < rubies.length; i++) {
                             var ruby = rubies[i];
                             if (!ruby.parentNode) continue;
-                            var baseText = Array.from(ruby.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
-                            var rubyText = Array.from(ruby.querySelectorAll('rt')).map(function(r) { return r.textContent; }).join('');
+                            var baseText = Array.from(ruby.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('').normalize('NFC').trim();
+                            var rubyText = Array.from(ruby.querySelectorAll('rt')).map(function(r) { return r.textContent; }).join('').normalize('NFC').trim();
                             if (rubyText.length === 0) continue;
 
                             // 구조 정규화 (순서 꼬임 방지)
@@ -297,9 +297,9 @@ object AozoraParser {
 
                             var baseLen = baseText.length;
                             var rubyLen = rubyText.length;
-                            var needsMerge = (baseLen === 1 && rubyLen >= 2) || 
-                                             (baseLen === 2 && rubyLen >= 4) || 
-                                             (baseLen === 3 && rubyLen >= 6) ||
+                            var needsMerge = (baseLen === 1 && rubyLen >= 3) || 
+                                             (baseLen === 2 && rubyLen >= 5) || 
+                                             (baseLen === 3 && rubyLen >= 7) ||
                                              (baseLen >= 4 && rubyLen >= baseLen * 1.5);
 
                             if (needsMerge) {
