@@ -133,6 +133,7 @@
     <string name="encoding_auto">Auto</string>
     <string name="encoding_sjis">Shift_JIS (Japan)</string>
     <string name="encoding_euckr">EUC-KR (Korea)</string>
+    <string name="encoding_johab">Johab (Korea)</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="side_margin_fmt">Side Margin: %d</string>
     <string name="prev_file">Previous File</string>

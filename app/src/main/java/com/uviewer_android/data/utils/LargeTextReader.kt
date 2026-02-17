@@ -9,7 +9,7 @@ import java.nio.charset.StandardCharsets
 
 class LargeTextReader(private val file: File) {
     private var lineOffsets = LongArray(0)
-    private var charset: Charset = StandardCharsets.UTF_8
+    private var charsetName: String = "UTF-8"
     private var isIndexed = false
 
     suspend fun indexFile(manualEncoding: String? = null, onProgress: (Float) -> Unit) {
@@ -30,7 +30,11 @@ class LargeTextReader(private val file: File) {
                 buffer.get(sample)
                 buffer.position(0)
                 
-                charset = if (manualEncoding != null) EncodingDetector.getCharset(manualEncoding) else EncodingDetector.detectEncoding(sample)
+                charsetName = if (manualEncoding != null) {
+                    manualEncoding
+                } else {
+                    EncodingDetector.detectEncodingName(sample)
+                }
 
                 val offsets = mutableListOf<Long>()
                 offsets.add(0L)
@@ -75,10 +79,15 @@ class LargeTextReader(private val file: File) {
                 raf.readFully(bytes)
             }
             
-            val decoded = String(bytes, charset)
+            val decoded = if (charsetName.equals("JO-HAB", ignoreCase = true) || charsetName.equals("x-Johab", ignoreCase = true)) {
+                JohabConverter.decode(bytes)
+            } else {
+                val cs = try { Charset.forName(charsetName) } catch (e: Exception) { StandardCharsets.UTF_8 }
+                String(bytes, cs)
+            }
             java.text.Normalizer.normalize(decoded, java.text.Normalizer.Form.NFC)
         }
     }
 
-    fun getCharset(): Charset = charset
+    fun getCharsetName(): String = charsetName
 }

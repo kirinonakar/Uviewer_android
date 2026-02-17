@@ -71,13 +71,14 @@ class FileRepository {
                 file.readBytes()
             }
             
-            if (manualCharset != null) {
-                return@withContext String(bytes, java.nio.charset.Charset.forName(manualCharset))
+            val encodingName = manualCharset ?: EncodingDetector.detectEncodingName(bytes)
+            
+            if (encodingName.equals("JO-HAB", ignoreCase = true) || encodingName.equals("x-Johab", ignoreCase = true)) {
+                return@withContext com.uviewer_android.data.utils.JohabConverter.decode(bytes)
+            } else {
+                val charset = try { java.nio.charset.Charset.forName(encodingName) } catch (e: Exception) { java.nio.charset.StandardCharsets.UTF_8 }
+                return@withContext String(bytes, charset)
             }
-
-            // Use improved EncodingDetector
-            val charset = EncodingDetector.detectEncoding(bytes)
-            return@withContext String(bytes, charset)
         }
     }
 

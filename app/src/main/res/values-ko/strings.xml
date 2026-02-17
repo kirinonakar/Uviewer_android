@@ -95,6 +95,7 @@
     <string name="encoding_auto">자동</string>
     <string name="encoding_sjis">Shift_JIS (일본어)</string>
     <string name="encoding_euckr">EUC-KR (한국어)</string>
+    <string name="encoding_johab">한글 조합형</string>
     <string name="encoding_w1252">Windows-1252</string>
     <string name="sharpening_amount">샤프닝 강도</string>
     <string name="sharpening_amount_fmt">샤프닝 강도: %d</string>

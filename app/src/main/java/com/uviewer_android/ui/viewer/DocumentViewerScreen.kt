@@ -321,6 +321,7 @@ fun DocumentViewerScreen(
                                     "UTF-8" to "UTF-8",
                                     stringResource(R.string.encoding_sjis) to "Shift_JIS",
                                     stringResource(R.string.encoding_euckr) to "EUC-KR",
+                                    stringResource(R.string.encoding_johab) to "JO-HAB",
                                     stringResource(R.string.encoding_w1252) to "windows-1252"
                                 )
                                 encodings.forEach { (label, value) ->
