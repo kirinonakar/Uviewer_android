@@ -57,12 +57,11 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         
-        val intentPath = if (intent?.action == Intent.ACTION_VIEW) {
-            handleIntent(intent)
-        } else {
-            null
+        var intentPath: String? = null
+        if (savedInstanceState == null && intent?.action == Intent.ACTION_VIEW) {
+            intentPath = handleIntent(intent)
         }
-        if (intent?.getStringExtra("action") == "resume") {
+        if (savedInstanceState == null && intent?.getStringExtra("action") == "resume") {
             shouldResumeState = true
             resumePathState = intent.getStringExtra("playing_path")
         }

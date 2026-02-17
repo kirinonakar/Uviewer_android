@@ -12,8 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.RecentFile
@@ -73,8 +77,22 @@ fun RecentFileItemRow(
     onClick: () -> Unit
 ) {
     val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+    var useSmallFont by remember { mutableStateOf(false) }
+    val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
+        .copy(fontWeight = FontWeight.Normal)
+    
     ListItem(
-        headlineContent = { Text(file.title) },
+        headlineContent = { 
+            Text(
+                text = file.title,
+                style = textStyle,
+                onTextLayout = { textLayoutResult ->
+                    if (textLayoutResult.lineCount >= 3) {
+                        useSmallFont = true
+                    }
+                }
+            )
+        },
         supportingContent = { Text(stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed)))) },
         modifier = Modifier.clickable(onClick = onClick)
     )

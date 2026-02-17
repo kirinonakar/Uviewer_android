@@ -219,7 +219,13 @@ class DocumentViewerViewModel(
                             allChapters.addAll(chunkChapters)
                             // Update UI incrementally if list is long
                             if (allChapters.size % 50 == 0 || startLine + scanChunkSize > totalLines) {
-                                _uiState.value = _uiState.value.copy(epubChapters = allChapters.toList())
+                                val currentIdx = allChapters.indexOfLast { 
+                                    it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= _uiState.value.currentLine 
+                                }.coerceAtLeast(0)
+                                _uiState.value = _uiState.value.copy(
+                                    epubChapters = allChapters.toList(),
+                                    currentChapterIndex = currentIdx
+                                )
                             }
                         }
                     }
@@ -308,6 +314,23 @@ class DocumentViewerViewModel(
                     )
                  } catch (e: Exception) { e.printStackTrace() }
              }
+        }
+    }
+
+    fun setCurrentLine(line: Int) {
+        val chapters = _uiState.value.epubChapters
+        if (currentFileType != FileEntry.FileType.EPUB && chapters.isNotEmpty()) {
+            val index = chapters.indexOfLast { 
+                it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
+            }.coerceAtLeast(0)
+            
+            if (index != _uiState.value.currentChapterIndex || line != _uiState.value.currentLine) {
+                _uiState.value = _uiState.value.copy(currentLine = line, currentChapterIndex = index)
+            }
+        } else {
+            if (line != _uiState.value.currentLine) {
+                _uiState.value = _uiState.value.copy(currentLine = line)
+            }
         }
     }
     private fun loadTextChunk(chunkIndex: Int) {

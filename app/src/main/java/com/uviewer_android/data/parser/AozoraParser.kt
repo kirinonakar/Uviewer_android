@@ -202,12 +202,18 @@ object AozoraParser {
             
             lineContent = lineContent.replace(Regex("［＃ここから(\\d+)字下げ］"), "<div style=\"margin-inline-start: $1em;\">")
             lineContent = lineContent.replace("［＃ここで字下げ終わり］", "</div>")
+            
+            lineContent = lineContent.replace("［＃ここから罫囲み］", "<div class=\"keigakomi\">")
+            lineContent = lineContent.replace("［＃ここで罫囲み終わり］", "</div>")
+            
+            lineContent = lineContent.replace("［＃ここから２段階小さな文字］", "<span class=\"small-text-2\">")
+            lineContent = lineContent.replace("［＃ここで小さな文字終わり］", "</span>")
 
             var classes = mutableListOf<String>()
             var styles = mutableListOf<String>()
             
-            if (lineContent.contains("［＃센터］")) {
-                lineContent = lineContent.replace("［＃센터］", "").replace("［＃센터終わり］", "")
+            if (lineContent.contains("［＃センター］")) {
+                lineContent = lineContent.replace("［＃センター］", "").replace("［＃センター終わり］", "")
                 classes.add("center")
             }
             
@@ -401,6 +407,14 @@ object AozoraParser {
                     }
                     .center {
                         text-align: center;
+                    }
+                    .keigakomi {
+                        border: 1px solid currentColor;
+                        padding: 0.5em;
+                        margin: 1em 0;
+                    }
+                    .small-text-2 {
+                        font-size: 0.7em !important;
                     }
                     img {
                         max-width: 100% !important;

@@ -64,7 +64,9 @@ fun MainScreen(
             }
             val encodedPath = android.net.Uri.encode(initialIntentPath, null)
             val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
-            navController.navigate(route)
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
         }
     }
 

@@ -500,6 +500,7 @@ fun DocumentViewerScreen(
 
                                             if (line != currentLine) {
                                                 currentLine = line
+                                                viewModel.setCurrentLine(line)
                                             }
                                         }
                                     }

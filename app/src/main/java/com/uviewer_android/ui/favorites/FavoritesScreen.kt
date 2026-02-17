@@ -12,8 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.FavoriteItem
@@ -102,9 +106,30 @@ fun FavoriteItemRow(
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var useSmallFont by remember { mutableStateOf(false) }
+    val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
+        .copy(fontWeight = FontWeight.Normal)
+    
     ListItem(
-        headlineContent = { Text(item.title) },
-        supportingContent = { Text(item.path) },
+        headlineContent = { 
+            Text(
+                text = item.title,
+                style = textStyle,
+                onTextLayout = { textLayoutResult ->
+                    if (textLayoutResult.lineCount >= 3) {
+                        useSmallFont = true
+                    }
+                }
+            )
+        },
+        supportingContent = { 
+            val parentPath = try {
+                java.io.File(item.path).parent ?: ""
+            } catch (e: Exception) {
+                item.path
+            }
+            Text(parentPath) 
+        },
         trailingContent = {
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
