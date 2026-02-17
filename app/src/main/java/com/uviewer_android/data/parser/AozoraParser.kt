@@ -130,6 +130,18 @@ object AozoraParser {
                 }
             }
 
+            // [추가] 특정 단어 볼드 처리: ［＃「단어」은/는/は太字］
+            val boldSpecificRegex = Regex("［＃「(.+?)」[は는은]太字］")
+            val boldSpecificMatches = boldSpecificRegex.findAll(l).toList()
+            boldSpecificMatches.forEach { match ->
+                val targetWord = match.groupValues[1]
+                val fullTag = match.value
+                val safeWord = Pattern.quote(targetWord)
+                val safeTag = Pattern.quote(fullTag)
+                val targetPattern = Regex("$safeWord$safeTag")
+                l = l.replace(targetPattern) { "<b>$targetWord</b>" }
+            }
+
             // Ruby logic (일반 루비)
             fun getRubyHtml(base: String, ruby: String): String {
                 val needCompression = when {
