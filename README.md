@@ -41,6 +41,13 @@
 - **Library Management**: Features for Recent Files, Favorites, and Pinning.
 - **Data Security**: Secure storage of user settings and history using `SharedPreferences` and `Room` DB.
 ---
+## 🌍 Supported Languages
+
+- 🇺🇸 **English**
+- 🇰🇷 **한국어 (Korean)**
+- 🇯🇵 **日本語 (Japanese)**
+
+---
 ## 🛠 Tech Stack
 
 Uviewer is built with the latest Android development technologies for a robust and fast experience.

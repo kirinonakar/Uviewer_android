@@ -92,18 +92,19 @@ fun DocumentViewerScreen(
     }
 
     val context = LocalContext.current
+    val currentActivity = activity ?: (context as? MainActivity)
 
     // Keep screen on while viewing document
-    DisposableEffect(activity) {
+    DisposableEffect(currentActivity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity?.volumeKeyPagingActive = true
+        currentActivity?.volumeKeyPagingActive = true
         onDispose {
             // Save progress one last time on dispose
             viewModel.updateProgress(currentLine)
 
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.volumeKeyPagingActive = false
+            currentActivity?.volumeKeyPagingActive = false
         }
     }
     val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
@@ -169,8 +170,8 @@ fun DocumentViewerScreen(
     }
 
     // Progress saving with debounce
-    LaunchedEffect(activity) {
-        activity?.keyEvents?.collect { keyCode ->
+    LaunchedEffect(currentActivity) {
+        currentActivity?.keyEvents?.collect { keyCode ->
             if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
                 webViewRef?.evaluateJavascript("window.pageUp();", null)
             } else if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {

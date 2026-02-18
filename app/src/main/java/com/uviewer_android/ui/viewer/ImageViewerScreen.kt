@@ -122,16 +122,18 @@ fun ImageViewerScreen(
         false // PDF full screen background is black
     }
     
-    DisposableEffect(activity) {
+    val currentActivity = activity ?: (context as? MainActivity)
+    
+    DisposableEffect(currentActivity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity?.volumeKeyPagingActive = true
+        currentActivity?.volumeKeyPagingActive = true
         onDispose {
             // Save progress on exit
             viewModel.updateProgress(currentPageIndex)
 
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.volumeKeyPagingActive = false
+            currentActivity?.volumeKeyPagingActive = false
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -224,8 +226,8 @@ fun ImageViewerScreen(
              viewModel.updateProgress(currentPageIndex)
         }
 
-        LaunchedEffect(activity) {
-            activity?.keyEvents?.collect { keyCode ->
+        LaunchedEffect(currentActivity) {
+            currentActivity?.keyEvents?.collect { keyCode ->
                 if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
                     // Previous image
                     if (pagerState.currentPage > 0) {

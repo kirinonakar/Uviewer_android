@@ -59,14 +59,15 @@ fun MediaPlayerScreen(
     viewModel: MediaPlayerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit,
     isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {}
+    onToggleFullScreen: () -> Unit = {},
+    activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val activity = context as? android.app.Activity
+    val currentActivity = activity ?: (context as? android.app.Activity)
     
-    var currentOrientation by remember { mutableIntStateOf(activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
+    var currentOrientation by remember { mutableIntStateOf(currentActivity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
     // Ensure status bar icons are visible (white) on dark background even in light theme
     // For Video: Hide status bar when isFullScreen is true
     // For Audio: Keep status bar visible
@@ -101,14 +102,14 @@ fun MediaPlayerScreen(
     }
 
     // Keep Screen On
-    DisposableEffect(activity) {
-        val window = activity?.window
+    DisposableEffect(currentActivity) {
+        val window = currentActivity?.window
         window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        (activity as? MainActivity)?.volumeKeyPagingActive = false
+        (currentActivity as? MainActivity)?.volumeKeyPagingActive = false
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             // Reset orientation when leaving
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            currentActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
     
@@ -294,7 +295,7 @@ fun MediaPlayerScreen(
                                     } else {
                                         ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                                     }
-                                    activity?.requestedOrientation = newOrientation
+                                    currentActivity?.requestedOrientation = newOrientation
                                     currentOrientation = newOrientation
                                 }) {
                                     Icon(
@@ -576,7 +577,7 @@ fun MediaPlayerScreen(
                                         } else {
                                             ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
                                         }
-                                        activity?.requestedOrientation = newOrientation
+                                        currentActivity?.requestedOrientation = newOrientation
                                         currentOrientation = newOrientation
                                         showControls = true
                                     }) {

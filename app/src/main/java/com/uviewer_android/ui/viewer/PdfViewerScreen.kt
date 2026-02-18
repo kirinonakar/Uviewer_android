@@ -49,7 +49,8 @@ fun PdfViewerScreen(
     viewModel: PdfViewerViewModel = viewModel(factory = AppViewModelProvider.Factory),
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
-    onToggleFullScreen: () -> Unit = {}
+    onToggleFullScreen: () -> Unit = {},
+    activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
@@ -62,7 +63,7 @@ fun PdfViewerScreen(
     
     val listState = rememberLazyListState()
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex } }
-    val activity = context as? MainActivity
+    val currentActivity = activity ?: (context as? MainActivity)
 
     // Track and save progress
     LaunchedEffect(currentPage, pageCount) {
@@ -104,10 +105,10 @@ fun PdfViewerScreen(
         false // PDF full screen background is black
     }
     
-    DisposableEffect(activity) {
+    DisposableEffect(currentActivity) {
         val window = (context as? android.app.Activity)?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        activity?.volumeKeyPagingActive = true
+        currentActivity?.volumeKeyPagingActive = true
         onDispose {
             // Save progress one last time on dispose
             if (pageCount > 0) {
@@ -115,7 +116,7 @@ fun PdfViewerScreen(
             }
 
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            activity?.volumeKeyPagingActive = false
+            currentActivity?.volumeKeyPagingActive = false
             try {
                 renderer?.close()
                 fileDescriptor?.close()
@@ -154,9 +155,9 @@ fun PdfViewerScreen(
     }
 
     // Hardware Volume Button Support
-    LaunchedEffect(activity, renderer) {
-        if (activity != null && renderer != null) {
-            activity.keyEvents.collect { keyCode: Int ->
+    LaunchedEffect(currentActivity, renderer) {
+        if (currentActivity != null && renderer != null) {
+            currentActivity.keyEvents.collect { keyCode: Int ->
                 if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
                     val target = (listState.firstVisibleItemIndex - 1).coerceAtLeast(0)
                     scope.launch { listState.animateScrollToItem(target) }
