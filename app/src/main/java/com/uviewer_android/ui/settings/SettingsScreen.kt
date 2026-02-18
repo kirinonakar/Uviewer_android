@@ -205,7 +205,6 @@ fun SettingsScreen(
             item {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.volume_key_paging)) },
-                    supportingContent = { Text(stringResource(R.string.volume_key_paging_desc)) },
                     trailingContent = {
                         Switch(
                             checked = volumeKeyPaging,

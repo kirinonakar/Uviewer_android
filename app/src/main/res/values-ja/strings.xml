@@ -116,4 +116,5 @@
     <string name="clear_cache">削除</string>
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
+    <string name="volume_key_paging">音量ボタンでページめくり</string>
 </resources>
