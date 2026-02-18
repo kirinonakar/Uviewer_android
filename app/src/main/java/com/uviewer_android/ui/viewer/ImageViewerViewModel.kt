@@ -397,6 +397,9 @@ enum class ViewMode {
                  val imageName = if (index >= 0 && index < uiState.value.images.size) uiState.value.images[index].name else null
                  val displayTitle = if (imageName != null && archiveName != imageName) "$archiveName - $imageName" else archiveName
                  
+                 val total = uiState.value.images.size
+                 val progress = if (total > 0) (index.toFloat() / (total - 1).coerceAtLeast(1)) else 0f
+
                  recentFileDao.insertRecent(
                      com.uviewer_android.data.RecentFile(
                          path = path,
@@ -406,7 +409,8 @@ enum class ViewMode {
                          type = if (currentIsZip) "ZIP" else "IMAGE",
                          lastAccessed = System.currentTimeMillis(),
                          pageIndex = index,
-                         positionTitle = imageName
+                         positionTitle = imageName,
+                         progress = progress
                      )
                  )
              } catch (e: Exception) { e.printStackTrace() }

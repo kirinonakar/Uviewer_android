@@ -425,11 +425,38 @@ fun FileItemRow(
             }
         },
         supportingContent = {
-            if (!file.isDirectory) {
-                Text(
-                    com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
-                    style = MaterialTheme.typography.labelSmall
-                )
+            Column {
+                val progressText = when (file.type) {
+                    FileEntry.FileType.EPUB -> {
+                        if (file.position > 0) {
+                            val chapter = (file.position / 1000000) + 1
+                            val line = file.position % 1000000
+                            "Chapter $chapter, Line $line"
+                        } else null
+                    }
+                    FileEntry.FileType.PDF -> if (file.position >= 0) "Page ${file.position + 1}" else null
+                    FileEntry.FileType.TEXT, FileEntry.FileType.HTML -> if (file.position > 0) "Line ${file.position}" else null
+                    FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> if (file.position >= 0) "Page ${file.position + 1}" else null
+                    else -> null
+                }
+                if (progressText != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = progressText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(text = "${(file.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    LinearProgressIndicator(
+                        progress = file.progress,
+                        modifier = Modifier.fillMaxWidth().height(2.dp).padding(vertical = 2.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+                if (!file.isDirectory) {
+                    Text(
+                        com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
             }
         },
         trailingContent = {
@@ -559,6 +586,33 @@ fun FileItemGridCard(
                         maxLines = Int.MAX_VALUE,
                         textAlign = TextAlign.Center,
                         onTextLayout = { if (it.lineCount >= 3) textStyle = typography.labelSmall }
+                    )
+                }
+                val progressText = when (file.type) {
+                    FileEntry.FileType.EPUB -> {
+                        if (file.position > 0) {
+                            val chapter = (file.position / 1000000) + 1
+                            val line = file.position % 1000000
+                            "ch$chapter L$line"
+                        } else null
+                    }
+                    FileEntry.FileType.PDF -> if (file.position >= 0) "P${file.position + 1}" else null
+                    FileEntry.FileType.TEXT, FileEntry.FileType.HTML -> if (file.position > 0) "L${file.position}" else null
+                    FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> if (file.position >= 0) "P${file.position + 1}" else null
+                    else -> null
+                }
+                if (progressText != null) {
+                    Text(
+                        text = "$progressText (${(file.progress * 100).toInt()}%)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    LinearProgressIndicator(
+                        progress = file.progress,
+                        modifier = Modifier.fillMaxWidth().height(2.dp).padding(horizontal = 4.dp, vertical = 2.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
                 if (!file.isDirectory) {

@@ -104,7 +104,34 @@ fun RecentFileItemRow(
                 )
             }
         },
-        supportingContent = { Text(stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed)))) },
+        supportingContent = {
+            Column {
+                val progressText = when (file.type) {
+                    "EPUB" -> {
+                        val chapter = (file.pageIndex / 1000000) + 1
+                        val line = file.pageIndex % 1000000
+                        "Chapter $chapter, Line $line"
+                    }
+                    "PDF" -> "Page ${file.pageIndex + 1}"
+                    "TEXT", "DOCUMENT", "HTML" -> "Line ${file.pageIndex}"
+                    "ZIP", "IMAGE" -> "Page ${file.pageIndex + 1}"
+                    else -> null
+                }
+                if (progressText != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = progressText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(text = "${(file.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    LinearProgressIndicator(
+                        progress = file.progress,
+                        modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 4.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+                Text(stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed))))
+            }
+        },
         modifier = Modifier.clickable(onClick = onClick)
     )
 }

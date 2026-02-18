@@ -11,7 +11,8 @@ data class FileEntry(
     val serverId: Int? = null,
     val isPinned: Boolean = false,
     val position: Int = -1,
-    val positionTitle: String? = null
+    val positionTitle: String? = null,
+    val progress: Float = 0f
 ) {
     enum class FileType {
         FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV, IMAGE_ZIP, RAR, SEVEN_ZIP

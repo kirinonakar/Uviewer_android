@@ -307,6 +307,14 @@ class DocumentViewerViewModel(
                          fileName
                      }
                      
+                     val totalLines = _uiState.value.totalLines
+                     val progress = if (currentFileType == FileEntry.FileType.EPUB) {
+                         val totalChapters = _uiState.value.epubChapters.size
+                         if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
+                     } else {
+                         if (totalLines > 0) (line.toFloat() / totalLines) else 0f
+                     }
+
                      recentFileDao.insertRecent(
                         com.uviewer_android.data.RecentFile(
                             path = currentFilePath,
@@ -315,7 +323,8 @@ class DocumentViewerViewModel(
                             serverId = serverIdContext,
                             type = currentFileType?.name ?: "TEXT",
                             lastAccessed = System.currentTimeMillis(),
-                            pageIndex = savePosition
+                            pageIndex = savePosition,
+                            progress = progress
                         )
                     )
                  } catch (e: Exception) { e.printStackTrace() }
@@ -643,6 +652,14 @@ class DocumentViewerViewModel(
                         favoriteDao.deleteFavorite(oldest)
                     }
                 }
+                val totalLines = _uiState.value.totalLines
+                val progress = if (type == "EPUB") {
+                    val totalChapters = _uiState.value.epubChapters.size
+                    if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
+                } else {
+                    if (totalLines > 0) (line.toFloat() / totalLines) else 0f
+                }
+
                 favoriteDao.insertFavorite(
                     com.uviewer_android.data.FavoriteItem(
                         title = bookmarkTitle,
@@ -652,6 +669,7 @@ class DocumentViewerViewModel(
                         type = type,
                         position = savePosition,
                         isPinned = wasPinned, // Transfer pin status
+                        progress = progress,
                         timestamp = System.currentTimeMillis()
                     )
                 )

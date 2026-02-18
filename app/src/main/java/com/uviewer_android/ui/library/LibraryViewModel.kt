@@ -128,7 +128,8 @@ class LibraryViewModel(
                     serverId = it.serverId,
                     isPinned = it.isPinned,
                     position = it.position,
-                    positionTitle = it.positionTitle
+                    positionTitle = it.positionTitle,
+                    progress = it.progress
                 ) 
             } catch (e: Exception) {
                 // If it's a legacy "DOCUMENT" type or invalid, map to TEXT or ignore
@@ -144,7 +145,8 @@ class LibraryViewModel(
                         serverId = it.serverId,
                         isPinned = it.isPinned,
                         position = it.position,
-                        positionTitle = it.positionTitle
+                        positionTitle = it.positionTitle,
+                        progress = it.progress
                     )
                 } else null
             }
@@ -157,7 +159,8 @@ class LibraryViewModel(
                 file.copy(
                     isPinned = favorite?.isPinned == true,
                     position = favorite?.position ?: -1,
-                    positionTitle = favorite?.positionTitle
+                    positionTitle = favorite?.positionTitle,
+                    progress = favorite?.progress ?: 0f
                 )
             },
             favoritePaths = favorites.map { it.path }.toSet(),

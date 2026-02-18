@@ -82,7 +82,7 @@ class PdfViewerViewModel(
         }
     }
 
-    fun toggleBookmark(path: String, page: Int, isWebDav: Boolean, serverId: Int?) {
+    fun toggleBookmark(path: String, page: Int, totalPages: Int, isWebDav: Boolean, serverId: Int?) {
         viewModelScope.launch {
             val fileName = File(path).name
             val bookmarkTitle = "$fileName - pg ${page + 1}"
@@ -140,6 +140,7 @@ class PdfViewerViewModel(
                         type = "PDF",
                         position = page,
                         isPinned = wasPinned, // Transfer pin status
+                        progress = if (totalPages > 1) (page.toFloat() / (totalPages - 1)) else 0f,
                         timestamp = System.currentTimeMillis()
                     )
                 )
@@ -147,6 +148,34 @@ class PdfViewerViewModel(
                 if (wasPinned) {
                     favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
                 }
+            }
+        }
+    }
+
+    fun updateProgress(path: String, page: Int, totalPages: Int, isWebDav: Boolean, serverId: Int?) {
+        viewModelScope.launch {
+            try {
+                val fileName = File(path).name
+                val progress = if (totalPages > 1) {
+                    (page.toFloat() / (totalPages - 1))
+                } else if (page > 0) {
+                    0.5f 
+                } else 0f
+
+                recentFileDao.insertRecent(
+                    com.uviewer_android.data.RecentFile(
+                        path = path,
+                        title = fileName,
+                        isWebDav = isWebDav,
+                        serverId = serverId,
+                        type = "PDF",
+                        lastAccessed = System.currentTimeMillis(),
+                        pageIndex = page,
+                        progress = progress
+                    )
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }

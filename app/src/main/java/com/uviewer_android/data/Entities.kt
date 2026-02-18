@@ -14,6 +14,7 @@ data class FavoriteItem(
     val isPinned: Boolean = false,
     val position: Int = 0, // Line number or page index for bookmarks
     val positionTitle: String? = null, // Image name or chapter title
+    val progress: Float = 0f,
     val timestamp: Long = System.currentTimeMillis()
 )
 

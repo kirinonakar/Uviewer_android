@@ -123,12 +123,37 @@ fun FavoriteItemRow(
     ListItem(
         headlineContent = headlineContent,
         supportingContent = { 
-            val parentPath = try {
-                java.io.File(item.path).parent ?: ""
-            } catch (e: Exception) {
-                item.path
+            Column {
+                val progressText = when (item.type) {
+                    "EPUB" -> {
+                        val chapter = (item.position / 1000000) + 1
+                        val line = item.position % 1000000
+                        "Chapter $chapter, Line $line"
+                    }
+                    "PDF" -> if (item.position >= 0) "Page ${item.position + 1}" else null
+                    "TEXT", "DOCUMENT", "HTML" -> if (item.position > 0) "Line ${item.position}" else null
+                    "IMAGE", "ZIP" -> if (item.position >= 0) "Page ${item.position + 1}" else null
+                    else -> null
+                }
+                if (progressText != null) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text(text = progressText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Spacer(modifier = Modifier.weight(1f))
+                        Text(text = "${(item.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    LinearProgressIndicator(
+                        progress = item.progress,
+                        modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 4.dp),
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+                val parentPath = try {
+                    java.io.File(item.path).parent ?: ""
+                } catch (e: Exception) {
+                    item.path
+                }
+                Text(parentPath)
             }
-            Text(parentPath) 
         },
         trailingContent = {
             Row {

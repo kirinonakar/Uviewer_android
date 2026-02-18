@@ -64,6 +64,13 @@ fun PdfViewerScreen(
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex } }
     val activity = context as? MainActivity
 
+    // Track and save progress
+    LaunchedEffect(currentPage, pageCount) {
+        if (!uiState.isLoading && uiState.localFilePath != null && pageCount > 0) {
+            viewModel.updateProgress(filePath, currentPage, pageCount, isWebDav, serverId)
+        }
+    }
+
     LaunchedEffect(filePath) {
         viewModel.loadPdf(filePath, isWebDav, serverId, initialPage)
     }
@@ -102,6 +109,11 @@ fun PdfViewerScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         activity?.volumeKeyPagingActive = true
         onDispose {
+            // Save progress one last time on dispose
+            if (pageCount > 0) {
+                viewModel.updateProgress(filePath, currentPage, pageCount, isWebDav, serverId)
+            }
+
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.volumeKeyPagingActive = false
             try {
@@ -168,7 +180,7 @@ fun PdfViewerScreen(
                     },
                     actions = {
                         IconButton(onClick = {
-                            viewModel.toggleBookmark(filePath, currentPage, isWebDav, serverId)
+                            viewModel.toggleBookmark(filePath, currentPage, pageCount, isWebDav, serverId)
                             android.widget.Toast.makeText(context, "Bookmark Saved: Page ${currentPage + 1}", android.widget.Toast.LENGTH_SHORT).show()
                         }) {
                             Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")

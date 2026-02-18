@@ -99,6 +99,9 @@ fun DocumentViewerScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         activity?.volumeKeyPagingActive = true
         onDispose {
+            // Save progress one last time on dispose
+            viewModel.updateProgress(currentLine)
+
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.volumeKeyPagingActive = false
         }
@@ -179,7 +182,7 @@ fun DocumentViewerScreen(
     // Progress saving with debounce
     LaunchedEffect(currentLine) {
         if (currentLine > 1) {
-            kotlinx.coroutines.delay(3000)
+            kotlinx.coroutines.delay(1000)
             viewModel.updateProgress(currentLine)
         }
     }
@@ -646,23 +649,21 @@ fun DocumentViewerScreen(
                                                       
                                                       var points = [];
                                                       if (isVertical) {
-                                                          // 세로쓰기: 화면 오른쪽 가장자리가 현재 읽는 위치
-                                                          var rx = width - 50; // 오른쪽에서 50px 지점
+                                                          // Vertical: Start is Right Edge
+                                                          var rx = width - 15; // 15px from right edge
                                                           points = [
+                                                              {x: rx, y: 30},
                                                               {x: rx, y: height * 0.2},
-                                                              {x: rx, y: height * 0.4},
-                                                              {x: rx, y: height * 0.5},
-                                                              {x: rx, y: height * 0.6},
-                                                              {x: rx, y: height * 0.8}
+                                                              {x: rx, y: height * 0.5}
                                                           ];
                                                       } else {
-                                                          // 가로쓰기: 화면 상단 중앙이 현재 읽는 위치
+                                                          // Horizontal: Start is Top Edge
                                                           var cx = width / 2;
-                                                          var cy = height / 2;
+                                                          var ty = 20; // 20px from top
                                                           points = [
-                                                              {x: cx, y: cy},
-                                                              {x: cx + 20, y: cy}, {x: cx - 20, y: cy},
-                                                              {x: cx, y: cy + 20}, {x: cx, y: cy - 20}
+                                                              {x: cx, y: ty},
+                                                              {x: cx - 50, y: ty},
+                                                              {x: cx + 50, y: ty}
                                                           ];
                                                       }
                                                       

@@ -56,7 +56,7 @@ fun ViewerScreen(
 
     when (resolvedType) {
         FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> {
-            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition ?: 0, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
             DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)

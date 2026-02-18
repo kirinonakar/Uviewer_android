@@ -102,6 +102,14 @@ fun ImageViewerScreen(
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
+    var currentPageIndex by remember { mutableIntStateOf(initialIndex ?: 0) }
+
+    // Sync current page index when document is loaded
+    LaunchedEffect(uiState.initialIndex) {
+        if (uiState.images.isNotEmpty()) {
+            currentPageIndex = uiState.initialIndex
+        }
+    }
 
     // Status Bar Logic
     val isLightAppTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -119,6 +127,9 @@ fun ImageViewerScreen(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         activity?.volumeKeyPagingActive = true
         onDispose {
+            // Save progress on exit
+            viewModel.updateProgress(currentPageIndex)
+
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             activity?.volumeKeyPagingActive = false
             if (window != null) {
@@ -189,7 +200,7 @@ fun ImageViewerScreen(
         
         val scales = remember { mutableStateMapOf<Int, Float>() }
         var globalScale by remember { mutableFloatStateOf(1f) }
-        var currentPageIndex by remember { mutableIntStateOf(uiState.initialIndex) }
+        // currentPageIndex hoisted to top level
 
         // Use key to recreate pagerState when toggling view mode to ensure immediate mapping
         val pagerState = key(viewMode) {
