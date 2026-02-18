@@ -227,6 +227,7 @@ fun LibraryScreen(
                                     file = file,
                                     isFavorite = isFavorite,
                                     isPinnedTab = selectedTab == 2,
+                                    isRemoteTab = selectedTab == 1,
                                     onToggleFavorite = { viewModel.toggleFavorite(file) },
                                     onTogglePin = { viewModel.togglePin(file) },
                                     onClick = {
@@ -251,6 +252,7 @@ fun LibraryScreen(
                                     file = file,
                                     isFavorite = isFavorite,
                                     isPinnedTab = selectedTab == 2,
+                                    isRemoteTab = selectedTab == 1,
                                     onToggleFavorite = { viewModel.toggleFavorite(file) },
                                     onTogglePin = { viewModel.togglePin(file) },
                                     onClick = {
@@ -342,6 +344,7 @@ fun FileItemRow(
     file: FileEntry,
     isFavorite: Boolean,
     isPinnedTab: Boolean = false,
+    isRemoteTab: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -369,7 +372,7 @@ fun FileItemRow(
         },
         headlineContent = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (file.isWebDav && (file.isPinned || isPinnedTab)) {
+                if (file.isWebDav && (file.isPinned || isPinnedTab || isFavorite) && !isRemoteTab) {
                     Icon(
                         imageVector = Icons.Default.Public,
                         contentDescription = "WebDAV",
@@ -429,6 +432,7 @@ fun FileItemGridCard(
     file: FileEntry,
     isFavorite: Boolean,
     isPinnedTab: Boolean = false,
+    isRemoteTab: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -505,7 +509,7 @@ fun FileItemGridCard(
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (file.isWebDav && (file.isPinned || isPinnedTab)) {
+                    if (file.isWebDav && (file.isPinned || isPinnedTab || isFavorite) && !isRemoteTab) {
                         Icon(
                             imageVector = Icons.Default.Public,
                             contentDescription = "WebDAV",
