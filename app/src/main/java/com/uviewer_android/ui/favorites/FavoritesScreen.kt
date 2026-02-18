@@ -132,7 +132,13 @@ fun FavoriteItemRow(
                     }
                     "PDF" -> if (item.position >= 0) "Page ${item.position + 1}" else null
                     "TEXT", "DOCUMENT", "HTML" -> if (item.position > 0) "Line ${item.position}" else null
-                    "IMAGE", "ZIP" -> if (item.position >= 0) "Page ${item.position + 1}" else null
+                    "ZIP" -> {
+                        if (!item.positionTitle.isNullOrEmpty()) {
+                            item.positionTitle
+                        } else if (item.position >= 0) {
+                            "Page ${item.position + 1}"
+                        } else null
+                    }
                     else -> null
                 }
                 if (progressText != null) {

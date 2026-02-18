@@ -436,7 +436,13 @@ fun FileItemRow(
                     }
                     FileEntry.FileType.PDF -> if (file.position >= 0) "Page ${file.position + 1}" else null
                     FileEntry.FileType.TEXT, FileEntry.FileType.HTML -> if (file.position > 0) "Line ${file.position}" else null
-                    FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> if (file.position >= 0) "Page ${file.position + 1}" else null
+                    FileEntry.FileType.ZIP -> {
+                        if (!file.positionTitle.isNullOrEmpty()) {
+                            file.positionTitle
+                        } else if (file.position >= 0) {
+                            "Page ${file.position + 1}"
+                        } else null
+                    }
                     else -> null
                 }
                 if (progressText != null) {
@@ -598,7 +604,13 @@ fun FileItemGridCard(
                     }
                     FileEntry.FileType.PDF -> if (file.position >= 0) "P${file.position + 1}" else null
                     FileEntry.FileType.TEXT, FileEntry.FileType.HTML -> if (file.position > 0) "L${file.position}" else null
-                    FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP -> if (file.position >= 0) "P${file.position + 1}" else null
+                    FileEntry.FileType.ZIP -> {
+                        if (!file.positionTitle.isNullOrEmpty()) {
+                            file.positionTitle
+                        } else if (file.position >= 0) {
+                            "P${file.position + 1}"
+                        } else null
+                    }
                     else -> null
                 }
                 if (progressText != null) {

@@ -114,7 +114,13 @@ fun RecentFileItemRow(
                     }
                     "PDF" -> "Page ${file.pageIndex + 1}"
                     "TEXT", "DOCUMENT", "HTML" -> "Line ${file.pageIndex}"
-                    "ZIP", "IMAGE" -> "Page ${file.pageIndex + 1}"
+                    "ZIP" -> {
+                        if (!file.positionTitle.isNullOrEmpty()) {
+                            file.positionTitle
+                        } else {
+                            "Page ${file.pageIndex + 1}"
+                        }
+                    }
                     else -> null
                 }
                 if (progressText != null) {

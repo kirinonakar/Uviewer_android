@@ -112,11 +112,16 @@ enum class ViewMode {
                     }
                     val wasPinned = pinnedItem != null
 
+                    val total = currentImages.size
+                    val progress = if (total > 0) (index.toFloat() / (total - 1).coerceAtLeast(1)) else 0f
+
                     if (existing != null) {
                         // Rule 1: Exactly same file and position -> Move to top
                         favoriteDao.updateFavorite(existing.copy(
                             timestamp = System.currentTimeMillis(),
-                            isPinned = wasPinned || existing.isPinned
+                            isPinned = wasPinned || existing.isPinned,
+                            progress = progress,
+                            positionTitle = imageName
                         ))
                         // If a DIFFERENT item was pinned, unpin it
                         if (wasPinned && pinnedItem?.id != existing.id) {
@@ -143,6 +148,7 @@ enum class ViewMode {
                                 position = index,
                                 positionTitle = imageName,
                                 isPinned = wasPinned, // Transfer pin status
+                                progress = progress,
                                 timestamp = System.currentTimeMillis()
                             )
                         )
