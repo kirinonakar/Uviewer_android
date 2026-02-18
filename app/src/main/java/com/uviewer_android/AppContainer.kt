@@ -28,6 +28,10 @@ class AppContainer(private val context: Context) {
         com.uviewer_android.data.repository.UserPreferencesRepository(context)
     }
 
+    val cacheManager by lazy {
+        com.uviewer_android.data.utils.CacheManager(context, userPreferencesRepository)
+    }
+
     // ViewModels factories or direct injection
     // ...
 }

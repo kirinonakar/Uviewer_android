@@ -24,6 +24,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.WebDavServer
+import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.ui.AppViewModelProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,6 +48,7 @@ fun SettingsScreen(
     val imageViewMode by viewModel.imageViewMode.collectAsState()
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsState()
     val cacheSize by viewModel.cacheSize.collectAsState()
+    val maxCacheSize by viewModel.maxCacheSize.collectAsState()
 
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -56,6 +58,7 @@ fun SettingsScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDualPageOrderDialog by remember { mutableStateOf(false) }
     var showImageViewModeDialog by remember { mutableStateOf(false) }
+    var showCacheLimitDialog by remember { mutableStateOf(false) }
 
 
     Scaffold(
@@ -297,6 +300,13 @@ fun SettingsScreen(
                     }
                 )
             }
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.cache_limit)) },
+                    supportingContent = { Text(FileRepository.formatFileSize(maxCacheSize)) },
+                    modifier = Modifier.clickable { showCacheLimitDialog = true }
+                )
+            }
 
             item { HorizontalDivider() }
             item {
@@ -395,7 +405,54 @@ fun SettingsScreen(
                 }
             )
         }
+
+        if (showCacheLimitDialog) {
+            CacheLimitSelectionDialog(
+                currentLimit = maxCacheSize,
+                onDismiss = { showCacheLimitDialog = false },
+                onSelect = { limit ->
+                    viewModel.setMaxCacheSize(limit)
+                    showCacheLimitDialog = false
+                }
+            )
+        }
     }
+}
+
+@Composable
+fun CacheLimitSelectionDialog(
+    currentLimit: Long,
+    onDismiss: () -> Unit,
+    onSelect: (Long) -> Unit
+) {
+    val limits = listOf(
+        500 * 1024 * 1024L,
+        1024 * 1024 * 1024L,
+        2 * 1024 * 1024 * 1024L,
+        5 * 1024 * 1024 * 1024L,
+        10 * 1024 * 1024 * 1024L
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.cache_limit)) },
+        text = {
+            Column {
+                limits.forEach { limit ->
+                    ThemeOptionRow(
+                        label = FileRepository.formatFileSize(limit),
+                        mode = limit.toString(),
+                        currentMode = currentLimit.toString(),
+                        onSelect = { onSelect(limit) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
 }
 
 @Composable

@@ -84,6 +84,9 @@ class SettingsViewModel(
     val volumeKeyPaging: StateFlow<Boolean> = userPreferencesRepository.volumeKeyPaging
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val maxCacheSize: StateFlow<Long> = userPreferencesRepository.maxCacheSize
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 1024 * 1024 * 1024L)
+
 
 
     fun setThemeMode(mode: String) {
@@ -140,6 +143,10 @@ class SettingsViewModel(
 
     fun setVolumeKeyPaging(enabled: Boolean) {
         userPreferencesRepository.setVolumeKeyPaging(enabled)
+    }
+
+    fun setMaxCacheSize(size: Long) {
+        userPreferencesRepository.setMaxCacheSize(size)
     }
 
     fun updateCacheSize() {

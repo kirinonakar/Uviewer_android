@@ -116,6 +116,7 @@
     <string name="app_cache">앱 캐시</string>
     <string name="cache_size_fmt">현재 용량: %s</string>
     <string name="clear_cache">지우기</string>
+    <string name="cache_limit">캐시 용량 제한</string>
     <string name="prev_file">이전 파일</string>
     <string name="next_file">다음 파일</string>
     <string name="volume_key_paging">볼륨 버튼으로 페이지 이동</string>

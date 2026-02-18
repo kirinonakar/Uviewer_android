@@ -95,6 +95,25 @@ class UserPreferencesRepository(context: Context) {
     )
     val volumeKeyPaging: StateFlow<Boolean> = _volumeKeyPaging.asStateFlow()
 
+    fun setVolumeKeyPaging(enabled: Boolean) {
+        sharedPreferences.edit {
+            putBoolean("volume_key_paging", enabled)
+        }
+        _volumeKeyPaging.value = enabled
+    }
+
+    private val _maxCacheSize = MutableStateFlow(
+        sharedPreferences.getLong("max_cache_size", 1024 * 1024 * 1024L)
+    )
+    val maxCacheSize: StateFlow<Long> = _maxCacheSize.asStateFlow()
+
+    fun setMaxCacheSize(size: Long) {
+        sharedPreferences.edit {
+            putLong("max_cache_size", size)
+        }
+        _maxCacheSize.value = size
+    }
+
     fun setThemeMode(mode: String) {
         sharedPreferences.edit {
             putString("theme_mode", mode)
@@ -185,13 +204,6 @@ class UserPreferencesRepository(context: Context) {
             putBoolean("is_vertical_reading", enabled)
         }
         _isVerticalReading.value = enabled
-    }
-
-    fun setVolumeKeyPaging(enabled: Boolean) {
-        sharedPreferences.edit {
-            putBoolean("volume_key_paging", enabled)
-        }
-        _volumeKeyPaging.value = enabled
     }
 
     fun setCustomDocBackgroundColor(color: String) {

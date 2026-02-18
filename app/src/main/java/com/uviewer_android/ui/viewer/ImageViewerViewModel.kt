@@ -40,7 +40,8 @@ enum class ViewMode {
         private val recentFileDao: com.uviewer_android.data.RecentFileDao,
         private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
         private val favoriteDao: com.uviewer_android.data.FavoriteDao,
-        private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository
+        private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository,
+        private val cacheManager: com.uviewer_android.data.utils.CacheManager
     ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(ImageViewerUiState())
@@ -258,14 +259,19 @@ enum class ViewMode {
                             val context = getApplication<Application>()
                             val cacheDir = context.cacheDir
                             val tempFile = File(cacheDir, "temp_archive_${System.currentTimeMillis()}.${filePath.substringAfterLast('.')}")
-                            webDavRepository.downloadFile(serverId, filePath, tempFile)
-                            
                             val unzipDir = File(cacheDir, "zip_${tempFile.name}_unzipped")
-                            if (unzipDir.exists()) unzipDir.deleteRecursively()
-                            unzipDir.mkdirs()
                             
-                            com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
-                            tempFile.delete() // Clean up the archive file
+                            if (unzipDir.exists()) {
+                                cacheManager.touch(unzipDir)
+                            } else {
+                                val fileSize = webDavRepository.getFileSize(serverId, filePath)
+                                cacheManager.ensureCapacity(fileSize + (fileSize * 2)) // Zip + estimate unzip
+                                webDavRepository.downloadFile(serverId, filePath, tempFile)
+                                
+                                unzipDir.mkdirs()
+                                com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
+                                tempFile.delete() // Clean up the archive file
+                            }
                             
                             unzipDir.walkTopDown()
                                 .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
@@ -287,10 +293,14 @@ enum class ViewMode {
                             val cacheDir = context.cacheDir
                             val zipFile = File(filePath)
                             val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
-                            if (unzipDir.exists()) unzipDir.deleteRecursively()
-                            unzipDir.mkdirs()
                             
-                            com.uviewer_android.data.utils.ArchiveExtractor.extract(zipFile, unzipDir)
+                            if (unzipDir.exists()) {
+                                cacheManager.touch(unzipDir)
+                            } else {
+                                cacheManager.ensureCapacity(zipFile.length() * 2)
+                                unzipDir.mkdirs()
+                                com.uviewer_android.data.utils.ArchiveExtractor.extract(zipFile, unzipDir)
+                            }
                             
                             unzipDir.walkTopDown()
                                 .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }

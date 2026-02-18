@@ -30,7 +30,8 @@ object AppViewModelProvider {
                 recentFileDao = app.container.database.recentFileDao(),
                 bookmarkDao = app.container.database.bookmarkDao(),
                 favoriteDao = app.container.database.favoriteDao(),
-                userPreferencesRepository = app.container.userPreferencesRepository
+                userPreferencesRepository = app.container.userPreferencesRepository,
+                cacheManager = app.container.cacheManager
             )
         }
         initializer {
@@ -42,7 +43,8 @@ object AppViewModelProvider {
                 recentFileDao = app.container.database.recentFileDao(),
                 bookmarkDao = app.container.database.bookmarkDao(),
                 favoriteDao = app.container.database.favoriteDao(),
-                userPreferencesRepository = app.container.userPreferencesRepository
+                userPreferencesRepository = app.container.userPreferencesRepository,
+                cacheManager = app.container.cacheManager
             )
         }
         initializer {
@@ -83,7 +85,8 @@ object AppViewModelProvider {
                 webDavRepository = app.container.webDavRepository,
                 recentFileDao = app.container.database.recentFileDao(),
                 bookmarkDao = app.container.database.bookmarkDao(),
-                favoriteDao = app.container.database.favoriteDao()
+                favoriteDao = app.container.database.favoriteDao(),
+                cacheManager = app.container.cacheManager
             )
         }
     }

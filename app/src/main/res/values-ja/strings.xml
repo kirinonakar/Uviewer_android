@@ -114,6 +114,7 @@
     <string name="app_cache">アプリキャッシュ</string>
     <string name="cache_size_fmt">現在のサイズ: %s</string>
     <string name="clear_cache">削除</string>
+    <string name="cache_limit">キャッシュ容量制限</string>
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
     <string name="volume_key_paging">音量ボタンでページめくり</string>

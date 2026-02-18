@@ -52,7 +52,8 @@ class DocumentViewerViewModel(
     private val recentFileDao: com.uviewer_android.data.RecentFileDao,
     private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
     private val favoriteDao: com.uviewer_android.data.FavoriteDao,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val cacheManager: com.uviewer_android.data.utils.CacheManager
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(DocumentViewerUiState())
@@ -159,7 +160,14 @@ class DocumentViewerViewModel(
                          val context = getApplication<Application>()
                          val cacheDir = context.cacheDir
                          val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                         webDavRepository.downloadFile(serverId, filePath, tempFile)
+                         
+                         if (tempFile.exists()) {
+                             cacheManager.touch(tempFile)
+                         } else {
+                             val fileSize = webDavRepository.getFileSize(serverId, filePath)
+                             cacheManager.ensureCapacity(fileSize)
+                             webDavRepository.downloadFile(serverId, filePath, tempFile)
+                         }
                          tempFile
                     } else {
                         File(filePath)
@@ -169,10 +177,14 @@ class DocumentViewerViewModel(
                     val context = getApplication<Application>()
                     val cacheDir = context.cacheDir
                     val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
-                    if (unzipDir.exists()) unzipDir.deleteRecursively()
-                    unzipDir.mkdirs()
                     
-                    EpubParser.unzip(epubFile, unzipDir)
+                    if (unzipDir.exists()) {
+                        cacheManager.touch(unzipDir)
+                    } else {
+                        cacheManager.ensureCapacity(epubFile.length() * 3) // EPUB usually 2-3x unzipped
+                        unzipDir.mkdirs()
+                        EpubParser.unzip(epubFile, unzipDir)
+                    }
                     val book = EpubParser.parse(unzipDir)
 
                     _uiState.value = _uiState.value.copy(
@@ -195,7 +207,14 @@ class DocumentViewerViewModel(
                          val context = getApplication<Application>()
                          val cacheDir = context.cacheDir
                          val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                         webDavRepository.downloadFile(serverId, filePath, tempFile)
+                         
+                         if (tempFile.exists()) {
+                             cacheManager.touch(tempFile)
+                         } else {
+                             val fileSize = webDavRepository.getFileSize(serverId, filePath)
+                             cacheManager.ensureCapacity(fileSize)
+                             webDavRepository.downloadFile(serverId, filePath, tempFile)
+                         }
                          tempFile
                     } else {
                         File(filePath)

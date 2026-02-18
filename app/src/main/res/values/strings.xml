@@ -94,6 +94,7 @@
     <string name="app_cache">App Cache</string>
     <string name="cache_size_fmt">Current size: %s</string>
     <string name="clear_cache">Clear</string>
+    <string name="cache_limit">Cache capacity limit</string>
 
     <string name="language">Language</string>
     <string name="lang_system">System Default</string>

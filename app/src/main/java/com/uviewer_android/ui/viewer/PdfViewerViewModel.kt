@@ -23,7 +23,8 @@ class PdfViewerViewModel(
     private val webDavRepository: WebDavRepository,
     private val recentFileDao: com.uviewer_android.data.RecentFileDao,
     private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
-    private val favoriteDao: com.uviewer_android.data.FavoriteDao
+    private val favoriteDao: com.uviewer_android.data.FavoriteDao,
+    private val cacheManager: com.uviewer_android.data.utils.CacheManager
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(PdfViewerUiState())
@@ -61,7 +62,14 @@ class PdfViewerViewModel(
                 val localFile = if (isWebDav && serverId != null) {
                     val cacheDir = getApplication<Application>().cacheDir
                     val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                    webDavRepository.downloadFile(serverId, filePath, tempFile)
+                    
+                    if (tempFile.exists()) {
+                        cacheManager.touch(tempFile)
+                    } else {
+                        val fileSize = webDavRepository.getFileSize(serverId, filePath)
+                        cacheManager.ensureCapacity(fileSize)
+                        webDavRepository.downloadFile(serverId, filePath, tempFile)
+                    }
                     tempFile
                 } else {
                     File(filePath)
