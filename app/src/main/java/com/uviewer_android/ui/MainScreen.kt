@@ -65,6 +65,9 @@ fun MainScreen(
             val encodedPath = android.net.Uri.encode(initialIntentPath, null)
             val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
             navController.navigate(route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = false
+                }
                 launchSingleTop = true
             }
         }
@@ -90,6 +93,9 @@ fun MainScreen(
                     // Position -1 to trigger auto-resume in viewer
                     val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
                     navController.navigate(route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = false
+                        }
                         launchSingleTop = true
                     }
                 }
@@ -105,6 +111,9 @@ fun MainScreen(
                     val encodedPath = android.net.Uri.encode(recent.path, null)
                     val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
                     navController.navigate(route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = false
+                        }
                         launchSingleTop = true
                     }
                 }
@@ -148,6 +157,9 @@ fun MainScreen(
                                         // Current ViewerScreen handles position as initialLine or initialIndex.
                                         val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
                                         navController.navigate(route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = false
+                                            }
                                             launchSingleTop = true
                                         }
                                     }
@@ -185,10 +197,10 @@ fun MainScreen(
             navController = navController,
             startDestination = "library",
             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
-            enterTransition = { androidx.compose.animation.EnterTransition.None },
-            exitTransition = { androidx.compose.animation.ExitTransition.None },
-            popEnterTransition = { androidx.compose.animation.EnterTransition.None },
-            popExitTransition = { androidx.compose.animation.ExitTransition.None }
+            enterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.snap()) },
+            exitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.snap()) },
+            popEnterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.snap()) },
+            popExitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.snap()) }
         ) {
             composable(
                 route = "library?path={path}&serverId={serverId}",

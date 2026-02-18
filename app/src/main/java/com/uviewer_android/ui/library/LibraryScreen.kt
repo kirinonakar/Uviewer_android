@@ -18,9 +18,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
@@ -281,13 +284,21 @@ fun LibraryScreen(
                 var useHttps by remember { mutableStateOf(true) }
                 var user by remember { mutableStateOf("") }
                 var pass by remember { mutableStateOf("") }
+                val focusManager = LocalFocusManager.current
 
                 AlertDialog(
                     onDismissRequest = { showAddServerDialog = false },
                     title = { Text(stringResource(R.string.add_webdav_server)) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text(stringResource(R.string.server_name_hint)) }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(
+                                value = name, 
+                                onValueChange = { name = it }, 
+                                label = { Text(stringResource(R.string.server_name_hint)) }, 
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                                 Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f))
                                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
@@ -299,22 +310,47 @@ fun LibraryScreen(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             }
-                            OutlinedTextField(value = host, onValueChange = { host = it }, label = { Text(stringResource(R.string.server_host_hint)) }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(
+                                value = host, 
+                                onValueChange = { host = it }, 
+                                label = { Text(stringResource(R.string.server_host_hint)) }, 
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                            )
                             OutlinedTextField(
                                 value = port, 
                                 onValueChange = { port = it }, 
                                 label = { Text(stringResource(R.string.server_port_hint)) }, 
                                 modifier = Modifier.fillMaxWidth(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                )
                             )
-                            OutlinedTextField(value = user, onValueChange = { user = it }, label = { Text(stringResource(R.string.username)) }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(
+                                value = user, 
+                                onValueChange = { user = it }, 
+                                label = { Text(stringResource(R.string.username)) }, 
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
+                            )
                             OutlinedTextField(
                                 value = pass, 
                                 onValueChange = { pass = it }, 
                                 label = { Text(stringResource(R.string.password)) }, 
                                 modifier = Modifier.fillMaxWidth(), 
                                 visualTransformation = PasswordVisualTransformation(),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password)
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Password,
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = { focusManager.clearFocus() }
+                                )
                             )
                         }
                     },

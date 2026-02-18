@@ -20,8 +20,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -75,7 +74,7 @@ fun DocumentViewerScreen(
     val scope = rememberCoroutineScope()
     
     // showControls replaced by !isFullScreen
-    var currentLine by remember { mutableIntStateOf(1) }
+    var currentLine by rememberSaveable { mutableIntStateOf(initialLine ?: 1) }
     var showGoToLineDialog by remember { mutableStateOf(false) }
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }

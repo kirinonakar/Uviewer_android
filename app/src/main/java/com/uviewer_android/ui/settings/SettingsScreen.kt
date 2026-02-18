@@ -610,7 +610,8 @@ fun AddServerDialog(
                     onValueChange = { name = it },
                     label = { Text(stringResource(R.string.server_name)) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                 )
                 
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
@@ -649,7 +650,8 @@ fun AddServerDialog(
                     onValueChange = { username = it },
                     label = { Text(stringResource(R.string.username)) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                 )
                 OutlinedTextField(
                     value = password,

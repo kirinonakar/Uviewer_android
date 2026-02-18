@@ -114,6 +114,11 @@ class DocumentViewerViewModel(
     }
 
     fun loadDocument(filePath: String, type: FileEntry.FileType, isWebDav: Boolean, serverId: Int?, initialLine: Int? = null) {
+        // If already loaded the same file and no explicit line jump requested, ignore to keep current position (e.g. during theme changes)
+        if (currentFilePath == filePath && _uiState.value.content.isNotEmpty() && initialLine == null) {
+            return
+        }
+
         currentFilePath = filePath
         currentFileType = type
         isWebDavContext = isWebDav
