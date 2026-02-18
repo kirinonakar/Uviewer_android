@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -83,15 +84,25 @@ fun RecentFileItemRow(
     
     ListItem(
         headlineContent = { 
-            Text(
-                text = file.title,
-                style = textStyle,
-                onTextLayout = { textLayoutResult ->
-                    if (textLayoutResult.lineCount >= 3) {
-                        useSmallFont = true
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (file.isWebDav) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "WebDAV",
+                        modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
                 }
-            )
+                Text(
+                    text = file.title,
+                    style = textStyle,
+                    onTextLayout = { textLayoutResult ->
+                        if (textLayoutResult.lineCount >= 3) {
+                            useSmallFont = true
+                        }
+                    }
+                )
+            }
         },
         supportingContent = { Text(stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed)))) },
         modifier = Modifier.clickable(onClick = onClick)

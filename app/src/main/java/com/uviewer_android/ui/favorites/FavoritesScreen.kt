@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -97,8 +98,16 @@ fun FavoriteItemRow(
     val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
         .copy(fontWeight = FontWeight.Normal)
     
-    ListItem(
-        headlineContent = { 
+    val headlineContent = @Composable {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (item.isWebDav) {
+                Icon(
+                    imageVector = Icons.Default.Public,
+                    contentDescription = "WebDAV",
+                    modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             Text(
                 text = item.title,
                 style = textStyle,
@@ -108,7 +117,11 @@ fun FavoriteItemRow(
                     }
                 }
             )
-        },
+        }
+    }
+
+    ListItem(
+        headlineContent = headlineContent,
         supportingContent = { 
             val parentPath = try {
                 java.io.File(item.path).parent ?: ""

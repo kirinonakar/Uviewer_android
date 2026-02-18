@@ -368,12 +368,22 @@ fun FileItemRow(
             )
         },
         headlineContent = { 
-            Text(
-                file.name, 
-                maxLines = Int.MAX_VALUE, 
-                style = textStyle,
-                onTextLayout = { if (it.lineCount >= 3) textStyle = typography.bodyMedium }
-            ) 
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (file.isWebDav && (file.isPinned || isPinnedTab)) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "WebDAV",
+                        modifier = Modifier.size(18.dp).padding(end = 4.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Text(
+                    file.name, 
+                    maxLines = Int.MAX_VALUE, 
+                    style = textStyle,
+                    onTextLayout = { if (it.lineCount >= 3) textStyle = typography.bodyMedium }
+                ) 
+            }
         },
         supportingContent = {
             if (!file.isDirectory) {
@@ -490,14 +500,27 @@ fun FileItemGridCard(
             }
             
             Column(modifier = Modifier.padding(8.dp)) {
-                Text(
-                    file.name,
-                    style = textStyle,
-                    maxLines = Int.MAX_VALUE,
-                    textAlign = TextAlign.Center,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    onTextLayout = { if (it.lineCount >= 3) textStyle = typography.labelSmall }
-                )
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (file.isWebDav && (file.isPinned || isPinnedTab)) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "WebDAV",
+                            modifier = Modifier.size(14.dp).padding(end = 2.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Text(
+                        file.name,
+                        style = textStyle,
+                        maxLines = Int.MAX_VALUE,
+                        textAlign = TextAlign.Center,
+                        onTextLayout = { if (it.lineCount >= 3) textStyle = typography.labelSmall }
+                    )
+                }
                 if (!file.isDirectory) {
                     Text(
                         com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
