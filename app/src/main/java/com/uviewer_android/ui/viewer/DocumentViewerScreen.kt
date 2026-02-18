@@ -643,46 +643,54 @@ fun DocumentViewerScreen(
                                                       });
                                                   }
                                                                                                   // 2. 정확한 페이지 이동 함수 (딱 한 페이지씩)
-                                                  window.detectAndReportLine = function() {
-                                                      var width = window.innerWidth;
-                                                      var height = window.innerHeight;
-                                                      
-                                                      var points = [];
-                                                      if (isVertical) {
-                                                          // Vertical: Start is Right Edge
-                                                          var rx = width - 15; // 15px from right edge
-                                                          points = [
-                                                              {x: rx, y: 30},
-                                                              {x: rx, y: height * 0.2},
-                                                              {x: rx, y: height * 0.5}
-                                                          ];
-                                                      } else {
-                                                          // Horizontal: Start is Top Edge
-                                                          var cx = width / 2;
-                                                          var ty = 20; // 20px from top
-                                                          points = [
-                                                              {x: cx, y: ty},
-                                                              {x: cx - 50, y: ty},
-                                                              {x: cx + 50, y: ty}
-                                                          ];
-                                                      }
-                                                      
-                                                      var foundLine = -1;
-                                                      for (var i = 0; i < points.length; i++) {
-                                                          var el = document.elementFromPoint(points[i].x, points[i].y);
-                                                          while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
-                                                              if (el.id && el.id.startsWith('line-')) {
-                                                                  foundLine = parseInt(el.id.replace('line-', ''));
-                                                                  break;
-                                                              }
-                                                              el = el.parentElement;
-                                                          }
-                                                          if (foundLine > 0) break;
-                                                      }
-                                                      if (foundLine > 0) {
-                                                          Android.onLineChanged(foundLine);
-                                                      }
-                                                  };
+                                                   window.detectAndReportLine = function() {
+                                                       var width = window.innerWidth;
+                                                       var height = window.innerHeight;
+                                                       
+                                                       var points = [];
+                                                       if (isVertical) {
+                                                           // Vertical: Start is Right Edge
+                                                           var rx = width - 15; // 15px from right edge
+                                                           points = [
+                                                               {x: rx, y: 30},
+                                                               {x: rx, y: height * 0.2},
+                                                               {x: rx, y: height * 0.5},
+                                                               {x: rx - 40, y: height * 0.2} // Extra point deeper
+                                                           ];
+                                                       } else {
+                                                           // Horizontal: Start is Top Edge
+                                                           var cx = width / 2;
+                                                           var ty = 20; // 20px from top
+                                                           points = [
+                                                               {x: cx, y: ty},
+                                                               {x: cx - 50, y: ty},
+                                                               {x: cx + 50, y: ty},
+                                                               {x: cx, y: ty + 40} // Extra point deeper
+                                                           ];
+                                                       }
+                                                       
+                                                       var foundLine = -1;
+                                                       for (var i = 0; i < points.length; i++) {
+                                                           var el = document.elementFromPoint(points[i].x, points[i].y);
+                                                           while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                                                               if (el.id && el.id.startsWith('line-')) {
+                                                                   foundLine = parseInt(el.id.replace('line-', ''));
+                                                                   break;
+                                                               }
+                                                               el = el.parentElement;
+                                                           }
+                                                           if (foundLine > 0) break;
+                                                       }
+
+                                                       if (foundLine > 0) {
+                                                           // Guard: If we found Line 1 but we are scrolled far down, it's likely a false positive hit on a container
+                                                           if (foundLine === 1) {
+                                                               var scrollPos = isVertical ? Math.abs(window.pageXOffset) : window.pageYOffset;
+                                                               if (scrollPos > 500) return; // Ignore line 1 if scrolled more than 500px
+                                                           }
+                                                           Android.onLineChanged(foundLine);
+                                                       }
+                                                   };
 
                                                   window.pageDown = function() {
                                                       var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;

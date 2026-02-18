@@ -178,9 +178,15 @@ object EpubParser {
         
         // 2. Inject line IDs into body block elements
         val body = doc.body()
-        val elements = body.select("p, div, li, h1, h2, h3, h4, h5, h6, blockquote, pre, article, section")
+        val blockTags = setOf("p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "article", "section")
+        val elements = body.select(blockTags.joinToString(", "))
         var count = 0
         for (el in elements) {
+            // Only assign ID if it doesn't contain other block elements (leaf block)
+            // or if it has its own direct text content (some EPUBs use generic divs for text).
+            val hasBlockChild = el.children().any { it.tagName() in blockTags }
+            if (hasBlockChild && el.ownText().isBlank()) continue
+            
             count++
             el.attr("id", "line-$count")
         }
