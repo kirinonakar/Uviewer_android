@@ -120,4 +120,8 @@
     <string name="prev_file">이전 파일</string>
     <string name="next_file">다음 파일</string>
     <string name="volume_key_paging">볼륨 버튼으로 페이지 이동</string>
+    <string name="paging_mode">페이지 넘김 모드</string>
+    <string name="paging_mode_overlap">한 줄 남기기</string>
+    <string name="paging_mode_complete">완전히 넘기기</string>
+    <string name="select_paging_mode">페이지 넘김 모드 선택</string>
 </resources>

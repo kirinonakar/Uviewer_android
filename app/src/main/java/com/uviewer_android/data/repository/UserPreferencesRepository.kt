@@ -24,6 +24,11 @@ class UserPreferencesRepository(context: Context) {
     )
     val fontFamily: StateFlow<String> = _fontFamily.asStateFlow()
 
+    private val _pagingMode = MutableStateFlow(
+        sharedPreferences.getInt("paging_mode", 0)
+    )
+    val pagingMode: StateFlow<Int> = _pagingMode.asStateFlow()
+
     private val _docBackgroundColor = MutableStateFlow(
         sharedPreferences.getString("doc_background_color", "white") ?: "white"
     )
@@ -133,6 +138,13 @@ class UserPreferencesRepository(context: Context) {
             putString("font_family", family)
         }
         _fontFamily.value = family
+    }
+
+    fun setPagingMode(mode: Int) {
+        sharedPreferences.edit {
+            putInt("paging_mode", mode)
+        }
+        _pagingMode.value = mode
     }
 
     fun setDocBackgroundColor(color: String) {

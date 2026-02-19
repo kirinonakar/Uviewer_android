@@ -81,6 +81,8 @@ fun DocumentViewerScreen(
     var showEncodingDialog by remember { mutableStateOf(false) }
     var isPageLoading by remember { mutableStateOf(false) }
     var isNavigating by remember { mutableStateOf(false) }
+    var bottomMaskHeight by remember { mutableFloatStateOf(0f) }
+    var topMaskHeight by remember { mutableFloatStateOf(0f) }
     
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
@@ -509,6 +511,20 @@ fun DocumentViewerScreen(
                                             }
                                         }
                                     }
+
+                                    @android.webkit.JavascriptInterface
+                                    fun updateBottomMask(height: Float) {
+                                        post {
+                                             bottomMaskHeight = height
+                                        }
+                                    }
+                                    
+                                    @android.webkit.JavascriptInterface
+                                    fun updateTopMask(height: Float) {
+                                        post {
+                                             topMaskHeight = height
+                                        }
+                                    }
                                 }, "Android")
 
                                 settings.allowFileAccess = true
@@ -535,15 +551,17 @@ fun DocumentViewerScreen(
                                         val enableAutoLoading = type == FileEntry.FileType.TEXT
                                         val isVertical = uiState.isVertical
 
+                                         val pagingMode = uiState.pagingMode
                                          val jsScrollLogic = """
                                              (function() {
                                                  var isVertical = $isVertical;
+                                                 var pagingMode = $pagingMode;
                                                  
-                                                 // 1. 초기 스크롤 위치 복원
+                                                 // 1. Restore scroll position
                                                  if ($targetLine === $totalLines && $totalLines > 1) {
                                                       if (typeof jumpToBottom === 'function') { jumpToBottom(); }
                                                       else {
-                                                           if (isVertical) window.scrollTo(-1000000, 0); // Left end
+                                                           if (isVertical) window.scrollTo(-1000000, 0); 
                                                            else window.scrollTo(0, 1000000);
                                                       }
                                                  } else {
@@ -551,11 +569,12 @@ fun DocumentViewerScreen(
                                                      if(el) {
                                                          el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                                                      } else if ($targetLine === 1) {
-                                                         if (isVertical) window.scrollTo(1000000, 0); // Right end (start)
+                                                         if (isVertical) window.scrollTo(1000000, 0); 
                                                          else window.scrollTo(0, 0);
                                                      }
                                                  }
-                                                                                                  // 1.5. 루비 병합 및 자간 벌어짐 방지 (세로쓰기 전용)
+
+                                                 // 1.5. Fix Ruby merging
                                                   if (isVertical) {
                                                       var rubies = Array.from(document.querySelectorAll('ruby'));
                                                       for (var i = 0; i < rubies.length; i++) {
@@ -565,7 +584,6 @@ fun DocumentViewerScreen(
                                                           var rubyText = Array.from(ruby.querySelectorAll('rt')).map(function(r) { return r.textContent; }).join('');
                                                           if (rubyText.length === 0) continue;
 
-                                                          // 구조 정규화 (순서 꼬임 방지)
                                                           while (ruby.firstChild) ruby.removeChild(ruby.firstChild);
                                                           ruby.appendChild(document.createTextNode(baseText));
                                                           var rt = document.createElement('rt');
@@ -580,7 +598,6 @@ fun DocumentViewerScreen(
                                                                            (baseLen >= 4 && rubyLen >= baseLen * 1.5);
           
                                                           if (needsMerge) {
-                                                              // 1. 앞쪽 인접 루비 병합
                                                               while (ruby.previousSibling && ruby.previousSibling.tagName === 'RUBY') {
                                                                   var prev = ruby.previousSibling;
                                                                   var pRts = Array.from(prev.querySelectorAll('rt'));
@@ -590,7 +607,6 @@ fun DocumentViewerScreen(
                                                                   rt.textContent = pRubyText + rt.textContent;
                                                                   prev.parentNode.removeChild(prev);
                                                               }
-                                                              // 2. 뒤쪽 인접 루비 병합
                                                               while (ruby.nextSibling && ruby.nextSibling.tagName === 'RUBY') {
                                                                   var next = ruby.nextSibling;
                                                                   var nRts = Array.from(next.querySelectorAll('rt'));
@@ -600,7 +616,6 @@ fun DocumentViewerScreen(
                                                                   rt.textContent = rt.textContent + nRubyText;
                                                                   next.parentNode.removeChild(next);
                                                               }
-                                                              // 3. 앞쪽 일반 글자 1자 흡수 (중앙 정렬)
                                                               var finalPrev = ruby.previousSibling;
                                                               if (finalPrev && finalPrev.nodeType === 3) {
                                                                   var txt = finalPrev.textContent;
@@ -609,7 +624,6 @@ fun DocumentViewerScreen(
                                                                       finalPrev.textContent = txt.substring(0, txt.length - 1);
                                                                   }
                                                               }
-                                                              // 4. 뒤쪽 일반 글자 1자 흡수
                                                               var finalNext = ruby.nextSibling;
                                                               if (finalNext && finalNext.nodeType === 3) {
                                                                   var txt = finalNext.textContent;
@@ -621,7 +635,6 @@ fun DocumentViewerScreen(
                                                           }
                                                       }
                                                   } else {
-                                                      // 가폭모드(기존 압축 로직 유지)
                                                       document.querySelectorAll('rt').forEach(function(el) {
                                                           var rubyText = el.textContent.trim();
                                                           var baseNode = el.previousSibling || el.parentElement.firstChild;
@@ -643,65 +656,201 @@ fun DocumentViewerScreen(
                                                           }
                                                       });
                                                   }
-                                                                                                  // 2. 정확한 페이지 이동 함수 (딱 한 페이지씩)
-                                                   window.detectAndReportLine = function() {
-                                                       var width = window.innerWidth;
-                                                       var height = window.innerHeight;
-                                                       
-                                                       var points = [];
-                                                       if (isVertical) {
-                                                           // Vertical: Start is Right Edge
-                                                           var rx = width - 15; // 15px from right edge
-                                                           points = [
-                                                               {x: rx, y: 30},
-                                                               {x: rx, y: height * 0.2},
-                                                               {x: rx, y: height * 0.5},
-                                                               {x: rx - 40, y: height * 0.2} // Extra point deeper
-                                                           ];
-                                                       } else {
-                                                           // Horizontal: Start is Top Edge
-                                                           var cx = width / 2;
-                                                           var ty = 20; // 20px from top
-                                                           points = [
-                                                               {x: cx, y: ty},
-                                                               {x: cx - 50, y: ty},
-                                                               {x: cx + 50, y: ty},
-                                                               {x: cx, y: ty + 40} // Extra point deeper
-                                                           ];
-                                                       }
-                                                       
-                                                       var foundLine = -1;
-                                                       for (var i = 0; i < points.length; i++) {
-                                                           var el = document.elementFromPoint(points[i].x, points[i].y);
-                                                           while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
-                                                               if (el.id && el.id.startsWith('line-')) {
-                                                                   foundLine = parseInt(el.id.replace('line-', ''));
-                                                                   break;
-                                                               }
-                                                               el = el.parentElement;
-                                                           }
-                                                           if (foundLine > 0) break;
-                                                       }
 
-                                                       if (foundLine > 0) {
-                                                           // Guard: If we found Line 1 but we are scrolled far down, it's likely a false positive hit on a container
-                                                           if (foundLine === 1) {
-                                                               var scrollPos = isVertical ? Math.abs(window.pageXOffset) : window.pageYOffset;
-                                                               if (scrollPos > 500) return; // Ignore line 1 if scrolled more than 500px
-                                                           }
-                                                           Android.onLineChanged(foundLine);
-                                                       }
-                                                   };
+                                                 window.detectAndReportLine = function() {
+                                                     var width = window.innerWidth;
+                                                     var height = window.innerHeight;
+                                                     var points = [];
+                                                     if (isVertical) {
+                                                         var rx = width - 15; 
+                                                         points = [{x: rx, y: 30}, {x: rx, y: height * 0.2}, {x: rx, y: height * 0.5}, {x: rx - 40, y: height * 0.2}];
+                                                     } else {
+                                                         var cx = width / 2;
+                                                         var ty = 20;
+                                                         points = [{x: cx, y: ty}, {x: cx - 50, y: ty}, {x: cx + 50, y: ty}, {x: cx, y: ty + 40}];
+                                                     }
+                                                     var foundLine = -1;
+                                                     for (var i = 0; i < points.length; i++) {
+                                                         var el = document.elementFromPoint(points[i].x, points[i].y);
+                                                         while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                                                             if (el.id && el.id.startsWith('line-')) {
+                                                                 foundLine = parseInt(el.id.replace('line-', ''));
+                                                                 break;
+                                                             }
+                                                             el = el.parentElement;
+                                                         }
+                                                         if (foundLine > 0) break;
+                                                     }
+                                                     if (foundLine > 0) {
+                                                         if (foundLine === 1) {
+                                                             var scrollPos = isVertical ? Math.abs(window.pageXOffset) : window.pageYOffset;
+                                                             if (scrollPos > 500) return;
+                                                         }
+                                                         Android.onLineChanged(foundLine);
+                                                     }
+                                                 };
 
-                                                  window.pageDown = function() {
+                                                 window.findSafeBottom = function() {
+                                                     if (isVertical) {
+                                                         // Vertical mode logic (simplified for now as user issue is likely horizontal paragraphs)
+                                                         var width = window.innerWidth;
+                                                         // Scan from right to left? Vertical-rl means content flows right to left.
+                                                         // Lines are vertical columns. A "cut off" means a column at the left edge is partially visible?
+                                                         // Or at the bottom? Vertical text flows horizontally.
+                                                         // "Cut off line" in vertical mode usually means the left-most line is cut off.
+                                                         // Mask should be on the LEFT. But current mask implementation is BOTTOM.
+                                                         
+                                                         // Assuming the request "empty space" is primarily about Horizontal mode where 'div' blocks were hidden.
+                                                         // For vertical, we stick to element-based for now or implement similar rect logic if needed.
+                                                         // But let's apply the rect logic to the element at the edge.
+                                                         
+                                                         // If isVertical, we scroll horizontally.
+                                                         // We need to find the 'safe' Left position.
+                                                         var leftEdge = 0;
+                                                         var lastVisibleLeft = 0;
+                                                         
+                                                         // For vertical-rl, coordinates: x decreases as we read.
+                                                         // Visible area: [0, window.innerWidth]
+                                                         // Future/Next content is at x < 0.
+                                                         // Past content is at x > width.
+                                                         // We scroll negative X to go next.
+                                                         
+                                                         // We want to find the last fully visible line on the LEFT side (closest to 0).
+                                                         // Iterate elements at x=0..50
+                                                         
+                                                         return window.innerWidth; // Fallback
+                                                     }
+                                                     
+                                                     var height = window.innerHeight;
+                                                     var bottomLimit = height;
+                                                     
+                                                     // Find element intersecting or just above the bottom
+                                                     var center = window.innerWidth / 2;
+                                                     // Scan up from bottom
+                                                     var el = null;
+                                                     for (var y = height - 1; y >= 0; y -= 10) {
+                                                         el = document.elementFromPoint(center, y);
+                                                         if (el && el.tagName !== 'HTML' && el.tagName !== 'BODY') break;
+                                                     }
+                                                     
+                                                     if (el) {
+                                                         // Find the specific line within this element
+                                                         var range = document.createRange();
+                                                         range.selectNodeContents(el);
+                                                         var rects = range.getClientRects();
+                                                         
+                                                         var found = false;
+                                                         // We want the last rect that ends before 'height'
+                                                         for (var i = rects.length - 1; i >= 0; i--) {
+                                                             if (rects[i].bottom <= height) {
+                                                                 bottomLimit = rects[i].bottom;
+                                                                 found = true;
+                                                                 break;
+                                                             }
+                                                         }
+                                                         
+                                                         // If no rect found in this element fits (e.g. element top > height, shouldn't happen with scan),
+                                                         // or single huge line cut off -> look at previous element? 
+                                                         // Or just accept we cut it?
+                                                         // If found is false, it means the *entire* text of 'el' visible so far is actually cut off (top line > bottom?).
+                                                         // In that case, we should essentially mask 'el' entirely (bottomLimit = el.getBoundingClientRect().top).
+                                                         if (!found && rects.length > 0) {
+                                                             bottomLimit = el.getBoundingClientRect().top;
+                                                             if (bottomLimit < 0) bottomLimit = 0; // Don't go neg
+                                                         } else if (!found) {
+                                                             // No rects? maybe image or block
+                                                             var r = el.getBoundingClientRect();
+                                                             if (r.bottom > height) bottomLimit = r.top;
+                                                             else bottomLimit = r.bottom;
+                                                         }
+                                                     }
+                                                     return bottomLimit;
+                                                 };
+
+                                                 window.updateMask = function() {
+                                                     if (pagingMode !== 1 || isVertical) {
+                                                         Android.updateBottomMask(0);
+                                                         Android.updateTopMask(0);
+                                                         return;
+                                                     }
+                                                     
+                                                     // Bottom Mask
+                                                     var safeBottom = window.findSafeBottom();
+                                                     var maskH = window.innerHeight - safeBottom;
+                                                     if (maskH < 0) maskH = 0;
+                                                     Android.updateBottomMask(maskH);
+                                                     
+                                                     // Top Mask: recalculate on every updateMask call so it stays
+                                                     // accurate after any scroll (manual or programmatic).
+                                                     var topCut = window.findSafeTop();
+                                                     Android.updateTopMask(topCut > 0 ? topCut : 0);
+                                                 };
+                                                 
+                                                 window.findSafeTop = function() {
+                                                     // Check if the top visual (wrapped) line is cut off (rect.top < 0).
+                                                     // Uses Range.getClientRects() so each wrap of a long line is a separate rect.
+                                                     var x = window.innerWidth / 2;
+                                                     var checked = new Set();
+                                                     for (var y = 0; y < 80; y += 4) {
+                                                         var el = document.elementFromPoint(x, y);
+                                                         if (!el || el.tagName === 'HTML' || el.tagName === 'BODY') continue;
+                                                         if (checked.has(el)) continue;
+                                                         checked.add(el);
+
+                                                         var range = document.createRange();
+                                                         range.selectNodeContents(el);
+                                                         var rects = range.getClientRects();
+                                                         // Sort by top so we process visual order
+                                                         var sorted = Array.from(rects).sort(function(a,b){ return a.top - b.top; });
+                                                         for (var i = 0; i < sorted.length; i++) {
+                                                             var r = sorted[i];
+                                                             if (r.top < 0 && r.bottom > 0) {
+                                                                 // This visual line is partially above the viewport.
+                                                                 // Mask from 0 down to r.bottom to hide the cut portion.
+                                                                 return r.bottom;
+                                                             }
+                                                             if (r.top >= 0) return 0; // First fully-visible line – no cut
+                                                         }
+                                                         // Fallback: element itself extends above viewport
+                                                         var er = el.getBoundingClientRect();
+                                                         if (er.top < 0 && er.bottom > 0) return er.bottom;
+                                                     }
+                                                     return 0;
+                                                 };
+
+                                                 window.pageDown = function() {
+                                                      if (pagingMode === 1 && !isVertical) {
+                                                          // Reset Top Mask
+                                                          Android.updateTopMask(0);
+                                                          
+                                                          var safeBottom = window.findSafeBottom();
+                                                          // safeBottom is relative to viewport top.
+                                                          // To put the "next line" (starts at safeBottom) at the top, we scroll by safeBottom.
+                                                          
+                                                          if (safeBottom < 50) { 
+                                                              // Edge case: Top of screen is already cutting off? 
+                                                              // Or mask is huge? Force min scroll.
+                                                              window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'instant' });
+                                                          } else {
+                                                              window.scrollBy({ top: safeBottom, behavior: 'instant' });
+                                                          }
+                                                          
+                                                          window.detectAndReportLine();
+                                                          setTimeout(window.updateMask, 50);
+                                                          
+                                                          // Check for autoload
+                                                          var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                          var bottomPosition = document.documentElement.scrollHeight;
+                                                          if (scrollPosition >= bottomPosition - 5) Android.autoLoadNext();
+                                                          return;
+                                                      }
+
                                                       var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
-                                                      var overlap = 40; // 겹침 거리 (약 한 글자)
+                                                      var overlap = 40;
                                                       var moveSize = pageSize - overlap;
-                                                      
                                                       if (isVertical) {
                                                           var oldX = window.pageXOffset;
                                                           window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                                                          // 끝에 도달하여 이동량이 적을 때 다음 청크 로드
                                                           if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadNext();
                                                       } else {
                                                           var oldY = window.pageYOffset;
@@ -709,12 +858,176 @@ fun DocumentViewerScreen(
                                                           if (Math.abs(window.pageYOffset - oldY) < 10) Android.autoLoadNext();
                                                       }
                                                       window.detectAndReportLine();
+                                                      setTimeout(window.updateMask, 50);
                                                   };
-                                                                                                  window.pageUp = function() {
+
+
+                                                 window.findVisualLineAt = function(y) {
+                                                     // Returns the visual-line rect (one wrap) that contains y.
+                                                     // Uses Range.getClientRects() so wrapped long lines each get their own rect.
+                                                     var x = window.innerWidth / 2;
+                                                     var checked = new Set();
+                                                     for (var searchY = y; searchY < y + 40; searchY += 4) {
+                                                         var el = document.elementFromPoint(x, searchY);
+                                                         if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') continue;
+                                                         if (checked.has(el)) continue;
+                                                         checked.add(el);
+
+                                                         var range = document.createRange();
+                                                         range.selectNodeContents(el);
+                                                         var rects = range.getClientRects();
+                                                         for (var i = 0; i < rects.length; i++) {
+                                                             var r = rects[i];
+                                                             if (searchY >= r.top && searchY < r.bottom) return r;
+                                                         }
+                                                         // Fallback to element bounding rect
+                                                         var er = el.getBoundingClientRect();
+                                                         if (searchY >= er.top && searchY < er.bottom) return er;
+                                                     }
+                                                     return null;
+                                                 };
+
+                                                 window.findPreviousVisualLineRect = function(y) {
+                                                     // Returns the visual-line rect (one wrap) whose bottom is just before y.
+                                                     // Uses Range.getClientRects() for per-wrap accuracy.
+                                                     var x = window.innerWidth / 2;
+                                                     var checked = new Set();
+                                                     for (var sy = y - 4; sy > y - 200; sy -= 4) {
+                                                         var el = document.elementFromPoint(x, sy);
+                                                         if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') continue;
+                                                         if (checked.has(el)) continue;
+                                                         checked.add(el);
+
+                                                         var range = document.createRange();
+                                                         range.selectNodeContents(el);
+                                                         var rects = range.getClientRects();
+                                                         var best = null;
+                                                         for (var i = 0; i < rects.length; i++) {
+                                                             var r = rects[i];
+                                                             if (r.bottom <= y + 1) {
+                                                                 if (!best || r.bottom > best.bottom) best = r;
+                                                             }
+                                                         }
+                                                         if (best) return best;
+                                                         // Fallback
+                                                         var er = el.getBoundingClientRect();
+                                                         if (er.bottom <= y + 1) return er;
+                                                     }
+                                                     return null;
+                                                 };
+
+                                                  window.pageUp = function() {
+                                                      if (pagingMode === 1 && !isVertical) {
+                                                          // ── Collect all visual-line rects from every leaf element
+                                                          //    whose bounding box overlaps the region [-200, viewport bottom].
+                                                          //    Using Range.getClientRects() gives one rect per wrapped line.
+                                                          var allRects = [];
+                                                          var scanTop    = window.pageYOffset - 200;
+                                                          var scanBottom = window.pageYOffset + window.innerHeight;
+
+                                                          // TreeWalker visits all text-bearing leaf nodes efficiently,
+                                                          // without relying on elementFromPoint (which misses gap areas).
+                                                          var walker = document.createTreeWalker(
+                                                              document.body,
+                                                              NodeFilter.SHOW_ELEMENT,
+                                                              {
+                                                                  acceptNode: function(node) {
+                                                                      var r = node.getBoundingClientRect();
+                                                                      // Relative to viewport
+                                                                      if (r.bottom < -200 || r.top > window.innerHeight) {
+                                                                          return NodeFilter.FILTER_REJECT;
+                                                                      }
+                                                                      // Only leaf-ish nodes that actually contain text lines
+                                                                      if (node.children.length === 0 ||
+                                                                          node.tagName === 'P' || node.tagName === 'DIV' ||
+                                                                          node.tagName === 'SPAN' || node.tagName === 'H1' ||
+                                                                          node.tagName === 'H2' || node.tagName === 'H3' ||
+                                                                          node.tagName === 'H4' || node.tagName === 'H5' ||
+                                                                          node.tagName === 'H6') {
+                                                                          return NodeFilter.FILTER_ACCEPT;
+                                                                      }
+                                                                      return NodeFilter.FILTER_SKIP;
+                                                                  }
+                                                              }
+                                                          );
+
+                                                          var seen = new Set();
+                                                          var node;
+                                                          while ((node = walker.nextNode())) {
+                                                              if (seen.has(node)) continue;
+                                                              seen.add(node);
+                                                              try {
+                                                                  var range = document.createRange();
+                                                                  range.selectNodeContents(node);
+                                                                  var rects = range.getClientRects();
+                                                                  for (var i = 0; i < rects.length; i++) {
+                                                                      var r = rects[i];
+                                                                      if (r.width > 0 && r.height > 0) {
+                                                                          allRects.push({ top: r.top, bottom: r.bottom });
+                                                                      }
+                                                                  }
+                                                              } catch(e) {}
+                                                          }
+
+                                                          // Sort by top position, deduplicate overlapping rects
+                                                          allRects.sort(function(a, b) { return a.top - b.top; });
+                                                          var unique = [];
+                                                          for (var i = 0; i < allRects.length; i++) {
+                                                              var r = allRects[i];
+                                                              if (unique.length === 0) { unique.push(r); continue; }
+                                                              var prev = unique[unique.length - 1];
+                                                              // Merge rects that are on the same visual line (top within 2px)
+                                                              if (Math.abs(r.top - prev.top) < 2) {
+                                                                  // Keep the one with larger bottom
+                                                                  if (r.bottom > prev.bottom) prev.bottom = r.bottom;
+                                                              } else {
+                                                                  unique.push(r);
+                                                              }
+                                                          }
+
+                                                          // ── Find the first FULLY visible line (top >= 0)
+                                                          var firstFullIdx = -1;
+                                                          for (var i = 0; i < unique.length; i++) {
+                                                              if (unique[i].top >= 0) { firstFullIdx = i; break; }
+                                                          }
+
+                                                          // ── The target line is exactly one before firstFullLine.
+                                                          //    This guarantees no skip: prev = current_first_line - 1.
+                                                          var prevIdx = (firstFullIdx > 0) ? firstFullIdx - 1
+                                                                      : (firstFullIdx === 0 && unique.length > 0) ? -1
+                                                                      : unique.length - 1;
+
+                                                          var prevRect = (prevIdx >= 0) ? unique[prevIdx] : null;
+
+                                                          if (prevRect) {
+                                                              // ── Scroll so prevRect.bottom lands exactly at viewport bottom.
+                                                              // Math.ceil ensures we never leave a sub-pixel sliver below prevRect
+                                                              // that would trick findSafeBottom() into masking it.
+                                                              var scrollDelta = Math.ceil(prevRect.bottom - window.innerHeight);
+                                                              window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+
+                                                              setTimeout(function() {
+                                                                  // Bottom mask: prevRect is the intentional last line.
+                                                                  // We must NOT re-run findSafeBottom() here because floating-point
+                                                                  // rounding can make prevRect appear "slightly cut" and hide it.
+                                                                  // Reset bottom mask to 0 unconditionally.
+                                                                  Android.updateBottomMask(0);
+
+                                                                  // Top mask: if the very first visible line at top is partially
+                                                                  // cut, cover it with the Compose overlay.
+                                                                  var topCutHeight = window.findSafeTop();
+                                                                  Android.updateTopMask(topCutHeight > 0 ? topCutHeight : 0);
+
+                                                                  window.detectAndReportLine();
+                                                                  if (window.pageYOffset <= 0) Android.autoLoadPrev();
+                                                              }, 10);
+                                                              return;
+                                                          }
+                                                      }
+
                                                       var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
                                                       var overlap = 40;
                                                       var moveSize = pageSize - overlap;
-          
                                                       if (isVertical) {
                                                           var oldX = window.pageXOffset;
                                                           window.scrollBy({ left: moveSize, behavior: 'instant' });
@@ -725,32 +1038,28 @@ fun DocumentViewerScreen(
                                                           if (Math.abs(window.pageYOffset - oldY) < 10 && oldY === 0) Android.autoLoadPrev();
                                                       }
                                                       window.detectAndReportLine();
+                                                      setTimeout(window.updateMask, 50);
                                                   };
          
-                                                 // 3. 스크롤 감지 및 라인 번호 업데이트 (그리드 서치 적용)
-                                                 var scrollTimer = null;
-                                                  window.onscroll = function() {
-                                                      if (scrollTimer) clearTimeout(scrollTimer);
-                                                      scrollTimer = setTimeout(function() {
-                                                          window.detectAndReportLine();
-                                                          
-                                                          var isScrolling = false; // Guard for autoload calls
+                                                  var scrollTimer = null;
+                                                   window.onscroll = function() {
+                                                       if (scrollTimer) clearTimeout(scrollTimer);
+                                                       scrollTimer = setTimeout(function() {
+                                                           window.detectAndReportLine();
+                                                           window.updateMask();
+                                                           
+                                                           var isScrolling = false; 
                                                          
-                                                         // 자동 로딩 로직
                                                          if ($enableAutoLoading) {
                                                              if (isVertical) {
                                                                  var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
-                                                                 // Chromium vertical-rl: 0 is Right (Start), Negative max is Left (End)
-                                                                 // 왼쪽 끝 도달 시 다음 챕터
                                                                  if (window.pageXOffset <= -(maxScrollX - 10)) {
                                                                     if (!isScrolling) { isScrolling = true; Android.autoLoadNext(); }
                                                                  }
-                                                                 // 오른쪽 끝 도달 시 이전 챕터
                                                                  else if (window.pageXOffset >= -10) { 
                                                                     if (!isScrolling) { isScrolling = true; Android.autoLoadPrev(); }
                                                                  }
                                                              } else {
-                                                                 // 가로 모드
                                                                  var scrollPosition = window.innerHeight + window.pageYOffset;
                                                                  var bottomPosition = document.documentElement.scrollHeight;
                                                                  if (scrollPosition >= bottomPosition - 5) {
@@ -762,9 +1071,12 @@ fun DocumentViewerScreen(
                                                              }
                                                          }
                                                      }, 100);
-                                                 };
-                                             })();
-                                         """.trimIndent()
+                                                  };
+                                                  
+                                                  // Initial mask check
+                                                  setTimeout(window.updateMask, 100);
+                                              })();
+                                          """.trimIndent()
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
                                             webViewRef?.postDelayed({
@@ -991,6 +1303,24 @@ fun DocumentViewerScreen(
                                   }
                              }
                           )
+                          if (uiState.pagingMode == 1 && bottomMaskHeight > 0f) {
+                               Box(
+                                   modifier = Modifier
+                                       .align(Alignment.BottomStart)
+                                       .fillMaxWidth()
+                                       .height(bottomMaskHeight.dp)
+                                                       .background(targetDocColor)
+                                               )
+                                          }
+                                          if (uiState.pagingMode == 1 && topMaskHeight > 0f) {
+                                               Box(
+                                                   modifier = Modifier
+                                                       .align(Alignment.TopStart) // Top Mask
+                                                       .fillMaxWidth()
+                                                       .height(topMaskHeight.dp)
+                                                       .background(targetDocColor)
+                                               )
+                                          }
                                          }
             }
         }

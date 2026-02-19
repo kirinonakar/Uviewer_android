@@ -142,4 +142,8 @@
     <string name="prev_file">Previous File</string>
     <string name="next_file">Next File</string>
     <string name="volume_key_paging">Volume keys turn pages</string>
+    <string name="paging_mode">Paging Mode</string>
+    <string name="paging_mode_overlap">Leave one line (Default)</string>
+    <string name="paging_mode_complete">Completely Turn</string>
+    <string name="select_paging_mode">Select Paging Mode</string>
 </resources>

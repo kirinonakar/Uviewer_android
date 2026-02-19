@@ -118,4 +118,8 @@
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
     <string name="volume_key_paging">音量ボタンでページめくり</string>
+    <string name="paging_mode">ページめくりモード</string>
+    <string name="paging_mode_overlap">一行重ねて表示</string>
+    <string name="paging_mode_complete">完全にめくる</string>
+    <string name="select_paging_mode">ページめくりモード選択</string>
 </resources>
