@@ -29,7 +29,7 @@ object AozoraParser {
     
     // Convert Aozora ruby to HTML <ruby>
     
-    fun parse(text: String, lineOffset: Int = 0, imageRootPath: String = ""): String {
+    fun parse(text: String, lineOffset: Int = 0, imageRootPath: String = "", isVertical: Boolean = false): String {
         // 1. 텍스트 내의 <img ...> 태그를 찾아서 임시 마커로 변경 (보호 처리)
         //    이렇게 안 하면 replace("<", "&lt;") 때 태그가 다 깨짐
         val imgTagMap = mutableMapOf<String, String>()
@@ -127,6 +127,24 @@ object AozoraParser {
                     targetWord.map { char ->
                         "<ruby class=\"bouten\">$char<rt>﹅</rt></ruby>"
                     }.joinToString("")
+                }
+            }
+
+            // 縦中横 (tate-chu-yoko) 처리: ［＃「XX」は縦中横］
+            val tcyRegex = Regex("［＃「(.+?)」は縦中横］")
+            val tcyMatches = tcyRegex.findAll(l).toList()
+            tcyMatches.forEach { match ->
+                val targetWord = match.groupValues[1]
+                val fullTag = match.value
+                val safeWord = Pattern.quote(targetWord)
+                val safeTag = Pattern.quote(fullTag)
+                val targetPattern = Regex("$safeWord$safeTag")
+                l = l.replace(targetPattern) {
+                    if (isVertical) {
+                        "<span class=\"tcy\">$targetWord</span>"
+                    } else {
+                        targetWord
+                    }
                 }
             }
 
@@ -427,6 +445,10 @@ object AozoraParser {
                     }
                     .small-text-2 {
                         font-size: 0.7em !important;
+                    }
+                    .tcy {
+                        text-combine-upright: all;
+                        -webkit-text-combine: horizontal;
                     }
                     img {
                         max-width: 100% !important;

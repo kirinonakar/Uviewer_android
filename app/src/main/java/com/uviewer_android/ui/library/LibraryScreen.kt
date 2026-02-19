@@ -159,9 +159,9 @@ fun LibraryScreen(
             )
         },
         floatingActionButton = {
-            // Show Add Server FAB if on Remote tab and at the root or server list
-            val isRemoteRoot = selectedTab == 1 && (uiState.serverId == null || uiState.currentPath == "WebDAV" || uiState.currentPath == "/")
-            if (isRemoteRoot) {
+            // Show Add Server FAB only when on server list (not browsing a server)
+            val isServerList = selectedTab == 1 && (uiState.serverId == null || uiState.currentPath == "WebDAV")
+            if (isServerList) {
                 FloatingActionButton(onClick = { showAddServerDialog = true }) {
                     Icon(Icons.Default.Add, contentDescription = "Add Server")
                 }

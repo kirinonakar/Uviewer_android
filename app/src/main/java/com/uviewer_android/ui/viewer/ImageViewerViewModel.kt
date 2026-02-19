@@ -349,7 +349,23 @@ enum class ViewMode {
                              if (images.isNotEmpty()) savedIndex.coerceIn(0, images.size - 1) else 0
                          }
                     } else {
-                        val found = images.indexOfFirst { it.path.trimEnd('/') == normalizedFilePath }
+                        // Try full path match first
+                        val normalizedFile = File(normalizedFilePath)
+                        var found = images.indexOfFirst { 
+                            File(it.path).absolutePath == normalizedFile.absolutePath 
+                        }
+                        // Fallback: case-insensitive path match
+                        if (found == -1) {
+                            found = images.indexOfFirst { 
+                                it.path.trimEnd('/').equals(normalizedFilePath, ignoreCase = true) 
+                            }
+                        }
+                        // Fallback: match by filename (handles URL encoding/decoding mismatches)
+                        if (found == -1) {
+                            val fileName = normalizedFilePath.substringAfterLast('/').substringAfterLast('\\')
+                            found = images.indexOfFirst { it.name.equals(fileName, ignoreCase = true) }
+                        }
+                        Log.d("ImageViewer", "Path match: normalizedFilePath=$normalizedFilePath, found=$found, savedIndex=$savedIndex")
                         if (found != -1) found else savedIndex.coerceIn(0, images.size - 1)
                     }
                     

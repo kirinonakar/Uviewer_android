@@ -104,12 +104,7 @@ fun ImageViewerScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     var currentPageIndex by remember { mutableIntStateOf(initialIndex ?: 0) }
 
-    // Sync current page index when document is loaded
-    LaunchedEffect(uiState.initialIndex) {
-        if (uiState.images.isNotEmpty()) {
-            currentPageIndex = uiState.initialIndex
-        }
-    }
+    // Sync is done after pagerState is created (see below)
 
     // Status Bar Logic
     val isLightAppTheme = MaterialTheme.colorScheme.background.luminance() > 0.5f
@@ -204,12 +199,12 @@ fun ImageViewerScreen(
         var globalScale by remember { mutableFloatStateOf(1f) }
         // currentPageIndex hoisted to top level
 
-        // Use key to recreate pagerState when toggling view mode to ensure immediate mapping
-        val pagerState = key(viewMode) {
+        // Recreate pagerState when viewMode or initialIndex changes, so pager starts at correct page
+        val pagerState = key(viewMode, uiState.initialIndex) {
             val initial = when (viewMode) {
-                ViewMode.SINGLE -> currentPageIndex
-                ViewMode.DUAL -> currentPageIndex / 2
-                ViewMode.SPLIT -> currentPageIndex * 2
+                ViewMode.SINGLE -> uiState.initialIndex
+                ViewMode.DUAL -> uiState.initialIndex / 2
+                ViewMode.SPLIT -> uiState.initialIndex * 2
             }
             rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
                 pageCount

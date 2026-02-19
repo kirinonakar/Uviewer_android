@@ -517,7 +517,7 @@ class DocumentViewerViewModel(
                     var htmlBody = if (currentFilePath.endsWith(".md", ignoreCase = true)) {
                         convertMarkdownToHtml(chunkText)
                     } else {
-                        AozoraParser.parse(chunkText, globalLineOffset, imageRootPath)
+                        AozoraParser.parse(chunkText, globalLineOffset, imageRootPath, _uiState.value.isVertical)
                     }
                     
                     if (!isWebDavContext) {
