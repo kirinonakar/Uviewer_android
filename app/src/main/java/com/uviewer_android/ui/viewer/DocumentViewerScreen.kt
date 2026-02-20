@@ -83,6 +83,8 @@ fun DocumentViewerScreen(
     var isNavigating by remember { mutableStateOf(false) }
     var bottomMaskHeight by remember { mutableFloatStateOf(0f) }
     var topMaskHeight by remember { mutableFloatStateOf(0f) }
+    var leftMaskWidth by remember { mutableFloatStateOf(0f) }
+    var rightMaskWidth by remember { mutableFloatStateOf(0f) }
     
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
@@ -525,6 +527,20 @@ fun DocumentViewerScreen(
                                              topMaskHeight = height
                                         }
                                     }
+
+                                    @android.webkit.JavascriptInterface
+                                    fun updateLeftMask(width: Float) {
+                                        post {
+                                             leftMaskWidth = width
+                                        }
+                                    }
+                                    
+                                    @android.webkit.JavascriptInterface
+                                    fun updateRightMask(width: Float) {
+                                        post {
+                                             rightMaskWidth = width
+                                        }
+                                    }
                                 }, "Android")
 
                                 settings.allowFileAccess = true
@@ -662,8 +678,15 @@ fun DocumentViewerScreen(
                                                      var height = window.innerHeight;
                                                      var points = [];
                                                      if (isVertical) {
-                                                         var rx = width - 15; 
-                                                         points = [{x: rx, y: 30}, {x: rx, y: height * 0.2}, {x: rx, y: height * 0.5}, {x: rx - 40, y: height * 0.2}];
+                                                         var offsetsX = [5, 15, 30, 50, 80];
+                                                         var offsetsY = [0.1, 0.25, 0.5, 0.75, 0.9];
+                                                         for (var i = 0; i < offsetsX.length; i++) {
+                                                             for (var j = 0; j < offsetsY.length; j++) {
+                                                                 if (width - offsetsX[i] > 0) {
+                                                                     points.push({x: width - offsetsX[i], y: height * offsetsY[j]});
+                                                                 }
+                                                             }
+                                                         }
                                                      } else {
                                                          var cx = width / 2;
                                                          var ty = 20;
@@ -690,356 +713,397 @@ fun DocumentViewerScreen(
                                                      }
                                                  };
 
-                                                 window.findSafeBottom = function() {
-                                                     if (isVertical) {
-                                                         // Vertical mode logic (simplified for now as user issue is likely horizontal paragraphs)
-                                                         var width = window.innerWidth;
-                                                         // Scan from right to left? Vertical-rl means content flows right to left.
-                                                         // Lines are vertical columns. A "cut off" means a column at the left edge is partially visible?
-                                                         // Or at the bottom? Vertical text flows horizontally.
-                                                         // "Cut off line" in vertical mode usually means the left-most line is cut off.
-                                                         // Mask should be on the LEFT. But current mask implementation is BOTTOM.
-                                                         
-                                                         // Assuming the request "empty space" is primarily about Horizontal mode where 'div' blocks were hidden.
-                                                         // For vertical, we stick to element-based for now or implement similar rect logic if needed.
-                                                         // But let's apply the rect logic to the element at the edge.
-                                                         
-                                                         // If isVertical, we scroll horizontally.
-                                                         // We need to find the 'safe' Left position.
-                                                         var leftEdge = 0;
-                                                         var lastVisibleLeft = 0;
-                                                         
-                                                         // For vertical-rl, coordinates: x decreases as we read.
-                                                         // Visible area: [0, window.innerWidth]
-                                                         // Future/Next content is at x < 0.
-                                                         // Past content is at x > width.
-                                                         // We scroll negative X to go next.
-                                                         
-                                                         // We want to find the last fully visible line on the LEFT side (closest to 0).
-                                                         // Iterate elements at x=0..50
-                                                         
-                                                         return window.innerWidth; // Fallback
-                                                     }
+                                                 window.getVisualLines = function() {
+                                                     var w = window.innerWidth;
+                                                     var h = window.innerHeight;
+                                                     var textLines = [];
+                                                     var seenRuby = new Set();
+                                                     var padding = isVertical ? w : h;
                                                      
-                                                     var height = window.innerHeight;
-                                                     var bottomLimit = height;
-                                                     
-                                                     // Find element intersecting or just above the bottom
-                                                     var center = window.innerWidth / 2;
-                                                     // Scan up from bottom
-                                                     var el = null;
-                                                     for (var y = height - 1; y >= 0; y -= 10) {
-                                                         el = document.elementFromPoint(center, y);
-                                                         if (el && el.tagName !== 'HTML' && el.tagName !== 'BODY') break;
-                                                     }
-                                                     
-                                                     if (el) {
-                                                         // Find the specific line within this element
-                                                         var range = document.createRange();
-                                                         range.selectNodeContents(el);
-                                                         var rects = range.getClientRects();
-                                                         
-                                                         var found = false;
-                                                         // We want the last rect that ends before 'height'
-                                                         for (var i = rects.length - 1; i >= 0; i--) {
-                                                             if (rects[i].bottom <= height) {
-                                                                 bottomLimit = rects[i].bottom;
-                                                                 found = true;
-                                                                 break;
+                                                     var walker = document.createTreeWalker(
+                                                         document.body,
+                                                         NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+                                                         {
+                                                             acceptNode: function(node) {
+                                                                 if (node.nodeType === 1) {
+                                                                     if (node.tagName === 'IMG') return NodeFilter.FILTER_REJECT;
+                                                                     var tag = node.tagName;
+                                                                     if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
+                                                                         var r = node.getBoundingClientRect();
+                                                                         if (!isVertical) {
+                                                                             if (r.bottom < -padding || r.top > h + padding) return NodeFilter.FILTER_REJECT;
+                                                                         } else {
+                                                                             if (r.left > w + padding || r.right < -padding) return NodeFilter.FILTER_REJECT;
+                                                                         }
+                                                                     }
+                                                                     return NodeFilter.FILTER_SKIP;
+                                                                 }
+                                                                 if (node.nodeType === 3 && node.nodeValue.trim().length > 0) return NodeFilter.FILTER_ACCEPT;
+                                                                 return NodeFilter.FILTER_SKIP;
                                                              }
                                                          }
-                                                         
-                                                         // If no rect found in this element fits (e.g. element top > height, shouldn't happen with scan),
-                                                         // or single huge line cut off -> look at previous element? 
-                                                         // Or just accept we cut it?
-                                                         // If found is false, it means the *entire* text of 'el' visible so far is actually cut off (top line > bottom?).
-                                                         // In that case, we should essentially mask 'el' entirely (bottomLimit = el.getBoundingClientRect().top).
-                                                         if (!found && rects.length > 0) {
-                                                             bottomLimit = el.getBoundingClientRect().top;
-                                                             if (bottomLimit < 0) bottomLimit = 0; // Don't go neg
-                                                         } else if (!found) {
-                                                             // No rects? maybe image or block
-                                                             var r = el.getBoundingClientRect();
-                                                             if (r.bottom > height) bottomLimit = r.top;
-                                                             else bottomLimit = r.bottom;
+                                                     );
+                                                     
+                                                     var node;
+                                                     while ((node = walker.nextNode())) {
+                                                         var el = node.parentElement;
+                                                         if (!el) continue;
+                                                         var rubyParent = el.closest('ruby');
+                                                         if (rubyParent) {
+                                                             if (seenRuby.has(rubyParent)) continue;
+                                                             seenRuby.add(rubyParent);
+                                                             var rubyWalker = document.createTreeWalker(rubyParent, NodeFilter.SHOW_TEXT, null);
+                                                             var rNode;
+                                                             var rRects = [];
+                                                             while ((rNode = rubyWalker.nextNode())) {
+                                                                 if (rNode.nodeValue.trim().length === 0) continue;
+                                                                 var range = document.createRange();
+                                                                 range.selectNodeContents(rNode);
+                                                                 var rects = range.getClientRects();
+                                                                 for (var i = 0; i < rects.length; i++) {
+                                                                     if (rects[i].width > 0 && rects[i].height > 0) rRects.push({
+                                                                         top: rects[i].top, bottom: rects[i].bottom, left: rects[i].left, right: rects[i].right
+                                                                     });
+                                                                 }
+                                                             }
+                                                             if (rRects.length > 0) {
+                                                                 var parts = [];
+                                                                 for (var i = 0; i < rRects.length; i++) {
+                                                                     var current = rRects[i];
+                                                                     var added = false;
+                                                                     for (var j = 0; j < parts.length; j++) {
+                                                                         var p = parts[j];
+                                                                         var hOverlap = Math.min(p.right, current.right) - Math.max(p.left, current.left);
+                                                                         var vOverlap = Math.min(p.bottom, current.bottom) - Math.max(p.top, current.top);
+                                                                         var isSamePart = false;
+                                                                         if (!isVertical) {
+                                                                             if (hOverlap > -10 && vOverlap > -10) isSamePart = true;
+                                                                         } else {
+                                                                             if (vOverlap > -10 && hOverlap > -10) isSamePart = true;
+                                                                         }
+                                                                         if (isSamePart) {
+                                                                             p.top = Math.min(p.top, current.top);
+                                                                             p.bottom = Math.max(p.bottom, current.bottom);
+                                                                             p.left = Math.min(p.left, current.left);
+                                                                             p.right = Math.max(p.right, current.right);
+                                                                             added = true;
+                                                                             break;
+                                                                         }
+                                                                     }
+                                                                     if (!added) {
+                                                                         parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right });
+                                                                     }
+                                                                 }
+                                                                 for (var i = 0; i < parts.length; i++) {
+                                                                     textLines.push(parts[i]);
+                                                                 }
+                                                             }
+                                                         } else {
+                                                             var range = document.createRange();
+                                                             range.selectNodeContents(node);
+                                                             var rects = range.getClientRects();
+                                                             for (var i = 0; i < rects.length; i++) {
+                                                                 var r = rects[i];
+                                                                 if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+                                                             }
                                                          }
                                                      }
-                                                     return bottomLimit;
+                                                     
+                                                     if (!isVertical) {
+                                                         textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
+                                                         var lines = [];
+                                                         if (textLines.length === 0) return lines;
+                                                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
+                                                         for (var i = 1; i < textLines.length; i++) {
+                                                             var r = textLines[i];
+                                                             var vOverlap = Math.min(currentLine.bottom, r.bottom) - Math.max(currentLine.top, r.top);
+                                                             var minHeight = Math.min(currentLine.bottom - currentLine.top, r.bottom - r.top);
+                                                             if (vOverlap > Math.max(2, minHeight * 0.6)) { 
+                                                                 currentLine.top = Math.min(currentLine.top, r.top);
+                                                                 currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
+                                                                 currentLine.left = Math.min(currentLine.left, r.left);
+                                                                 currentLine.right = Math.max(currentLine.right, r.right);
+                                                             } else {
+                                                                 lines.push(currentLine);
+                                                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+                                                             }
+                                                         }
+                                                         lines.push(currentLine);
+                                                         
+                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                         for (var k = 0; k < lines.length; k++) {
+                                                             var l = lines[k];
+                                                             var expectedTop = l.bottom - FS * 1.6;
+                                                             var expectedBottom = l.bottom + FS * 0.2;
+                                                             l.top = Math.min(l.top, expectedTop);
+                                                             l.bottom = Math.max(l.bottom, expectedBottom);
+                                                         }
+                                                         return lines;
+                                                     } else {
+                                                         textLines.sort(function(a, b) { var diff = b.right - a.right; return diff !== 0 ? diff : a.top - b.top; });
+                                                         var lines = [];
+                                                         if (textLines.length === 0) return lines;
+                                                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
+                                                         for (var i = 1; i < textLines.length; i++) {
+                                                             var r = textLines[i];
+                                                             var hOverlap = Math.min(currentLine.right, r.right) - Math.max(currentLine.left, r.left);
+                                                             var minWidth = Math.min(currentLine.right - currentLine.left, r.right - r.left);
+                                                             if (hOverlap > Math.max(2, minWidth * 0.6)) { 
+                                                                 currentLine.top = Math.min(currentLine.top, r.top);
+                                                                 currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
+                                                                 currentLine.left = Math.min(currentLine.left, r.left);
+                                                                 currentLine.right = Math.max(currentLine.right, r.right);
+                                                             } else {
+                                                                 lines.push(currentLine);
+                                                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+                                                             }
+                                                         }
+                                                         lines.push(currentLine);
+                                                         
+                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                         for (var k = 0; k < lines.length; k++) {
+                                                             var l = lines[k];
+                                                             var expectedLeft = l.left - FS * 0.2;
+                                                             var expectedRight = l.left + FS * 1.6;
+                                                             l.left = Math.min(l.left, expectedLeft);
+                                                             l.right = Math.max(l.right, expectedRight);
+                                                         }
+                                                         return lines;
+                                                     }
+                                                 };
+
+                                                 window.calculateMasks = function() {
+                                                     var masks = { top: 0, bottom: 0, left: 0, right: 0 };
+                                                     if (pagingMode !== 1) return masks;
+                                                     var lines = window.getVisualLines();
+                                                     if (lines.length === 0) return masks;
+                                                     var w = window.innerWidth;
+                                                     var h = window.innerHeight;
+                                                     
+                                                     if (!isVertical) {
+                                                         var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                                         if (visible.length === 0) return masks;
+                                                         
+                                                         var first = visible[0];
+                                                         if (first.top < -2 && first.bottom > 0) {
+                                                             masks.top = Math.min(h, Math.ceil(first.bottom));
+                                                         }
+                                                         
+                                                         var last = visible[visible.length - 1];
+                                                         if (last.bottom > h + 2 && last.top < h) {
+                                                             masks.bottom = Math.min(h, Math.ceil(h - last.top));
+                                                         }
+                                                     } else {
+                                                         var visible = lines.filter(function(l) { return l.right > -2 && l.left < w + 2; });
+                                                         if (visible.length === 0) return masks;
+                                                         
+                                                         var first = visible[0];
+                                                         if (first.right > w + 2 && first.left < w) {
+                                                             masks.right = Math.min(w, Math.ceil(w - first.left));
+                                                         }
+                                                         
+                                                         var last = visible[visible.length - 1];
+                                                         if (last.left < -2 && last.right > 0) {
+                                                             masks.left = Math.min(w, Math.ceil(last.right));
+                                                         }
+                                                     }
+                                                     
+                                                     if (window._scrollDir === 1) {
+                                                         masks.top = 0;
+                                                         masks.right = 0;
+                                                     } else if (window._scrollDir === -1) {
+                                                         masks.bottom = 0;
+                                                         masks.left = 0;
+                                                     }
+                                                     
+                                                     return masks;
                                                  };
 
                                                  window.updateMask = function() {
-                                                     if (pagingMode !== 1 || isVertical) {
+                                                     if (pagingMode !== 1) {
                                                          Android.updateBottomMask(0);
                                                          Android.updateTopMask(0);
+                                                         Android.updateLeftMask(0);
+                                                         Android.updateRightMask(0);
                                                          return;
                                                      }
-                                                     
-                                                     // Bottom Mask
-                                                     var safeBottom = window.findSafeBottom();
-                                                     var maskH = window.innerHeight - safeBottom;
-                                                     if (maskH < 0) maskH = 0;
-                                                     Android.updateBottomMask(maskH);
-                                                     
-                                                     // Top Mask: recalculate on every updateMask call so it stays
-                                                     // accurate after any scroll (manual or programmatic).
-                                                     var topCut = window.findSafeTop();
-                                                     Android.updateTopMask(topCut > 0 ? topCut : 0);
-                                                 };
-                                                 
-                                                 window.findSafeTop = function() {
-                                                     // Check if the top visual (wrapped) line is cut off (rect.top < 0).
-                                                     // Uses Range.getClientRects() so each wrap of a long line is a separate rect.
-                                                     var x = window.innerWidth / 2;
-                                                     var checked = new Set();
-                                                     for (var y = 0; y < 80; y += 4) {
-                                                         var el = document.elementFromPoint(x, y);
-                                                         if (!el || el.tagName === 'HTML' || el.tagName === 'BODY') continue;
-                                                         if (checked.has(el)) continue;
-                                                         checked.add(el);
-
-                                                         var range = document.createRange();
-                                                         range.selectNodeContents(el);
-                                                         var rects = range.getClientRects();
-                                                         // Sort by top so we process visual order
-                                                         var sorted = Array.from(rects).sort(function(a,b){ return a.top - b.top; });
-                                                         for (var i = 0; i < sorted.length; i++) {
-                                                             var r = sorted[i];
-                                                             if (r.top < 0 && r.bottom > 0) {
-                                                                 // This visual line is partially above the viewport.
-                                                                 // Mask from 0 down to r.bottom to hide the cut portion.
-                                                                 return r.bottom;
-                                                             }
-                                                             if (r.top >= 0) return 0; // First fully-visible line – no cut
-                                                         }
-                                                         // Fallback: element itself extends above viewport
-                                                         var er = el.getBoundingClientRect();
-                                                         if (er.top < 0 && er.bottom > 0) return er.bottom;
-                                                     }
-                                                     return 0;
+                                                     var masks = window.calculateMasks();
+                                                     Android.updateTopMask(masks.top > 0 ? masks.top : 0);
+                                                     Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
+                                                     Android.updateLeftMask(masks.left > 0 ? masks.left : 0);
+                                                     Android.updateRightMask(masks.right > 0 ? masks.right : 0);
                                                  };
 
                                                  window.pageDown = function() {
-                                                      if (pagingMode === 1 && !isVertical) {
-                                                          // Reset Top Mask
-                                                          Android.updateTopMask(0);
-                                                          
-                                                          var safeBottom = window.findSafeBottom();
-                                                          // safeBottom is relative to viewport top.
-                                                          // To put the "next line" (starts at safeBottom) at the top, we scroll by safeBottom.
-                                                          
-                                                          if (safeBottom < 50) { 
-                                                              // Edge case: Top of screen is already cutting off? 
-                                                              // Or mask is huge? Force min scroll.
-                                                              window.scrollBy({ top: window.innerHeight * 0.9, behavior: 'instant' });
-                                                          } else {
-                                                              window.scrollBy({ top: safeBottom, behavior: 'instant' });
-                                                          }
-                                                          
-                                                          window.detectAndReportLine();
-                                                          setTimeout(window.updateMask, 50);
-                                                          
-                                                          // Check for autoload
-                                                          var scrollPosition = window.innerHeight + window.pageYOffset;
-                                                          var bottomPosition = document.documentElement.scrollHeight;
-                                                          if (scrollPosition >= bottomPosition - 5) Android.autoLoadNext();
-                                                          return;
-                                                      }
-
-                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
-                                                      var overlap = 40;
-                                                      var moveSize = pageSize - overlap;
-                                                      if (isVertical) {
-                                                          var oldX = window.pageXOffset;
-                                                          window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                                                          if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadNext();
-                                                      } else {
-                                                          var oldY = window.pageYOffset;
-                                                          window.scrollBy({ top: moveSize, behavior: 'instant' });
-                                                          if (Math.abs(window.pageYOffset - oldY) < 10) Android.autoLoadNext();
-                                                      }
-                                                      window.detectAndReportLine();
-                                                      setTimeout(window.updateMask, 50);
-                                                  };
-
-
-                                                 window.findVisualLineAt = function(y) {
-                                                     // Returns the visual-line rect (one wrap) that contains y.
-                                                     // Uses Range.getClientRects() so wrapped long lines each get their own rect.
-                                                     var x = window.innerWidth / 2;
-                                                     var checked = new Set();
-                                                     for (var searchY = y; searchY < y + 40; searchY += 4) {
-                                                         var el = document.elementFromPoint(x, searchY);
-                                                         if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') continue;
-                                                         if (checked.has(el)) continue;
-                                                         checked.add(el);
-
-                                                         var range = document.createRange();
-                                                         range.selectNodeContents(el);
-                                                         var rects = range.getClientRects();
-                                                         for (var i = 0; i < rects.length; i++) {
-                                                             var r = rects[i];
-                                                             if (searchY >= r.top && searchY < r.bottom) return r;
+                                                     window._scrollDir = 1;
+                                                     if (pagingMode === 1) {
+                                                         var lines = window.getVisualLines();
+                                                         var w = window.innerWidth;
+                                                         var h = window.innerHeight;
+                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                         var gap = FS * 0.8;
+                                                         
+                                                         if (!isVertical) {
+                                                             var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                                             var scrollDelta = h;
+                                                             if (visible.length > 0) {
+                                                                 var last = visible[visible.length - 1];
+                                                                 if (last.bottom > h + 2 && last.top < h) {
+                                                                     scrollDelta = last.top - gap;
+                                                                 } else {
+                                                                     var idx = lines.indexOf(last);
+                                                                     if (idx >= 0 && idx < lines.length - 1) {
+                                                                         scrollDelta = lines[idx + 1].top - gap;
+                                                                     } else {
+                                                                         scrollDelta = h;
+                                                                     }
+                                                                 }
+                                                             } else if (lines.length > 0) {
+                                                                 var idx = lines.findIndex(function(l) { return l.top >= h; });
+                                                                 if (idx >= 0) scrollDelta = lines[idx].top - gap;
+                                                             }
+                                                             scrollDelta = Math.min(scrollDelta, h);
+                                                             window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+                                                         } else {
+                                                             var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+                                                             var scrollDelta = -w;
+                                                             if (visible.length > 0) {
+                                                                 var last = visible[visible.length - 1];
+                                                                 if (last.left < -2 && last.right > 0) {
+                                                                     var targetRight = last.right + gap;
+                                                                     scrollDelta = targetRight - w;
+                                                                 } else {
+                                                                     var idx = lines.indexOf(last);
+                                                                     if (idx >= 0 && idx < lines.length - 1) {
+                                                                         var targetRight = lines[idx + 1].right + gap;
+                                                                         scrollDelta = targetRight - w;
+                                                                     } else {
+                                                                         scrollDelta = -w;
+                                                                     }
+                                                                 }
+                                                             } else if (lines.length > 0) {
+                                                                 var idx = lines.findIndex(function(l) { return l.left <= 0; });
+                                                                 if (idx >= 0) {
+                                                                     var targetRight = lines[idx].right + gap;
+                                                                     scrollDelta = targetRight - w;
+                                                                 }
+                                                             }
+                                                             scrollDelta = Math.max(scrollDelta, -w);
+                                                             window.scrollBy({ left: scrollDelta, behavior: 'instant' });
                                                          }
-                                                         // Fallback to element bounding rect
-                                                         var er = el.getBoundingClientRect();
-                                                         if (searchY >= er.top && searchY < er.bottom) return er;
+                                                         
+                                                         window.detectAndReportLine();
+                                                         window.updateMask();
+                                                         setTimeout(function() {
+                                                             if (!isVertical) {
+                                                                 if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) Android.autoLoadNext();
+                                                             } else {
+                                                                 if (window.pageXOffset <= -(document.documentElement.scrollWidth - w - 10)) Android.autoLoadNext();
+                                                             }
+                                                         }, 100);
+                                                         return;
                                                      }
-                                                     return null;
+                                                     
+                                                     var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
+                                                     var moveSize = pageSize - 40;
+                                                     if (isVertical) {
+                                                         var oldX = window.pageXOffset;
+                                                         window.scrollBy({ left: -moveSize, behavior: 'instant' });
+                                                         if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadNext();
+                                                     } else {
+                                                         var oldY = window.pageYOffset;
+                                                         window.scrollBy({ top: moveSize, behavior: 'instant' });
+                                                         if (Math.abs(window.pageYOffset - oldY) < 10) Android.autoLoadNext();
+                                                     }
+                                                     window.detectAndReportLine();
+                                                     window.updateMask();
                                                  };
 
-                                                 window.findPreviousVisualLineRect = function(y) {
-                                                     // Returns the visual-line rect (one wrap) whose bottom is just before y.
-                                                     // Uses Range.getClientRects() for per-wrap accuracy.
-                                                     var x = window.innerWidth / 2;
-                                                     var checked = new Set();
-                                                     for (var sy = y - 4; sy > y - 200; sy -= 4) {
-                                                         var el = document.elementFromPoint(x, sy);
-                                                         if (!el || el.tagName === 'BODY' || el.tagName === 'HTML') continue;
-                                                         if (checked.has(el)) continue;
-                                                         checked.add(el);
-
-                                                         var range = document.createRange();
-                                                         range.selectNodeContents(el);
-                                                         var rects = range.getClientRects();
-                                                         var best = null;
-                                                         for (var i = 0; i < rects.length; i++) {
-                                                             var r = rects[i];
-                                                             if (r.bottom <= y + 1) {
-                                                                 if (!best || r.bottom > best.bottom) best = r;
+                                                 window.pageUp = function() {
+                                                     window._scrollDir = -1;
+                                                     if (pagingMode === 1) {
+                                                         var lines = window.getVisualLines();
+                                                         var w = window.innerWidth;
+                                                         var h = window.innerHeight;
+                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                         var gap = FS * 0.8;
+                                                         
+                                                         if (!isVertical) {
+                                                             var firstFullIdx = -1;
+                                                             for (var i = 0; i < lines.length; i++) {
+                                                                 if (lines[i].top >= -2) { firstFullIdx = i; break; }
+                                                             }
+                                                             var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
+                                                             if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
+                                                             
+                                                             if (prevIdx >= 0) {
+                                                                 var targetBottom = lines[prevIdx].bottom;
+                                                                 var topIdx = prevIdx;
+                                                                 for (var i = prevIdx; i >= 0; i--) {
+                                                                     if (targetBottom - lines[i].top <= h - gap) {
+                                                                         topIdx = i;
+                                                                     } else {
+                                                                         break;
+                                                                     }
+                                                                 }
+                                                                 var scrollDelta = lines[topIdx].top - gap;
+                                                                 scrollDelta = Math.max(scrollDelta, -h);
+                                                                 window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+                                                             } else {
+                                                                 window.scrollBy({ top: -h, behavior: 'instant' });
+                                                             }
+                                                         } else {
+                                                             var firstFullIdx = -1;
+                                                             for (var i = 0; i < lines.length; i++) {
+                                                                 if (lines[i].right <= w + 2) { firstFullIdx = i; break; }
+                                                             }
+                                                             var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
+                                                             if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
+                                                             
+                                                             if (prevIdx >= 0) {
+                                                                 var targetLeft = lines[prevIdx].left;
+                                                                 var topIdx = prevIdx;
+                                                                 for (var i = prevIdx; i >= 0; i--) {
+                                                                     if (lines[i].right - targetLeft <= w - gap) {
+                                                                         topIdx = i;
+                                                                     } else {
+                                                                         break;
+                                                                     }
+                                                                 }
+                                                                 var scrollDelta = lines[topIdx].right - w + gap;
+                                                                 scrollDelta = Math.min(scrollDelta, w);
+                                                                 window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+                                                             } else {
+                                                                 window.scrollBy({ left: w, behavior: 'instant' });
                                                              }
                                                          }
-                                                         if (best) return best;
-                                                         // Fallback
-                                                         var er = el.getBoundingClientRect();
-                                                         if (er.bottom <= y + 1) return er;
+                                                         
+                                                         window.detectAndReportLine();
+                                                         window.updateMask();
+                                                         setTimeout(function() {
+                                                             if (!isVertical) {
+                                                                 if (window.pageYOffset <= 0) Android.autoLoadPrev();
+                                                             } else {
+                                                                 if (window.pageXOffset >= -10) Android.autoLoadPrev();
+                                                             }
+                                                         }, 100);
+                                                         return;
                                                      }
-                                                     return null;
+                                                     
+                                                     var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
+                                                     var moveSize = pageSize - 40;
+                                                     if (isVertical) {
+                                                         var oldX = window.pageXOffset;
+                                                         window.scrollBy({ left: moveSize, behavior: 'instant' });
+                                                         if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadPrev();
+                                                     } else {
+                                                         var oldY = window.pageYOffset;
+                                                         window.scrollBy({ top: -moveSize, behavior: 'instant' });
+                                                         if (Math.abs(window.pageYOffset - oldY) < 10 && oldY === 0) Android.autoLoadPrev();
+                                                     }
+                                                     window.detectAndReportLine();
+                                                     setTimeout(window.updateMask, 50);
                                                  };
-
-                                                  window.pageUp = function() {
-                                                      if (pagingMode === 1 && !isVertical) {
-                                                          // ── Collect all visual-line rects from every leaf element
-                                                          //    whose bounding box overlaps the region [-200, viewport bottom].
-                                                          //    Using Range.getClientRects() gives one rect per wrapped line.
-                                                          var allRects = [];
-                                                          var scanTop    = window.pageYOffset - 200;
-                                                          var scanBottom = window.pageYOffset + window.innerHeight;
-
-                                                          // TreeWalker visits all text-bearing leaf nodes efficiently,
-                                                          // without relying on elementFromPoint (which misses gap areas).
-                                                          var walker = document.createTreeWalker(
-                                                              document.body,
-                                                              NodeFilter.SHOW_ELEMENT,
-                                                              {
-                                                                  acceptNode: function(node) {
-                                                                      var r = node.getBoundingClientRect();
-                                                                      // Relative to viewport
-                                                                      if (r.bottom < -200 || r.top > window.innerHeight) {
-                                                                          return NodeFilter.FILTER_REJECT;
-                                                                      }
-                                                                      // Only leaf-ish nodes that actually contain text lines
-                                                                      if (node.children.length === 0 ||
-                                                                          node.tagName === 'P' || node.tagName === 'DIV' ||
-                                                                          node.tagName === 'SPAN' || node.tagName === 'H1' ||
-                                                                          node.tagName === 'H2' || node.tagName === 'H3' ||
-                                                                          node.tagName === 'H4' || node.tagName === 'H5' ||
-                                                                          node.tagName === 'H6') {
-                                                                          return NodeFilter.FILTER_ACCEPT;
-                                                                      }
-                                                                      return NodeFilter.FILTER_SKIP;
-                                                                  }
-                                                              }
-                                                          );
-
-                                                          var seen = new Set();
-                                                          var node;
-                                                          while ((node = walker.nextNode())) {
-                                                              if (seen.has(node)) continue;
-                                                              seen.add(node);
-                                                              try {
-                                                                  var range = document.createRange();
-                                                                  range.selectNodeContents(node);
-                                                                  var rects = range.getClientRects();
-                                                                  for (var i = 0; i < rects.length; i++) {
-                                                                      var r = rects[i];
-                                                                      if (r.width > 0 && r.height > 0) {
-                                                                          allRects.push({ top: r.top, bottom: r.bottom });
-                                                                      }
-                                                                  }
-                                                              } catch(e) {}
-                                                          }
-
-                                                          // Sort by top position, deduplicate overlapping rects
-                                                          allRects.sort(function(a, b) { return a.top - b.top; });
-                                                          var unique = [];
-                                                          for (var i = 0; i < allRects.length; i++) {
-                                                              var r = allRects[i];
-                                                              if (unique.length === 0) { unique.push(r); continue; }
-                                                              var prev = unique[unique.length - 1];
-                                                              // Merge rects that are on the same visual line (top within 2px)
-                                                              if (Math.abs(r.top - prev.top) < 2) {
-                                                                  // Keep the one with larger bottom
-                                                                  if (r.bottom > prev.bottom) prev.bottom = r.bottom;
-                                                              } else {
-                                                                  unique.push(r);
-                                                              }
-                                                          }
-
-                                                          // ── Find the first FULLY visible line (top >= 0)
-                                                          var firstFullIdx = -1;
-                                                          for (var i = 0; i < unique.length; i++) {
-                                                              if (unique[i].top >= 0) { firstFullIdx = i; break; }
-                                                          }
-
-                                                          // ── The target line is exactly one before firstFullLine.
-                                                          //    This guarantees no skip: prev = current_first_line - 1.
-                                                          var prevIdx = (firstFullIdx > 0) ? firstFullIdx - 1
-                                                                      : (firstFullIdx === 0 && unique.length > 0) ? -1
-                                                                      : unique.length - 1;
-
-                                                          var prevRect = (prevIdx >= 0) ? unique[prevIdx] : null;
-
-                                                          if (prevRect) {
-                                                              // ── Scroll so prevRect.bottom lands exactly at viewport bottom.
-                                                              // Math.ceil ensures we never leave a sub-pixel sliver below prevRect
-                                                              // that would trick findSafeBottom() into masking it.
-                                                              var scrollDelta = Math.ceil(prevRect.bottom - window.innerHeight);
-                                                              window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-
-                                                              setTimeout(function() {
-                                                                  // Bottom mask: prevRect is the intentional last line.
-                                                                  // We must NOT re-run findSafeBottom() here because floating-point
-                                                                  // rounding can make prevRect appear "slightly cut" and hide it.
-                                                                  // Reset bottom mask to 0 unconditionally.
-                                                                  Android.updateBottomMask(0);
-
-                                                                  // Top mask: if the very first visible line at top is partially
-                                                                  // cut, cover it with the Compose overlay.
-                                                                  var topCutHeight = window.findSafeTop();
-                                                                  Android.updateTopMask(topCutHeight > 0 ? topCutHeight : 0);
-
-                                                                  window.detectAndReportLine();
-                                                                  if (window.pageYOffset <= 0) Android.autoLoadPrev();
-                                                              }, 10);
-                                                              return;
-                                                          }
-                                                      }
-
-                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
-                                                      var overlap = 40;
-                                                      var moveSize = pageSize - overlap;
-                                                      if (isVertical) {
-                                                          var oldX = window.pageXOffset;
-                                                          window.scrollBy({ left: moveSize, behavior: 'instant' });
-                                                          if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadPrev();
-                                                      } else {
-                                                          var oldY = window.pageYOffset;
-                                                          window.scrollBy({ top: -moveSize, behavior: 'instant' });
-                                                          if (Math.abs(window.pageYOffset - oldY) < 10 && oldY === 0) Android.autoLoadPrev();
-                                                      }
-                                                      window.detectAndReportLine();
-                                                      setTimeout(window.updateMask, 50);
-                                                  };
          
                                                   var scrollTimer = null;
                                                    window.onscroll = function() {
@@ -1303,25 +1367,43 @@ fun DocumentViewerScreen(
                                   }
                              }
                           )
-                          if (uiState.pagingMode == 1 && bottomMaskHeight > 0f) {
-                               Box(
-                                   modifier = Modifier
-                                       .align(Alignment.BottomStart)
-                                       .fillMaxWidth()
-                                       .height(bottomMaskHeight.dp)
-                                                       .background(targetDocColor)
-                                               )
+                          if (uiState.pagingMode == 1 && bottomMaskHeight > 0f && !uiState.isVertical) {
+                                                               Box(
+                                                                   modifier = Modifier
+                                                                       .align(Alignment.BottomStart)
+                                                                       .fillMaxWidth()
+                                                                       .height(bottomMaskHeight.dp)
+                                                                       .background(targetDocColor)
+                                                               )
+                                                          }
+                                                          if (uiState.pagingMode == 1 && topMaskHeight > 0f && !uiState.isVertical) {
+                                                               Box(
+                                                                   modifier = Modifier
+                                                                       .align(Alignment.TopStart) // Top Mask
+                                                                       .fillMaxWidth()
+                                                                       .height(topMaskHeight.dp)
+                                                                       .background(targetDocColor)
+                                                               )
+                                                          }
+                                                          if (uiState.pagingMode == 1 && leftMaskWidth > 0f && uiState.isVertical) {
+                                                               Box(
+                                                                   modifier = Modifier
+                                                                       .align(Alignment.TopStart)
+                                                                       .fillMaxHeight()
+                                                                       .width(leftMaskWidth.dp)
+                                                                       .background(targetDocColor)
+                                                               )
+                                                          }
+                                                          if (uiState.pagingMode == 1 && rightMaskWidth > 0f && uiState.isVertical) {
+                                                               Box(
+                                                                   modifier = Modifier
+                                                                       .align(Alignment.TopEnd)
+                                                                       .fillMaxHeight()
+                                                                       .width(rightMaskWidth.dp)
+                                                                       .background(targetDocColor)
+                                                               )
+                                                          }
                                           }
-                                          if (uiState.pagingMode == 1 && topMaskHeight > 0f) {
-                                               Box(
-                                                   modifier = Modifier
-                                                       .align(Alignment.TopStart) // Top Mask
-                                                       .fillMaxWidth()
-                                                       .height(topMaskHeight.dp)
-                                                       .background(targetDocColor)
-                                               )
-                                          }
-                                         }
             }
         }
     }
