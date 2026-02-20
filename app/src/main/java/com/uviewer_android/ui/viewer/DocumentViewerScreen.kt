@@ -995,11 +995,11 @@ window._scrollDir = 1;
             var absoluteTargetX = originalScrollX + scrollDelta;
             var maxScrollX = document.documentElement.scrollWidth - w; // w로 변경
             
+            var maxScrollLeft = -(w + 100);
             if (absoluteTargetX < -maxScrollX) {
                 scrollDelta = -maxScrollX - originalScrollX;
-            } else if (scrollDelta < -(w - buffer)) {
-                // 수정 3: 최대 이동 거리를 w에서 buffer(15px)만큼 빼서 제한
-                scrollDelta = -(w - buffer);
+            } else if (scrollDelta < maxScrollLeft) {
+                scrollDelta = maxScrollLeft;
             }
             window.scrollBy({ left: scrollDelta, behavior: 'instant' });
         }
@@ -1068,30 +1068,29 @@ window._scrollDir = -1;
                 window.scrollBy({ top: -(h - buffer), behavior: 'instant' });
             }
         } else {
-            var firstFullIdx = -1;
-            for (var i = 0; i < lines.length; i++) {
-                if (lines[i].right <= w + 2) { firstFullIdx = i; break; }
-            }
-            var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
-            if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
-            
-            if (prevIdx >= 0) {
-                var targetLeft = lines[prevIdx].left;
-                var topIdx = prevIdx;
-                for (var i = prevIdx; i >= 0; i--) {
-                    if (lines[i].right - targetLeft <= w - gap) {
-                        topIdx = i;
-                    } else {
-                        break;
-                    }
+            var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+            var scrollDelta = w - buffer;
+            if (visible.length > 0) {
+                var firstVisibleLine = visible[0]; // 맨 오른쪽 줄
+                
+                var prevIdx = lines.indexOf(firstVisibleLine) - 1; // 이전 줄
+                
+                if (prevIdx >= 0) {
+                    var targetLeft = lines[prevIdx].left; // 이전 줄의 왼쪽 위치
+                    // 맨 왼쪽 가장자리(gap만큼 여유)에 표시
+                    scrollDelta = targetLeft - gap;
+                } else {
+                    scrollDelta = w - buffer;
                 }
-                var scrollDelta = lines[topIdx].right - w + gap;
-                // 수정 3: 최대 이동 거리를 w 대신 w - buffer로 제한
-                scrollDelta = Math.min(scrollDelta, w - buffer);
-                window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-            } else {
-                window.scrollBy({ left: w - buffer, behavior: 'instant' });
+            } else if (lines.length > 0) {
+                var idx = lines.findIndex(function(l) { return l.right >= w; });
+                if (idx >= 0) {
+                    scrollDelta = lines[idx].left - gap;
+                }
             }
+            
+            scrollDelta = Math.min(scrollDelta, w + 100);
+            window.scrollBy({ left: scrollDelta, behavior: 'instant' });
         }
         
         window.detectAndReportLine();
