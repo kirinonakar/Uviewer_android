@@ -968,15 +968,16 @@ fun DocumentViewerScreen(
                                                              var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
                                                              var scrollDelta = -w;
                                                              if (visible.length > 0) {
-                                                                 var last = visible[visible.length - 1];
-                                                                 if (last.left < -2 && last.right > 0) {
-                                                                     var targetRight = last.right + gap;
-                                                                     scrollDelta = targetRight - w;
+                                                                 var lastVisibleLine = visible[visible.length - 1];
+                                                                 var targetRight = lastVisibleLine.right;
+                                                                 var isCutOff = lastVisibleLine.left < 0;
+                                                                 
+                                                                 if (isCutOff) {
+                                                                     scrollDelta = targetRight + gap - w;
                                                                  } else {
-                                                                     var idx = lines.indexOf(last);
+                                                                     var idx = lines.indexOf(lastVisibleLine);
                                                                      if (idx >= 0 && idx < lines.length - 1) {
-                                                                         var targetRight = lines[idx + 1].right + gap;
-                                                                         scrollDelta = targetRight - w;
+                                                                         scrollDelta = lines[idx + 1].right + gap - w;
                                                                      } else {
                                                                          scrollDelta = -w;
                                                                      }
@@ -984,11 +985,19 @@ fun DocumentViewerScreen(
                                                              } else if (lines.length > 0) {
                                                                  var idx = lines.findIndex(function(l) { return l.left <= 0; });
                                                                  if (idx >= 0) {
-                                                                     var targetRight = lines[idx].right + gap;
-                                                                     scrollDelta = targetRight - w;
+                                                                     scrollDelta = lines[idx].right + gap - w;
                                                                  }
                                                              }
-                                                             scrollDelta = Math.max(scrollDelta, -w);
+                                                             
+                                                             var originalScrollX = window.pageXOffset;
+                                                             var absoluteTargetX = originalScrollX + scrollDelta;
+                                                             var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
+                                                             
+                                                             if (absoluteTargetX < -maxScrollX) {
+                                                                 scrollDelta = -maxScrollX - originalScrollX;
+                                                             } else if (scrollDelta < -w) {
+                                                                 scrollDelta = -w;
+                                                             }
                                                              window.scrollBy({ left: scrollDelta, behavior: 'instant' });
                                                          }
                                                          
