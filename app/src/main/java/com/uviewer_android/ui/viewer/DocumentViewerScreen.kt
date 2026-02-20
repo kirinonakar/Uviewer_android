@@ -935,84 +935,88 @@ fun DocumentViewerScreen(
                                                  };
 
                                                  window.pageDown = function() {
-                                                     window._scrollDir = 1;
-                                                     if (pagingMode === 1) {
-                                                         var lines = window.getVisualLines();
-                                                         var w = window.innerWidth;
-                                                         var h = window.innerHeight;
-                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                         var gap = FS * 0.8;
-                                                         
-                                                         if (!isVertical) {
-                                                             var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                                                             var scrollDelta = h;
-                                                             if (visible.length > 0) {
-                                                                 var last = visible[visible.length - 1];
-                                                                 if (last.bottom > h + 2 && last.top < h) {
-                                                                     scrollDelta = last.top - gap;
-                                                                 } else {
-                                                                     var idx = lines.indexOf(last);
-                                                                     if (idx >= 0 && idx < lines.length - 1) {
-                                                                         scrollDelta = lines[idx + 1].top - gap;
-                                                                     } else {
-                                                                         scrollDelta = h;
-                                                                     }
-                                                                 }
-                                                             } else if (lines.length > 0) {
-                                                                 var idx = lines.findIndex(function(l) { return l.top >= h; });
-                                                                 if (idx >= 0) scrollDelta = lines[idx].top - gap;
-                                                             }
-                                                             scrollDelta = Math.min(scrollDelta, h);
-                                                             window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-                                                         } else {
-                                                             var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-                                                             var scrollDelta = -w;
-                                                             if (visible.length > 0) {
-                                                                 var lastVisibleLine = visible[visible.length - 1];
-                                                                 var targetRight = lastVisibleLine.right;
-                                                                 var isCutOff = lastVisibleLine.left < 0;
-                                                                 
-                                                                 if (isCutOff) {
-                                                                     scrollDelta = targetRight + gap - w;
-                                                                 } else {
-                                                                     var idx = lines.indexOf(lastVisibleLine);
-                                                                     if (idx >= 0 && idx < lines.length - 1) {
-                                                                         scrollDelta = lines[idx + 1].right + gap - w;
-                                                                     } else {
-                                                                         scrollDelta = -w;
-                                                                     }
-                                                                 }
-                                                             } else if (lines.length > 0) {
-                                                                 var idx = lines.findIndex(function(l) { return l.left <= 0; });
-                                                                 if (idx >= 0) {
-                                                                     scrollDelta = lines[idx].right + gap - w;
-                                                                 }
-                                                             }
-                                                             
-                                                             var originalScrollX = window.pageXOffset;
-                                                             var absoluteTargetX = originalScrollX + scrollDelta;
-                                                             var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
-                                                             
-                                                             if (absoluteTargetX < -maxScrollX) {
-                                                                 scrollDelta = -maxScrollX - originalScrollX;
-                                                             } else if (scrollDelta < -w) {
-                                                                 scrollDelta = -w;
-                                                             }
-                                                             window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-                                                         }
-                                                         
-                                                         window.detectAndReportLine();
-                                                         window.updateMask();
-                                                         setTimeout(function() {
-                                                             if (!isVertical) {
-                                                                 if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) Android.autoLoadNext();
-                                                             } else {
-                                                                 if (window.pageXOffset <= -(document.documentElement.scrollWidth - w - 10)) Android.autoLoadNext();
-                                                             }
-                                                         }, 100);
-                                                         return;
-                                                     }
+window._scrollDir = 1;
+    if (pagingMode === 1) {
+        var lines = window.getVisualLines();
+        // 수정 1: window.innerWidth 대신 clientWidth를 사용하여 더 정확한 화면 폭 계산
+        var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+        var h = window.innerHeight;
+        var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+        var gap = FS * 0.8;
+        var buffer = 15; // 수정 2: 오차 방지용 안전 버퍼 추가
+        
+        if (!isVertical) {
+            var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+            var scrollDelta = h;
+            if (visible.length > 0) {
+                var last = visible[visible.length - 1];
+                if (last.bottom > h + 2 && last.top < h) {
+                    scrollDelta = last.top - gap;
+                } else {
+                    var idx = lines.indexOf(last);
+                    if (idx >= 0 && idx < lines.length - 1) {
+                        scrollDelta = lines[idx + 1].top - gap;
+                    } else {
+                        scrollDelta = h;
+                    }
+                }
+            } else if (lines.length > 0) {
+                var idx = lines.findIndex(function(l) { return l.top >= h; });
+                if (idx >= 0) scrollDelta = lines[idx].top - gap;
+            }
+            scrollDelta = Math.min(scrollDelta, h - buffer); // 버퍼 적용
+            window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+        } else {
+            var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+            var scrollDelta = -w;
+            if (visible.length > 0) {
+                var lastVisibleLine = visible[visible.length - 1];
+                var targetRight = lastVisibleLine.right;
+                var isCutOff = lastVisibleLine.left < 0;
+                
+                if (isCutOff) {
+                    scrollDelta = targetRight + gap - w;
+                } else {
+                    var idx = lines.indexOf(lastVisibleLine);
+                    if (idx >= 0 && idx < lines.length - 1) {
+                        scrollDelta = lines[idx + 1].right + gap - w;
+                    } else {
+                        scrollDelta = -w;
+                    }
+                }
+            } else if (lines.length > 0) {
+                var idx = lines.findIndex(function(l) { return l.left <= 0; });
+                if (idx >= 0) {
+                    scrollDelta = lines[idx].right + gap - w;
+                }
+            }
+            
+            var originalScrollX = window.pageXOffset;
+            var absoluteTargetX = originalScrollX + scrollDelta;
+            var maxScrollX = document.documentElement.scrollWidth - w; // w로 변경
+            
+            if (absoluteTargetX < -maxScrollX) {
+                scrollDelta = -maxScrollX - originalScrollX;
+            } else if (scrollDelta < -(w - buffer)) {
+                // 수정 3: 최대 이동 거리를 w에서 buffer(15px)만큼 빼서 제한
+                scrollDelta = -(w - buffer);
+            }
+            window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+        }
+        
+        window.detectAndReportLine();
+        window.updateMask();
+        setTimeout(function() {
+            if (!isVertical) {
+                if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) Android.autoLoadNext();
+            } else {
+                if (window.pageXOffset <= -(document.documentElement.scrollWidth - w - 10)) Android.autoLoadNext();
+            }
+        }, 100);
+        return;
+    }
                                                      
+                                                     // pagingMode !== 1 인 경우 (한 줄 남기기 모드)
                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
                                                      var moveSize = pageSize - 40;
                                                      if (isVertical) {
@@ -1029,76 +1033,80 @@ fun DocumentViewerScreen(
                                                  };
 
                                                  window.pageUp = function() {
-                                                     window._scrollDir = -1;
-                                                     if (pagingMode === 1) {
-                                                         var lines = window.getVisualLines();
-                                                         var w = window.innerWidth;
-                                                         var h = window.innerHeight;
-                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                         var gap = FS * 0.8;
-                                                         
-                                                         if (!isVertical) {
-                                                             var firstFullIdx = -1;
-                                                             for (var i = 0; i < lines.length; i++) {
-                                                                 if (lines[i].top >= -2) { firstFullIdx = i; break; }
-                                                             }
-                                                             var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
-                                                             if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
-                                                             
-                                                             if (prevIdx >= 0) {
-                                                                 var targetBottom = lines[prevIdx].bottom;
-                                                                 var topIdx = prevIdx;
-                                                                 for (var i = prevIdx; i >= 0; i--) {
-                                                                     if (targetBottom - lines[i].top <= h - gap) {
-                                                                         topIdx = i;
-                                                                     } else {
-                                                                         break;
-                                                                     }
-                                                                 }
-                                                                 var scrollDelta = lines[topIdx].top - gap;
-                                                                 scrollDelta = Math.max(scrollDelta, -h);
-                                                                 window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-                                                             } else {
-                                                                 window.scrollBy({ top: -h, behavior: 'instant' });
-                                                             }
-                                                         } else {
-                                                             var firstFullIdx = -1;
-                                                             for (var i = 0; i < lines.length; i++) {
-                                                                 if (lines[i].right <= w + 2) { firstFullIdx = i; break; }
-                                                             }
-                                                             var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
-                                                             if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
-                                                             
-                                                             if (prevIdx >= 0) {
-                                                                 var targetLeft = lines[prevIdx].left;
-                                                                 var topIdx = prevIdx;
-                                                                 for (var i = prevIdx; i >= 0; i--) {
-                                                                     if (lines[i].right - targetLeft <= w - gap) {
-                                                                         topIdx = i;
-                                                                     } else {
-                                                                         break;
-                                                                     }
-                                                                 }
-                                                                 var scrollDelta = lines[topIdx].right - w + gap;
-                                                                 scrollDelta = Math.min(scrollDelta, w);
-                                                                 window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-                                                             } else {
-                                                                 window.scrollBy({ left: w, behavior: 'instant' });
-                                                             }
-                                                         }
-                                                         
-                                                         window.detectAndReportLine();
-                                                         window.updateMask();
-                                                         setTimeout(function() {
-                                                             if (!isVertical) {
-                                                                 if (window.pageYOffset <= 0) Android.autoLoadPrev();
-                                                             } else {
-                                                                 if (window.pageXOffset >= -10) Android.autoLoadPrev();
-                                                             }
-                                                         }, 100);
-                                                         return;
-                                                     }
+window._scrollDir = -1;
+    if (pagingMode === 1) {
+        var lines = window.getVisualLines();
+        // 수정 1: clientWidth 사용
+        var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+        var h = window.innerHeight;
+        var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+        var gap = FS * 0.8;
+        var buffer = 15; // 수정 2: 안전 버퍼 추가
+        
+        if (!isVertical) {
+            var firstFullIdx = -1;
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].top >= -2) { firstFullIdx = i; break; }
+            }
+            var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
+            if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
+            
+            if (prevIdx >= 0) {
+                var targetBottom = lines[prevIdx].bottom;
+                var topIdx = prevIdx;
+                for (var i = prevIdx; i >= 0; i--) {
+                    if (targetBottom - lines[i].top <= h - gap) {
+                        topIdx = i;
+                    } else {
+                        break;
+                    }
+                }
+                var scrollDelta = lines[topIdx].top - gap;
+                scrollDelta = Math.max(scrollDelta, -(h - buffer)); // 버퍼 적용
+                window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+            } else {
+                window.scrollBy({ top: -(h - buffer), behavior: 'instant' });
+            }
+        } else {
+            var firstFullIdx = -1;
+            for (var i = 0; i < lines.length; i++) {
+                if (lines[i].right <= w + 2) { firstFullIdx = i; break; }
+            }
+            var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
+            if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
+            
+            if (prevIdx >= 0) {
+                var targetLeft = lines[prevIdx].left;
+                var topIdx = prevIdx;
+                for (var i = prevIdx; i >= 0; i--) {
+                    if (lines[i].right - targetLeft <= w - gap) {
+                        topIdx = i;
+                    } else {
+                        break;
+                    }
+                }
+                var scrollDelta = lines[topIdx].right - w + gap;
+                // 수정 3: 최대 이동 거리를 w 대신 w - buffer로 제한
+                scrollDelta = Math.min(scrollDelta, w - buffer);
+                window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+            } else {
+                window.scrollBy({ left: w - buffer, behavior: 'instant' });
+            }
+        }
+        
+        window.detectAndReportLine();
+        window.updateMask();
+        setTimeout(function() {
+            if (!isVertical) {
+                if (window.pageYOffset <= 0) Android.autoLoadPrev();
+            } else {
+                if (window.pageXOffset >= -10) Android.autoLoadPrev();
+            }
+        }, 100);
+        return;
+    }
                                                      
+                                                     // pagingMode !== 1 인 경우 (한 줄 남기기 모드)
                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
                                                      var moveSize = pageSize - 40;
                                                      if (isVertical) {
