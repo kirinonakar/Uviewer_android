@@ -44,7 +44,8 @@ data class DocumentViewerUiState(
     val pagingMode: Int = 0,
     val loadProgress: Float = 1f,
     val contentUpdateType: Int = 0, // 0: Refresh, 1: Append, 2: Prepend
-    val appendTrigger: Long = 0L
+    val appendTrigger: Long = 0L,
+    val chapterLineCounts: Map<Int, Int> = emptyMap()
 )
 
 
@@ -387,7 +388,14 @@ class DocumentViewerViewModel(
     }
 
     fun setEpubPosition(chapterIndex: Int, line: Int) {
-        _uiState.value = _uiState.value.copy(currentChapterIndex = chapterIndex, currentLine = line)
+        val chTotal = _uiState.value.chapterLineCounts[chapterIndex] ?: _uiState.value.totalLines
+        if (chapterIndex != _uiState.value.currentChapterIndex || line != _uiState.value.currentLine || chTotal != _uiState.value.totalLines) {
+            _uiState.value = _uiState.value.copy(
+                currentChapterIndex = chapterIndex,
+                currentLine = line,
+                totalLines = chTotal
+            )
+        }
     }
 
     private fun loadTextChunk(chunkIndex: Int, updateType: Int = 0) {
@@ -853,6 +861,9 @@ class DocumentViewerViewModel(
 
                     val baseUrl = "file://${chapterFile.parent}/"
                     
+                    val newCounts = _uiState.value.chapterLineCounts.toMutableMap()
+                    newCounts[index] = lineCount
+
                     _uiState.value = _uiState.value.copy(
                         url = null, 
                         baseUrl = baseUrl,
@@ -862,7 +873,8 @@ class DocumentViewerViewModel(
                         currentLine = if (initialLine == -1) lineCount else initialLine,
                         totalLines = lineCount,
                         contentUpdateType = updateType,
-                        appendTrigger = System.currentTimeMillis()
+                        appendTrigger = System.currentTimeMillis(),
+                        chapterLineCounts = newCounts
                     )
                 }
             } else {
@@ -873,6 +885,17 @@ class DocumentViewerViewModel(
                 }
             }
         }
+    }
+
+    fun jumpToChapter(index: Int) {
+        loadedStartChapter = index
+        loadedEndChapter = index
+        _uiState.value = _uiState.value.copy(
+            currentLine = 1, 
+            currentChapterIndex = index, 
+            isLoading = true
+        )
+        loadChapter(index, initialLine = 1, updateType = 0)
     }
 
     fun nextChapter() {

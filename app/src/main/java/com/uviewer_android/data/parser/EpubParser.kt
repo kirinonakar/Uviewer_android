@@ -194,8 +194,17 @@ object EpubParser {
         // If no block elements found, wrap the whole body text to ensure at least one line exists
         if (count == 0) {
             val content = body.html()
-            body.html("<div id=\"line-$idPrefix" + "1\">$content</div>")
+            body.html("<div id=\"line-${idPrefix}1\">$content</div>")
             count = 1
+        }
+        
+        // 추가 예외 처리: img나 svg, figure가 혼자 덩그러니 있는 경우에도 라인 ID 부여
+        val mediaElements = body.select("img, svg, figure")
+        for (media in mediaElements) {
+            if (!media.hasAttr("id") || !media.attr("id").startsWith("line-")) {
+                count++
+                media.attr("id", "line-$idPrefix$count")
+            }
         }
         
         // 3. Wrap body content in a chunk div for sliding window

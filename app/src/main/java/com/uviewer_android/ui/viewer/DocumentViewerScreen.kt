@@ -90,6 +90,7 @@ fun DocumentViewerScreen(
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
     val isSliderPressed by sliderInteractionSource.collectIsPressedAsState()
     val isInteractingWithSlider = isSliderDragged || isSliderPressed
+    var tempSliderValue by remember { mutableFloatStateOf(-1f) }
 
     LaunchedEffect(filePath) {
         viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
@@ -398,52 +399,95 @@ fun DocumentViewerScreen(
                             } else {
                                 Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
                             }
+                            val isEpub = type == FileEntry.FileType.EPUB
+                            val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
+
+                            // [핵심 1] 글로벌 진행도 계산
+                            val sliderValue = if (isEpub) {
+                                val chIdx = uiState.currentChapterIndex
+                                val chLines = uiState.totalLines.coerceAtLeast(1)
+                                chIdx.toFloat() + (currentLine.toFloat() / chLines).coerceIn(0f, 1f)
+                            } else {
+                                currentLine.toFloat()
+                            }
+
+                            val sliderRange = if (isEpub) {
+                                0f..totalCh.toFloat() // EPUB 범위: 0 ~ 총 챕터 수
+                            } else {
+                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f) // 일반 텍스트 범위
+                            }
+
+                            // 퍼센트 표시도 글로벌 스케일에 맞게 수정
+                            val progressPercent = if (isEpub) {
+                                ((sliderValue / totalCh) * 100).toInt().coerceIn(0, 100)
+                            } else {
+                                if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines).coerceIn(0, 100) else 0
+                            }
+
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    if (type == FileEntry.FileType.EPUB) {
+                                    if (isEpub) {
                                         val ch = uiState.currentChapterIndex + 1
-                                        val totalCh = uiState.epubChapters.size
                                         "Ch: $ch / $totalCh | Line: $currentLine / ${uiState.totalLines}"
                                     } else {
                                         "Line: $currentLine / ${uiState.totalLines}"
                                     },
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                // Percentage
-                                Text("${if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines) else 0}%", style = MaterialTheme.typography.bodySmall)
+                                Text("$progressPercent%", style = MaterialTheme.typography.bodySmall)
                             }
-                            
+
+                            val displayValue = if (tempSliderValue >= 0f) tempSliderValue else sliderValue
+
                             Slider(
-                                 value = currentLine.toFloat(),
-                                 onValueChange = { 
-                                     currentLine = it.toInt()
-                                 },
-                                 onValueChangeFinished = {
-                                     val targetChunk = (currentLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
-                                     
-                                     if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(currentLine - uiState.currentLine) > 50) {
-                                         isNavigating = true
-                                         isPageLoading = true
-                                     }
-                                     viewModel.jumpToLine(currentLine)
-                                     
-                                     if (targetChunk == uiState.currentChunkIndex) {
-                                         val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
-                                         webViewRef?.evaluateJavascript(js) {
-                                             webViewRef?.postDelayed({
-                                                 isPageLoading = false
-                                                 isNavigating = false
-                                             }, 500) // 100 -> 500ms
-                                         }
-                                     }
-                                 },
-                                 valueRange = 1f..uiState.totalLines.toFloat().coerceAtLeast(1f),
-                                 interactionSource = sliderInteractionSource,
-                                 modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 16.dp)
+                                value = displayValue,
+                                onValueChange = { tempSliderValue = it },
+                                onValueChangeFinished = {
+                                    val finalVal = tempSliderValue
+                                    tempSliderValue = -1f // 임시값 초기화
+                                    
+                                    if (isEpub) {
+                                        // [EPUB 점프] 슬라이더 위치에 해당하는 챕터로 이동
+                                        val targetCh = finalVal.toInt().coerceIn(0, totalCh - 1)
+                                        
+                                        // 돔(DOM) 찌꺼기가 남지 않게 화면을 비우고 점프
+                                        isNavigating = true
+                                        isPageLoading = true
+                                        webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
+                                        viewModel.jumpToChapter(targetCh)
+                                        
+                                    } else {
+                                        // [일반 텍스트 점프]
+                                        val targetLine = finalVal.toInt()
+                                        currentLine = targetLine
+                                        val targetChunk = (targetLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                        
+                                        if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
+                                            isNavigating = true
+                                            isPageLoading = true
+                                            webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
+                                        }
+                                        viewModel.jumpToLine(targetLine)
+                                        
+                                        // 동일 청크 내 점프인 경우의 스크롤 복구
+                                        if (targetChunk == uiState.currentChunkIndex) {
+                                            val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                            webViewRef?.evaluateJavascript(js) {
+                                                webViewRef?.postDelayed({
+                                                    isPageLoading = false
+                                                    isNavigating = false
+                                                }, 500)
+                                            }
+                                        }
+                                    }
+                                },
+                                valueRange = sliderRange,
+                                interactionSource = sliderInteractionSource,
+                                modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 16.dp)
                             )
                          }
 
@@ -590,6 +634,22 @@ fun DocumentViewerScreen(
                                                  var pagingMode = $pagingMode;
                                                  var enableAutoLoading = $enableAutoLoading;
                                                  
+                                                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
+                                                  window.isSystemScrolling = false;
+                                                  window.sysScrollTimer = null;
+
+                                                  // 2. JS가 강제로 스크롤을 조작할 때 사용할 안전한 래퍼 함수
+                                                  window.safeScrollBy = function(x, y) {
+                                                      window.isSystemScrolling = true; // 스크롤 이벤트 무시 시작
+                                                      window.scrollBy(x, y);
+                                                      
+                                                      // 보정이 끝난 후 충분한 시간(250ms)이 지난 뒤에 락을 풉니다.
+                                                      if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);
+                                                      window.sysScrollTimer = setTimeout(function() {
+                                                          window.isSystemScrolling = false;
+                                                      }, 250); 
+                                                  };
+                                                 
                                                   // 1. Restore scroll position
                                                   if ($targetLine === $totalLines && $totalLines > 1) {
                                                        if (typeof jumpToBottom === 'function') { jumpToBottom(); }
@@ -663,30 +723,47 @@ fun DocumentViewerScreen(
                                                            hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
                                                            chunkWrapper.appendChild(hr);
 
-                                                           // 삽입 전 문서 전체 크기
-                                                           var oldScrollWidth = document.documentElement.scrollWidth;
-                                                           var oldScrollHeight = document.documentElement.scrollHeight;
-
                                                            container.insertBefore(chunkWrapper, container.firstChild);
 
-                                                           // 삽입 후 문서 전체 크기
-                                                           var newScrollWidth = document.documentElement.scrollWidth;
-                                                           var newScrollHeight = document.documentElement.scrollHeight;
+                                                           // [핵심 해결책] ResizeObserver: 이미지가 비동기 로딩되며 크기가 커질 때마다 실시간으로 스크롤 역산
+                                                           var lastWidth = 0;
+                                                           var lastHeight = 0;
+                                                           
+                                                           var ro = new ResizeObserver(function(entries) {
+                                                               for (var i = 0; i < entries.length; i++) {
+                                                                   var entry = entries[i];
+                                                                   var newWidth = entry.contentRect.width;
+                                                                   var newHeight = entry.contentRect.height;
+                                                                   
+                                                                   var diffW = newWidth - lastWidth;
+                                                                   var diffH = newHeight - lastHeight;
+                                                                   
+                                                                   lastWidth = newWidth;
+                                                                   lastHeight = newHeight;
 
-                                                           // [핵심] 늘어난 크기만큼 즉시 스크롤을 밀어내어 사용자 시야 고정
-                                                           if (isVertical) {
-                                                               var diff = newScrollWidth - oldScrollWidth;
-                                                               window.scrollBy(-diff, 0); 
-                                                           } else {
-                                                               var diff = newScrollHeight - oldScrollHeight;
-                                                               window.scrollBy(0, diff); 
-                                                           }
+                                                                   // 이미지가 커지면서 밀어낸 공간만큼 스크롤을 이동시켜 시야를 꽉 잡아줌
+                                                                   if (isVertical) {
+                                                                       window.safeScrollBy(-diffW, 0); 
+                                                                   } else {
+                                                                       window.safeScrollBy(0, diffH);
+                                                                   }
+                                                               }
+                                                           });
+                                                           
+                                                           // 관찰 시작 (이때 초기 DOM 크기에 대한 첫 번째 보정이 자동으로 발생합니다)
+                                                           ro.observe(chunkWrapper);
 
+                                                           // 이미지가 전부 로딩될 넉넉한 시간(2초) 뒤에 관찰을 끄고 메모리 확보
+                                                           setTimeout(function() {
+                                                               ro.disconnect();
+                                                           }, 2000);
+
+                                                           // 로딩 락은 짧게 해제하여 유저가 계속 스크롤 할 수 있게 허용
                                                            setTimeout(function() {
                                                                window.enforceChunkLimit(false); 
                                                                window.updateMask();
-                                                               window.isScrolling = false; // 락 해제
-                                                           }, 100);
+                                                               window.isScrolling = false; 
+                                                           }, 150);
                                                        } catch(e) { console.error(e); window.isScrolling = false; }
                                                    };
 
@@ -707,10 +784,10 @@ fun DocumentViewerScreen(
                                                                // [핵심] 줄어든 크기만큼 즉시 스크롤을 당겨옴
                                                                if (isVertical) {
                                                                    var diff = oldScrollWidth - newScrollWidth;
-                                                                   window.scrollBy(diff, 0);
+                                                                   window.safeScrollBy(diff, 0);
                                                                } else {
                                                                    var diff = oldScrollHeight - newScrollHeight;
-                                                                   window.scrollBy(0, -diff);
+                                                                   window.safeScrollBy(0, -diff);
                                                                }
                                                            } else {
                                                                // 앞으로 스크롤 중: 맨 뒤(아래/왼쪽)의 청크 삭제 (보정 불필요)
@@ -1053,8 +1130,14 @@ fun DocumentViewerScreen(
 
                                                    var scrollTimer = null;
                                                    window.onscroll = function() {
+                                                        // [핵심 방어선] 자바스크립트가 스크롤 보정 중일 때는 이벤트를 완전히 무시
+                                                        if (window.isSystemScrolling) return; 
+
                                                        if (scrollTimer) clearTimeout(scrollTimer);
                                                        scrollTimer = setTimeout(function() {
+                                                            // 타이머가 실행되는 시점에도 다시 한번 확인
+                                                            if (window.isSystemScrolling) return; 
+
                                                            window.detectAndReportLine();
                                                            window.updateMask();
                                                            
@@ -1085,7 +1168,7 @@ fun DocumentViewerScreen(
                                                                    }
                                                                }
                                                            }
-                                                       }, 100); // 디바운싱 시간
+                                                       }, 150); // 디바운싱 시간
                                                    };
 
                                                   setTimeout(window.updateMask, 100);
