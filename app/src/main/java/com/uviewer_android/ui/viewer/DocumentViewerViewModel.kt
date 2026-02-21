@@ -620,12 +620,10 @@ class DocumentViewerViewModel(
         
         val targetChunk = (line - 1) / LINES_PER_CHUNK
         
-        // TOC synchronization logic
         val chapterIdx = _uiState.value.epubChapters.indexOfLast { 
             it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
         }.coerceAtLeast(0)
 
-        // Reset window for jump
         loadedStartChunk = targetChunk
         loadedEndChunk = targetChunk
         
@@ -634,7 +632,8 @@ class DocumentViewerViewModel(
             currentChapterIndex = chapterIdx,
             isLoading = true 
         )
-        loadTextChunk(targetChunk, updateType = 0)
+        // [수정됨] updateType을 0(전체 리로드)에서 3(내용 교체)으로 변경하여 깜빡임 제거
+        loadTextChunk(targetChunk, updateType = 3)
     }
 
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {

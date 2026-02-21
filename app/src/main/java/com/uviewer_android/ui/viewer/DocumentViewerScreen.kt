@@ -195,12 +195,25 @@ fun DocumentViewerScreen(
 
     LaunchedEffect(uiState.appendTrigger) {
         if (uiState.appendTrigger == 0L) return@LaunchedEffect
-        if (uiState.contentUpdateType == 1 || uiState.contentUpdateType == 2) {
-            // HTML을 Base64로 인코딩하여 JS 파싱 오류(따옴표, 줄바꿈 등) 완벽 차단
+        // [수정됨] updateType 3번(Replace) 포함
+        if (uiState.contentUpdateType in 1..3) {
             val base64Html = android.util.Base64.encodeToString(uiState.content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-            val jsFunction = if (uiState.contentUpdateType == 1) "appendHtmlBase64" else "prependHtmlBase64"
+            val jsFunction = when (uiState.contentUpdateType) {
+                1 -> "appendHtmlBase64"
+                2 -> "prependHtmlBase64"
+                3 -> "replaceHtmlBase64"
+                else -> ""
+            }
             val chunkIdx = if (type == FileEntry.FileType.EPUB) uiState.currentChapterIndex else uiState.currentChunkIndex
-            webViewRef?.evaluateJavascript("if(window.$jsFunction) { window.$jsFunction('$base64Html', $chunkIdx); window.isScrolling = false; }", null)
+            val targetLine = uiState.currentLine
+            // JS로 함수 호출 시 targetLine 전달
+            // [수정됨] evaluateJavascript에 콜백 블록을 추가하여 실행 후 잠금을 해제합니다.
+            webViewRef?.evaluateJavascript("if(window.$jsFunction) { window.$jsFunction('$base64Html', $chunkIdx, $targetLine); window.isScrolling = false; }") {
+                webViewRef?.postDelayed({
+                    isPageLoading = false
+                    isNavigating = false
+                }, 300) // UI가 렌더링될 시간(300ms)을 주고 잠금 해제
+            }
         }
     }
 
@@ -469,7 +482,8 @@ fun DocumentViewerScreen(
                                         if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
                                             isNavigating = true
                                             isPageLoading = true
-                                            webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
+                                            // [수정됨] 아래 줄(document.body.innerHTML = '')을 삭제하거나 주석 처리하세요.
+                                            // webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
                                         }
                                         viewModel.jumpToLine(targetLine)
                                         
@@ -667,9 +681,35 @@ fun DocumentViewerScreen(
                                                       }
                                                   }
 
-                                                   // 청크 개수 제한 (2~3개 유지. 너무 적으면 스크롤하자마자 지워져서 튈 수 있음)
-                                                   window.MAX_CHUNKS = 3; 
+                                                    // [수정됨] 청크 개수 제한을 5로 늘려 이전2 + 현재 + 이후2 구조가 가능하게 함
+                                                   window.MAX_CHUNKS = 5; 
+                                                   
+                                                   // [추가됨] 앞뒤 청크를 미리(미리보기 화면의 1.5배 전부터) 불러오는 독립 함수
+                                                   window.checkPreload = function() {
+                                                       if (!enableAutoLoading) return;
+                                                       var w = window.innerWidth;
+                                                       var h = window.innerHeight;
+                                                       // 여유 마진을 화면의 1.5배로 크게 잡음 (사용자가 도달하기 전에 미리 로드)
+                                                       var preloadMarginX = w * 1.5; 
+                                                       var preloadMarginY = h * 1.5;
 
+                                                       if (isVertical) {
+                                                           var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
+                                                           if (window.pageXOffset <= -(maxScrollX - preloadMarginX)) {
+                                                               window.isScrolling = true; Android.autoLoadNext();
+                                                           } else if (window.pageXOffset >= -preloadMarginX) { 
+                                                               window.isScrolling = true; Android.autoLoadPrev();
+                                                           }
+                                                       } else {
+                                                           var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                           var bottomPosition = document.documentElement.scrollHeight;
+                                                           if (scrollPosition >= bottomPosition - preloadMarginY) {
+                                                               window.isScrolling = true; Android.autoLoadNext();
+                                                           } else if (window.pageYOffset <= preloadMarginY) {
+                                                               window.isScrolling = true; Android.autoLoadPrev();
+                                                           }
+                                                       }
+                                                   };
                                                    window.appendHtmlBase64 = function(base64Str, chunkIndex) {
                                                        try {
                                                            var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
@@ -695,10 +735,11 @@ fun DocumentViewerScreen(
                                                            else container.appendChild(chunkWrapper);
 
                                                            // 이미지 로딩 등으로 인한 높이 변화 대기 후 GC 실행
-                                                           setTimeout(function() {
+                                                            setTimeout(function() {
                                                                window.enforceChunkLimit(true);
                                                                window.updateMask();
-                                                               window.isScrolling = false; // 락 해제
+                                                               window.isScrolling = false; 
+                                                               window.checkPreload(); // 추가됨: 로드 직후 한 번 더 공간 검사
                                                            }, 100);
                                                        } catch(e) { console.error(e); window.isScrolling = false; }
                                                    };
@@ -759,11 +800,51 @@ fun DocumentViewerScreen(
                                                            }, 2000);
 
                                                            // 로딩 락은 짧게 해제하여 유저가 계속 스크롤 할 수 있게 허용
-                                                           setTimeout(function() {
+                                                            setTimeout(function() {
                                                                window.enforceChunkLimit(false); 
                                                                window.updateMask();
                                                                window.isScrolling = false; 
+                                                               window.checkPreload(); // 추가됨
                                                            }, 150);
+                                                       } catch(e) { console.error(e); window.isScrolling = false; }
+                                                   };
+
+                                                   // [추가됨] 깜빡임 없는 슬라이더 점프를 위한 함수
+                                                   window.replaceHtmlBase64 = function(base64Str, chunkIndex, targetLine) {
+                                                       try {
+                                                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
+                                                           var parser = new DOMParser();
+                                                           var doc = parser.parseFromString(htmlStr, 'text/html');
+                                                           var container = document.body;
+
+                                                           // 화면을 비우지 않고 기존 청크만 즉시 삭제 및 교체 (깜빡임 최소화)
+                                                           var chunks = document.querySelectorAll('.content-chunk');
+                                                           chunks.forEach(function(c) { c.parentNode.removeChild(c); });
+
+                                                           var chunkWrapper = document.createElement('div');
+                                                           chunkWrapper.className = 'content-chunk';
+                                                           chunkWrapper.dataset.index = chunkIndex;
+
+                                                           Array.from(doc.body.childNodes).forEach(function(node) {
+                                                               if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                                                               chunkWrapper.appendChild(node);
+                                                           });
+
+                                                           container.insertBefore(chunkWrapper, container.firstChild);
+
+                                                           // 내용 렌더링 후 목표 라인으로 즉각 스크롤 이동
+                                                           setTimeout(function() {
+                                                               var el = document.getElementById('line-' + targetLine);
+                                                               if(el) {
+                                                                   el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                                                               }
+                                                               window.updateMask();
+                                                               window.isScrolling = false;
+                                                               window.checkPreload(); 
+                                                               
+                                                               // [추가됨] 점프가 끝난 즉시 안드로이드에 현재 라인 번호를 쏴줍니다.
+                                                               window.detectAndReportLine();
+                                                           }, 50);
                                                        } catch(e) { console.error(e); window.isScrolling = false; }
                                                    };
 
@@ -1149,47 +1230,23 @@ fun DocumentViewerScreen(
                                                       window.detectAndReportLine(); window.updateMask();
                                                   };
 
+                                                    // [수정됨] 기존 window.onscroll 전체를 아래 코드로 교체
                                                    var scrollTimer = null;
                                                    window.onscroll = function() {
-                                                        // [핵심 방어선] 자바스크립트가 스크롤 보정 중일 때는 이벤트를 완전히 무시
                                                         if (window.isSystemScrolling) return; 
 
                                                        if (scrollTimer) clearTimeout(scrollTimer);
                                                        scrollTimer = setTimeout(function() {
-                                                            // 타이머가 실행되는 시점에도 다시 한번 확인
                                                             if (window.isSystemScrolling) return; 
 
                                                            window.detectAndReportLine();
                                                            window.updateMask();
                                                            
-                                                           if (window.isScrolling) return; // 중복 호출 방지
+                                                           if (window.isScrolling) return; 
                                                            
-                                                           if (enableAutoLoading) {
-                                                               if (isVertical) {
-                                                                   var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
-                                                                   // 오른쪽 끝 (다음 청크)
-                                                                   if (window.pageXOffset <= -(maxScrollX - 100)) {
-                                                                       window.isScrolling = true; Android.autoLoadNext();
-                                                                   }
-                                                                   // 왼쪽 끝 (이전 청크) - 여유 공간을 -50px로 넉넉하게 변경!
-                                                                   else if (window.pageXOffset >= -50) { 
-                                                                       window.isScrolling = true; Android.autoLoadPrev();
-                                                                   }
-                                                               } else {
-                                                                   var scrollPosition = window.innerHeight + window.pageYOffset;
-                                                                   var bottomPosition = document.documentElement.scrollHeight;
-                                                                   
-                                                                   // 바닥 (다음 청크)
-                                                                   if (scrollPosition >= bottomPosition - 100) {
-                                                                       window.isScrolling = true; Android.autoLoadNext();
-                                                                   }
-                                                                   // 천장 (이전 청크) - 여유 공간 50px!
-                                                                   else if (window.pageYOffset <= 50) {
-                                                                       window.isScrolling = true; Android.autoLoadPrev();
-                                                                   }
-                                                               }
-                                                           }
-                                                       }, 150); // 디바운싱 시간
+                                                           // 복잡한 여백 계산은 checkPreload가 담당
+                                                           window.checkPreload();
+                                                       }, 150); 
                                                    };
 
                                                   setTimeout(window.updateMask, 100);
