@@ -875,6 +875,9 @@ fun DocumentViewerScreen(
                                                  window.calculateMasks = function() {
                                                      var masks = { top: 0, bottom: 0, left: 0, right: 0 };
                                                      if (pagingMode !== 1) return masks;
+                                                     // 이전페이지 이동시에는 가리지 않게 (Requirement 2)
+                                                     if (window._scrollDir === -1) return masks;
+
                                                      var lines = window.getVisualLines();
                                                      if (lines.length === 0) return masks;
                                                      var w = window.innerWidth;
@@ -911,12 +914,40 @@ fun DocumentViewerScreen(
                                                      if (window._scrollDir === 1) {
                                                          masks.top = 0;
                                                          masks.right = 0;
-                                                     } else if (window._scrollDir === -1) {
-                                                         masks.bottom = 0;
-                                                         masks.left = 0;
                                                      }
                                                      
                                                      return masks;
+                                                 };
+
+                                                 window.jumpToBottom = function() {
+                                                     var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                     var gap = FS * 0.8;
+                                                     if (isVertical) {
+                                                         window.scrollTo(-1000000, 0);
+                                                         if (pagingMode === 1) {
+                                                             var w = document.documentElement.clientWidth;
+                                                             var lines = window.getVisualLines();
+                                                             if (lines.length > 0) {
+                                                                 var farRightLine = lines[0];
+                                                                 if (farRightLine.right > w) {
+                                                                     var scrollDelta = farRightLine.right - (w - gap);
+                                                                     window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+                                                                 }
+                                                             }
+                                                         }
+                                                     } else {
+                                                         window.scrollTo(0, 1000000);
+                                                         if (pagingMode === 1) {
+                                                             var lines = window.getVisualLines();
+                                                             if (lines.length > 0) {
+                                                                 var topCutLine = lines[0];
+                                                                 if (topCutLine.top < 0) {
+                                                                     var scrollDelta = topCutLine.top - gap;
+                                                                     window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+                                                                 }
+                                                             }
+                                                         }
+                                                     }
                                                  };
 
                                                  window.updateMask = function() {
@@ -936,11 +967,24 @@ fun DocumentViewerScreen(
 
                                                  window.pageDown = function() {
 window._scrollDir = 1;
+    var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+    var h = window.innerHeight;
+
+    var isAtBottom = false;
+    if (!isVertical) {
+        if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
+    } else {
+        var maxScrollX = document.documentElement.scrollWidth - w;
+        if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
+    }
+
+    if (isAtBottom) {
+        Android.autoLoadNext();
+        return;
+    }
+
     if (pagingMode === 1) {
         var lines = window.getVisualLines();
-        // 수정 1: window.innerWidth 대신 clientWidth를 사용하여 더 정확한 화면 폭 계산
-        var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-        var h = window.innerHeight;
         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
         var gap = FS * 0.8;
         var buffer = 15; // 수정 2: 오차 방지용 안전 버퍼 추가
@@ -1005,14 +1049,8 @@ window._scrollDir = 1;
         }
         
         window.detectAndReportLine();
+        window.detectAndReportLine();
         window.updateMask();
-        setTimeout(function() {
-            if (!isVertical) {
-                if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) Android.autoLoadNext();
-            } else {
-                if (window.pageXOffset <= -(document.documentElement.scrollWidth - w - 10)) Android.autoLoadNext();
-            }
-        }, 100);
         return;
     }
                                                      
@@ -1020,13 +1058,9 @@ window._scrollDir = 1;
                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
                                                      var moveSize = pageSize - 40;
                                                      if (isVertical) {
-                                                         var oldX = window.pageXOffset;
                                                          window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                                                         if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadNext();
                                                      } else {
-                                                         var oldY = window.pageYOffset;
                                                          window.scrollBy({ top: moveSize, behavior: 'instant' });
-                                                         if (Math.abs(window.pageYOffset - oldY) < 10) Android.autoLoadNext();
                                                      }
                                                      window.detectAndReportLine();
                                                      window.updateMask();
@@ -1034,11 +1068,23 @@ window._scrollDir = 1;
 
                                                  window.pageUp = function() {
 window._scrollDir = -1;
+    var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+    var h = window.innerHeight;
+
+    var isAtTop = false;
+    if (!isVertical) {
+        if (window.pageYOffset <= 5) isAtTop = true;
+    } else {
+        if (window.pageXOffset >= -10) isAtTop = true;
+    }
+
+    if (isAtTop) {
+        Android.autoLoadPrev();
+        return;
+    }
+
     if (pagingMode === 1) {
         var lines = window.getVisualLines();
-        // 수정 1: clientWidth 사용
-        var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-        var h = window.innerHeight;
         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
         var gap = FS * 0.8;
         var buffer = 15; // 수정 2: 안전 버퍼 추가
@@ -1094,14 +1140,8 @@ window._scrollDir = -1;
         }
         
         window.detectAndReportLine();
+        window.detectAndReportLine();
         window.updateMask();
-        setTimeout(function() {
-            if (!isVertical) {
-                if (window.pageYOffset <= 0) Android.autoLoadPrev();
-            } else {
-                if (window.pageXOffset >= -10) Android.autoLoadPrev();
-            }
-        }, 100);
         return;
     }
                                                      
@@ -1109,13 +1149,9 @@ window._scrollDir = -1;
                                                      var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
                                                      var moveSize = pageSize - 40;
                                                      if (isVertical) {
-                                                         var oldX = window.pageXOffset;
                                                          window.scrollBy({ left: moveSize, behavior: 'instant' });
-                                                         if (Math.abs(window.pageXOffset - oldX) < 10) Android.autoLoadPrev();
                                                      } else {
-                                                         var oldY = window.pageYOffset;
                                                          window.scrollBy({ top: -moveSize, behavior: 'instant' });
-                                                         if (Math.abs(window.pageYOffset - oldY) < 10 && oldY === 0) Android.autoLoadPrev();
                                                      }
                                                      window.detectAndReportLine();
                                                      setTimeout(window.updateMask, 50);
