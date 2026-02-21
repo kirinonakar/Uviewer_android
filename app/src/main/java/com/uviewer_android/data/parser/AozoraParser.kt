@@ -279,7 +279,7 @@ object AozoraParser {
         return titles
     }
 
-    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8): String {
+    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8, chunkIndex: Int = 0): String {
         val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
         val fontFamily = when(font) {
             "serif" -> "'Sawarabi Mincho', serif"
@@ -399,6 +399,7 @@ object AozoraParser {
                         overflow-y: ${if (isVertical) "hidden" else "scroll"} !important;
                         overscroll-behavior: none !important;
                         touch-action: ${if (isVertical) "pan-x" else "pan-y"} !important;
+                        overflow-anchor: auto !important;
                         writing-mode: $writingMode !important;
                         -webkit-writing-mode: $writingMode !important;
                     }
@@ -414,6 +415,7 @@ object AozoraParser {
                         padding: 0 !important;
                         line-height: 1.8;
                         overflow: visible !important;
+                        overflow-anchor: auto !important;
                         height: 100vh !important;
                         min-height: 100vh !important;
                         width: ${if (isVertical) "auto" else "100%"};
@@ -430,6 +432,9 @@ object AozoraParser {
                         padding-top: ${if (isVertical) "${marginEm}em" else "0"} !important;
                         padding-bottom: ${if (isVertical) "${marginEm}em" else "0"} !important;
                         box-sizing: border-box !important;
+                    }
+                    .content-chunk {
+                        overflow-anchor: auto !important;
                     }
 
                     div:has(img), p:has(img) {
@@ -522,7 +527,9 @@ object AozoraParser {
                 </style>
             </head>
             <body class="${if (isVertical) "vertical" else ""}">
-                $bodyContent
+                <div class="content-chunk" data-index="$chunkIndex">
+                    $bodyContent
+                </div>
                 ${if (isVertical) 
                     """<div id="end-marker" style="display:inline-block; width:1px; height:100vh;"></div>"""
                   else 

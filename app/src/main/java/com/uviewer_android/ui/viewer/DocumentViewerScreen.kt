@@ -192,6 +192,17 @@ fun DocumentViewerScreen(
         }
     }
 
+    LaunchedEffect(uiState.appendTrigger) {
+        if (uiState.appendTrigger == 0L) return@LaunchedEffect
+        if (uiState.contentUpdateType == 1 || uiState.contentUpdateType == 2) {
+            // HTML을 Base64로 인코딩하여 JS 파싱 오류(따옴표, 줄바꿈 등) 완벽 차단
+            val base64Html = android.util.Base64.encodeToString(uiState.content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+            val jsFunction = if (uiState.contentUpdateType == 1) "appendHtmlBase64" else "prependHtmlBase64"
+            val chunkIdx = if (type == FileEntry.FileType.EPUB) uiState.currentChapterIndex else uiState.currentChunkIndex
+            webViewRef?.evaluateJavascript("if(window.$jsFunction) { window.$jsFunction('$base64Html', $chunkIdx); window.isScrolling = false; }", null)
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -471,21 +482,26 @@ fun DocumentViewerScreen(
                                 )
                                 addJavascriptInterface(object {
                                     @android.webkit.JavascriptInterface
-                                    fun onLineChanged(line: Int) {
+                                    fun onLineChangedStr(lineStr: String) {
                                         post {
                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
                                             
-                                            // Bypass chunk check for EPUB as it doesn't use chunks the same way
-                                            if (type != FileEntry.FileType.EPUB) {
-                                                val reportedChunkIndex = (line - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
-                                                if (reportedChunkIndex != viewModel.uiState.value.currentChunkIndex) {
-                                                    return@post
+                                            if (type == FileEntry.FileType.EPUB) {
+                                                val parts = lineStr.split("-")
+                                                if (parts.size == 2) {
+                                                    val ch = parts[0].toIntOrNull() ?: return@post
+                                                    val ln = parts[1].toIntOrNull() ?: return@post
+                                                    if (ln != currentLine) {
+                                                        currentLine = ln
+                                                        viewModel.setEpubPosition(ch, ln)
+                                                    }
                                                 }
-                                            }
-
-                                            if (line != currentLine) {
-                                                currentLine = line
-                                                viewModel.setCurrentLine(line)
+                                            } else {
+                                                val ln = lineStr.toIntOrNull() ?: return@post
+                                                if (ln != currentLine) {
+                                                    currentLine = ln
+                                                    viewModel.setCurrentLine(ln)
+                                                }
                                             }
                                         }
                                     }
@@ -564,7 +580,7 @@ fun DocumentViewerScreen(
                                         super.onPageFinished(view, url)
                                         val targetLine = viewModel.uiState.value.currentLine
                                         val totalLines = viewModel.uiState.value.totalLines
-                                        val enableAutoLoading = type == FileEntry.FileType.TEXT
+                                         val enableAutoLoading = type == FileEntry.FileType.TEXT || type == FileEntry.FileType.EPUB
                                         val isVertical = uiState.isVertical
 
                                          val pagingMode = uiState.pagingMode
@@ -572,624 +588,506 @@ fun DocumentViewerScreen(
                                              (function() {
                                                  var isVertical = $isVertical;
                                                  var pagingMode = $pagingMode;
+                                                 var enableAutoLoading = $enableAutoLoading;
                                                  
-                                                 // 1. Restore scroll position
-                                                 if ($targetLine === $totalLines && $totalLines > 1) {
-                                                      if (typeof jumpToBottom === 'function') { jumpToBottom(); }
-                                                      else {
-                                                           if (isVertical) window.scrollTo(-1000000, 0); 
-                                                           else window.scrollTo(0, 1000000);
-                                                      }
-                                                 } else {
-                                                     var el = document.getElementById('line-$targetLine'); 
-                                                     if(el) {
-                                                         el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
-                                                     } else if ($targetLine === 1) {
-                                                         if (isVertical) window.scrollTo(1000000, 0); 
-                                                         else window.scrollTo(0, 0);
-                                                     }
-                                                 }
-
-                                                 // 1.5. Fix Ruby merging
-                                                  if (isVertical) {
-                                                      var rubies = Array.from(document.querySelectorAll('ruby'));
-                                                      for (var i = 0; i < rubies.length; i++) {
-                                                          var ruby = rubies[i];
-                                                          if (!ruby.parentNode) continue;
-                                                          var baseText = Array.from(ruby.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
-                                                          var rubyText = Array.from(ruby.querySelectorAll('rt')).map(function(r) { return r.textContent; }).join('');
-                                                          if (rubyText.length === 0) continue;
-
-                                                          while (ruby.firstChild) ruby.removeChild(ruby.firstChild);
-                                                          ruby.appendChild(document.createTextNode(baseText));
-                                                          var rt = document.createElement('rt');
-                                                          rt.textContent = rubyText;
-                                                          ruby.appendChild(rt);
-
-                                                          var baseLen = baseText.length;
-                                                          var rubyLen = rubyText.length;
-                                                          var needsMerge = (baseLen === 1 && rubyLen >= 2) || 
-                                                                           (baseLen === 2 && rubyLen >= 4) || 
-                                                                           (baseLen === 3 && rubyLen >= 6) ||
-                                                                           (baseLen >= 4 && rubyLen >= baseLen * 1.5);
-          
-                                                          if (needsMerge) {
-                                                              while (ruby.previousSibling && ruby.previousSibling.tagName === 'RUBY') {
-                                                                  var prev = ruby.previousSibling;
-                                                                  var pRts = Array.from(prev.querySelectorAll('rt'));
-                                                                  var pRubyText = pRts.map(function(r) { return r.textContent; }).join('');
-                                                                  var pBase = Array.from(prev.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
-                                                                  ruby.insertBefore(document.createTextNode(pBase), ruby.firstChild);
-                                                                  rt.textContent = pRubyText + rt.textContent;
-                                                                  prev.parentNode.removeChild(prev);
-                                                              }
-                                                              while (ruby.nextSibling && ruby.nextSibling.tagName === 'RUBY') {
-                                                                  var next = ruby.nextSibling;
-                                                                  var nRts = Array.from(next.querySelectorAll('rt'));
-                                                                  var nRubyText = nRts.map(function(r) { return r.textContent; }).join('');
-                                                                  var nBase = Array.from(next.childNodes).filter(function(n) { return n.nodeType === 3; }).map(function(n) { return n.textContent; }).join('');
-                                                                  ruby.insertBefore(document.createTextNode(nBase), rt);
-                                                                  rt.textContent = rt.textContent + nRubyText;
-                                                                  next.parentNode.removeChild(next);
-                                                              }
-                                                              var finalPrev = ruby.previousSibling;
-                                                              if (finalPrev && finalPrev.nodeType === 3) {
-                                                                  var txt = finalPrev.textContent;
-                                                                  if (txt.length > 0) {
-                                                                      ruby.insertBefore(document.createTextNode(txt[txt.length - 1]), ruby.firstChild);
-                                                                      finalPrev.textContent = txt.substring(0, txt.length - 1);
-                                                                  }
-                                                              }
-                                                              var finalNext = ruby.nextSibling;
-                                                              if (finalNext && finalNext.nodeType === 3) {
-                                                                  var txt = finalNext.textContent;
-                                                                  if (txt.length > 0) {
-                                                                      ruby.insertBefore(document.createTextNode(txt[0]), rt);
-                                                                      finalNext.textContent = txt.substring(1);
-                                                                  }
-                                                              }
-                                                          }
-                                                      }
+                                                  // 1. Restore scroll position
+                                                  if ($targetLine === $totalLines && $totalLines > 1) {
+                                                       if (typeof jumpToBottom === 'function') { jumpToBottom(); }
+                                                       else {
+                                                            if (isVertical) window.scrollTo(-1000000, 0); 
+                                                            else window.scrollTo(0, 1000000);
+                                                       }
                                                   } else {
-                                                      document.querySelectorAll('rt').forEach(function(el) {
-                                                          var rubyText = el.textContent.trim();
-                                                          var baseNode = el.previousSibling || el.parentElement.firstChild;
-                                                          var baseText = baseNode ? baseNode.textContent.trim() : "";
-                                                          var baseLen = baseText.length;
-                                                          var rubyLen = rubyText.length;
-                                                          
-                                                          var needCompression = false;
-                                                          if (baseLen === 1 && rubyLen >= 2) needCompression = true;
-                                                          else if (baseLen === 2 && rubyLen >= 4) needCompression = true;
-                                                          else if (baseLen === 3 && rubyLen >= 6) needCompression = true;
-                                                          else if (baseLen >= 4 && rubyLen >= baseLen * 1.5) needCompression = true;
-                                                          
-                                                          if (needCompression) {
-                                                              el.classList.add('ruby-wide');
-                                                              if (el.children.length === 0) {
-                                                                  el.innerHTML = '<span>' + rubyText + '</span>';
-                                                              }
-                                                          }
-                                                      });
+                                                      var el = document.getElementById('line-${if (type == FileEntry.FileType.EPUB) "${uiState.currentChapterIndex}-" else ""}$targetLine'); 
+                                                      if(el) {
+                                                          el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                                                      } else if ($targetLine === 1) {
+                                                          if (isVertical) window.scrollTo(1000000, 0); 
+                                                          else window.scrollTo(0, 0);
+                                                      }
                                                   }
 
-                                                 window.detectAndReportLine = function() {
-                                                     var width = window.innerWidth;
-                                                     var height = window.innerHeight;
-                                                     var points = [];
-                                                     if (isVertical) {
-                                                         var offsetsX = [5, 15, 30, 50, 80];
-                                                         var offsetsY = [0.1, 0.25, 0.5, 0.75, 0.9];
-                                                         for (var i = 0; i < offsetsX.length; i++) {
-                                                             for (var j = 0; j < offsetsY.length; j++) {
-                                                                 if (width - offsetsX[i] > 0) {
-                                                                     points.push({x: width - offsetsX[i], y: height * offsetsY[j]});
-                                                                 }
-                                                             }
-                                                         }
-                                                     } else {
-                                                         var cx = width / 2;
-                                                         var ty = 20;
-                                                         points = [{x: cx, y: ty}, {x: cx - 50, y: ty}, {x: cx + 50, y: ty}, {x: cx, y: ty + 40}];
-                                                     }
-                                                     var foundLine = -1;
-                                                     for (var i = 0; i < points.length; i++) {
-                                                         var el = document.elementFromPoint(points[i].x, points[i].y);
-                                                         while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
-                                                             if (el.id && el.id.startsWith('line-')) {
-                                                                 foundLine = parseInt(el.id.replace('line-', ''));
-                                                                 break;
-                                                             }
-                                                             el = el.parentElement;
-                                                         }
-                                                         if (foundLine > 0) break;
-                                                     }
-                                                     if (foundLine > 0) {
-                                                         if (foundLine === 1) {
-                                                             var scrollPos = isVertical ? Math.abs(window.pageXOffset) : window.pageYOffset;
-                                                             if (scrollPos > 500) return;
-                                                         }
-                                                         Android.onLineChanged(foundLine);
-                                                     }
-                                                 };
+                                                   // 청크 개수 제한 (2~3개 유지. 너무 적으면 스크롤하자마자 지워져서 튈 수 있음)
+                                                   window.MAX_CHUNKS = 3; 
 
-                                                 window.getVisualLines = function() {
-                                                     var w = window.innerWidth;
-                                                     var h = window.innerHeight;
-                                                     var textLines = [];
-                                                     var seenRuby = new Set();
-                                                     var padding = isVertical ? w : h;
-                                                     
-                                                     var walker = document.createTreeWalker(
-                                                         document.body,
-                                                         NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-                                                         {
-                                                             acceptNode: function(node) {
-                                                                 if (node.nodeType === 1) {
-                                                                     if (node.tagName === 'IMG') return NodeFilter.FILTER_REJECT;
-                                                                     var tag = node.tagName;
-                                                                     if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
-                                                                         var r = node.getBoundingClientRect();
-                                                                         if (!isVertical) {
-                                                                             if (r.bottom < -padding || r.top > h + padding) return NodeFilter.FILTER_REJECT;
-                                                                         } else {
-                                                                             if (r.left > w + padding || r.right < -padding) return NodeFilter.FILTER_REJECT;
-                                                                         }
-                                                                     }
-                                                                     return NodeFilter.FILTER_SKIP;
-                                                                 }
-                                                                 if (node.nodeType === 3 && node.nodeValue.trim().length > 0) return NodeFilter.FILTER_ACCEPT;
-                                                                 return NodeFilter.FILTER_SKIP;
-                                                             }
-                                                         }
-                                                     );
-                                                     
-                                                     var node;
-                                                     while ((node = walker.nextNode())) {
-                                                         var el = node.parentElement;
-                                                         if (!el) continue;
-                                                         var rubyParent = el.closest('ruby');
-                                                         if (rubyParent) {
-                                                             if (seenRuby.has(rubyParent)) continue;
-                                                             seenRuby.add(rubyParent);
-                                                             var rubyWalker = document.createTreeWalker(rubyParent, NodeFilter.SHOW_TEXT, null);
-                                                             var rNode;
-                                                             var rRects = [];
-                                                             while ((rNode = rubyWalker.nextNode())) {
-                                                                 if (rNode.nodeValue.trim().length === 0) continue;
-                                                                 var range = document.createRange();
-                                                                 range.selectNodeContents(rNode);
-                                                                 var rects = range.getClientRects();
-                                                                 for (var i = 0; i < rects.length; i++) {
-                                                                     if (rects[i].width > 0 && rects[i].height > 0) rRects.push({
-                                                                         top: rects[i].top, bottom: rects[i].bottom, left: rects[i].left, right: rects[i].right
-                                                                     });
-                                                                 }
-                                                             }
-                                                             if (rRects.length > 0) {
-                                                                 var parts = [];
-                                                                 for (var i = 0; i < rRects.length; i++) {
-                                                                     var current = rRects[i];
-                                                                     var added = false;
-                                                                     for (var j = 0; j < parts.length; j++) {
-                                                                         var p = parts[j];
-                                                                         var hOverlap = Math.min(p.right, current.right) - Math.max(p.left, current.left);
-                                                                         var vOverlap = Math.min(p.bottom, current.bottom) - Math.max(p.top, current.top);
-                                                                         var isSamePart = false;
-                                                                         if (!isVertical) {
-                                                                             if (hOverlap > -10 && vOverlap > -10) isSamePart = true;
-                                                                         } else {
-                                                                             if (vOverlap > -10 && hOverlap > -10) isSamePart = true;
-                                                                         }
-                                                                         if (isSamePart) {
-                                                                             p.top = Math.min(p.top, current.top);
-                                                                             p.bottom = Math.max(p.bottom, current.bottom);
-                                                                             p.left = Math.min(p.left, current.left);
-                                                                             p.right = Math.max(p.right, current.right);
-                                                                             added = true;
-                                                                             break;
-                                                                         }
-                                                                     }
-                                                                     if (!added) {
-                                                                         parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right });
-                                                                     }
-                                                                 }
-                                                                 for (var i = 0; i < parts.length; i++) {
-                                                                     textLines.push(parts[i]);
-                                                                 }
-                                                             }
-                                                         } else {
-                                                             var range = document.createRange();
-                                                             range.selectNodeContents(node);
-                                                             var rects = range.getClientRects();
-                                                             for (var i = 0; i < rects.length; i++) {
-                                                                 var r = rects[i];
-                                                                 if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
-                                                             }
-                                                         }
-                                                     }
-                                                     
-                                                     if (!isVertical) {
-                                                         textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
-                                                         var lines = [];
-                                                         if (textLines.length === 0) return lines;
-                                                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
-                                                         for (var i = 1; i < textLines.length; i++) {
-                                                             var r = textLines[i];
-                                                             var vOverlap = Math.min(currentLine.bottom, r.bottom) - Math.max(currentLine.top, r.top);
-                                                             var minHeight = Math.min(currentLine.bottom - currentLine.top, r.bottom - r.top);
-                                                             if (vOverlap > Math.max(2, minHeight * 0.6)) { 
-                                                                 currentLine.top = Math.min(currentLine.top, r.top);
-                                                                 currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
-                                                                 currentLine.left = Math.min(currentLine.left, r.left);
-                                                                 currentLine.right = Math.max(currentLine.right, r.right);
-                                                             } else {
-                                                                 lines.push(currentLine);
-                                                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
-                                                             }
-                                                         }
-                                                         lines.push(currentLine);
-                                                         
-                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                         for (var k = 0; k < lines.length; k++) {
-                                                             var l = lines[k];
-                                                             var expectedTop = l.bottom - FS * 1.6;
-                                                             var expectedBottom = l.bottom + FS * 0.2;
-                                                             l.top = Math.min(l.top, expectedTop);
-                                                             l.bottom = Math.max(l.bottom, expectedBottom);
-                                                         }
-                                                         return lines;
-                                                     } else {
-                                                         textLines.sort(function(a, b) { var diff = b.right - a.right; return diff !== 0 ? diff : a.top - b.top; });
-                                                         var lines = [];
-                                                         if (textLines.length === 0) return lines;
-                                                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
-                                                         for (var i = 1; i < textLines.length; i++) {
-                                                             var r = textLines[i];
-                                                             var hOverlap = Math.min(currentLine.right, r.right) - Math.max(currentLine.left, r.left);
-                                                             var minWidth = Math.min(currentLine.right - currentLine.left, r.right - r.left);
-                                                             if (hOverlap > Math.max(2, minWidth * 0.6)) { 
-                                                                 currentLine.top = Math.min(currentLine.top, r.top);
-                                                                 currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
-                                                                 currentLine.left = Math.min(currentLine.left, r.left);
-                                                                 currentLine.right = Math.max(currentLine.right, r.right);
-                                                             } else {
-                                                                 lines.push(currentLine);
-                                                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
-                                                             }
-                                                         }
-                                                         lines.push(currentLine);
-                                                         
-                                                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                         for (var k = 0; k < lines.length; k++) {
-                                                             var l = lines[k];
-                                                             var expectedLeft = l.left - FS * 0.2;
-                                                             var expectedRight = l.left + FS * 1.6;
-                                                             l.left = Math.min(l.left, expectedLeft);
-                                                             l.right = Math.max(l.right, expectedRight);
-                                                         }
-                                                         return lines;
-                                                     }
-                                                 };
+                                                   window.appendHtmlBase64 = function(base64Str, chunkIndex) {
+                                                       try {
+                                                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
+                                                           var parser = new DOMParser();
+                                                           var doc = parser.parseFromString(htmlStr, 'text/html');
+                                                           var container = document.body;
+                                                           var endMarker = document.getElementById('end-marker');
+                                                           
+                                                           var chunkWrapper = document.createElement('div');
+                                                           chunkWrapper.className = 'content-chunk';
+                                                           chunkWrapper.dataset.index = chunkIndex;
+                                                           
+                                                           var hr = document.createElement('hr');
+                                                           hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                                                           chunkWrapper.appendChild(hr);
 
-                                                 window.calculateMasks = function() {
-                                                     var masks = { top: 0, bottom: 0, left: 0, right: 0 };
-                                                     if (pagingMode !== 1) return masks;
-                                                     // 이전페이지 이동시에는 가리지 않게 (Requirement 2)
-                                                     if (window._scrollDir === -1) return masks;
+                                                           Array.from(doc.body.childNodes).forEach(function(node) {
+                                                               if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                                                               chunkWrapper.appendChild(node);
+                                                           });
 
-                                                     var lines = window.getVisualLines();
-                                                     if (lines.length === 0) return masks;
-                                                     var w = window.innerWidth;
-                                                     var h = window.innerHeight;
-                                                     
-                                                     if (!isVertical) {
-                                                         var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                                                         if (visible.length === 0) return masks;
-                                                         
-                                                         var first = visible[0];
-                                                         if (first.top < -2 && first.bottom > 0) {
-                                                             masks.top = Math.min(h, Math.ceil(first.bottom));
-                                                         }
-                                                         
-                                                         var last = visible[visible.length - 1];
-                                                         if (last.bottom > h + 2 && last.top < h) {
-                                                             masks.bottom = Math.min(h, Math.ceil(h - last.top));
-                                                         }
-                                                     } else {
-                                                         var visible = lines.filter(function(l) { return l.right > -2 && l.left < w + 2; });
-                                                         if (visible.length === 0) return masks;
-                                                         
-                                                         var first = visible[0];
-                                                         if (first.right > w + 2 && first.left < w) {
-                                                             masks.right = Math.min(w, Math.ceil(w - first.left));
-                                                         }
-                                                         
-                                                         var last = visible[visible.length - 1];
-                                                         if (last.left < -2 && last.right > 0) {
-                                                             masks.left = Math.min(w, Math.ceil(last.right));
-                                                         }
-                                                     }
-                                                     
-                                                     if (window._scrollDir === 1) {
-                                                         masks.top = 0;
-                                                         masks.right = 0;
-                                                     }
-                                                     
-                                                     return masks;
-                                                 };
+                                                           if (endMarker) container.insertBefore(chunkWrapper, endMarker);
+                                                           else container.appendChild(chunkWrapper);
 
-                                                 window.jumpToBottom = function() {
-                                                     var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                     var gap = FS * 0.8;
-                                                     if (isVertical) {
-                                                         window.scrollTo(-1000000, 0);
-                                                         if (pagingMode === 1) {
-                                                             var w = document.documentElement.clientWidth;
-                                                             var lines = window.getVisualLines();
-                                                             if (lines.length > 0) {
-                                                                 var farRightLine = lines[0];
-                                                                 if (farRightLine.right > w) {
-                                                                     var scrollDelta = farRightLine.right - (w - gap);
-                                                                     window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-                                                                 }
-                                                             }
-                                                         }
-                                                     } else {
-                                                         window.scrollTo(0, 1000000);
-                                                         if (pagingMode === 1) {
-                                                             var lines = window.getVisualLines();
-                                                             if (lines.length > 0) {
-                                                                 var topCutLine = lines[0];
-                                                                 if (topCutLine.top < 0) {
-                                                                     var scrollDelta = topCutLine.top - gap;
-                                                                     window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-                                                                 }
-                                                             }
-                                                         }
-                                                     }
-                                                 };
+                                                           // 이미지 로딩 등으로 인한 높이 변화 대기 후 GC 실행
+                                                           setTimeout(function() {
+                                                               window.enforceChunkLimit(true);
+                                                               window.updateMask();
+                                                               window.isScrolling = false; // 락 해제
+                                                           }, 100);
+                                                       } catch(e) { console.error(e); window.isScrolling = false; }
+                                                   };
 
-                                                 window.updateMask = function() {
-                                                     if (pagingMode !== 1) {
-                                                         Android.updateBottomMask(0);
-                                                         Android.updateTopMask(0);
-                                                         Android.updateLeftMask(0);
-                                                         Android.updateRightMask(0);
-                                                         return;
-                                                     }
-                                                     var masks = window.calculateMasks();
-                                                     Android.updateTopMask(masks.top > 0 ? masks.top : 0);
-                                                     Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
-                                                     Android.updateLeftMask(masks.left > 0 ? masks.left : 0);
-                                                     Android.updateRightMask(masks.right > 0 ? masks.right : 0);
-                                                 };
+                                                   window.prependHtmlBase64 = function(base64Str, chunkIndex) {
+                                                       try {
+                                                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
+                                                           var parser = new DOMParser();
+                                                           var doc = parser.parseFromString(htmlStr, 'text/html');
+                                                           var container = document.body;
+                                                           
+                                                           var chunkWrapper = document.createElement('div');
+                                                           chunkWrapper.className = 'content-chunk';
+                                                           chunkWrapper.dataset.index = chunkIndex;
 
-                                                 window.pageDown = function() {
-window._scrollDir = 1;
-    var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-    var h = window.innerHeight;
+                                                           Array.from(doc.body.childNodes).forEach(function(node) {
+                                                               if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                                                               chunkWrapper.appendChild(node);
+                                                           });
 
-    var isAtBottom = false;
-    if (!isVertical) {
-        if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
-    } else {
-        var maxScrollX = document.documentElement.scrollWidth - w;
-        if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
-    }
+                                                           var hr = document.createElement('hr');
+                                                           hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                                                           chunkWrapper.appendChild(hr);
 
-    if (isAtBottom) {
-        Android.autoLoadNext();
-        return;
-    }
+                                                           // 삽입 전 문서 전체 크기
+                                                           var oldScrollWidth = document.documentElement.scrollWidth;
+                                                           var oldScrollHeight = document.documentElement.scrollHeight;
 
-    if (pagingMode === 1) {
-        var lines = window.getVisualLines();
-        var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-        var gap = FS * 0.8;
-        var buffer = 15; // 수정 2: 오차 방지용 안전 버퍼 추가
-        
-        if (!isVertical) {
-            var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-            var scrollDelta = h;
-            if (visible.length > 0) {
-                var last = visible[visible.length - 1];
-                if (last.bottom > h + 2 && last.top < h) {
-                    scrollDelta = last.top - gap;
-                } else {
-                    var idx = lines.indexOf(last);
-                    if (idx >= 0 && idx < lines.length - 1) {
-                        scrollDelta = lines[idx + 1].top - gap;
-                    } else {
-                        scrollDelta = h;
-                    }
-                }
-            } else if (lines.length > 0) {
-                var idx = lines.findIndex(function(l) { return l.top >= h; });
-                if (idx >= 0) scrollDelta = lines[idx].top - gap;
-            }
-            scrollDelta = Math.min(scrollDelta, h - buffer); // 버퍼 적용
-            window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-        } else {
-            var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-            var scrollDelta = -w;
-            if (visible.length > 0) {
-                var lastVisibleLine = visible[visible.length - 1];
-                var targetRight = lastVisibleLine.right;
-                var isCutOff = lastVisibleLine.left < 0;
-                
-                if (isCutOff) {
-                    scrollDelta = targetRight + gap - w;
-                } else {
-                    var idx = lines.indexOf(lastVisibleLine);
-                    if (idx >= 0 && idx < lines.length - 1) {
-                        scrollDelta = lines[idx + 1].right + gap - w;
-                    } else {
-                        scrollDelta = -w;
-                    }
-                }
-            } else if (lines.length > 0) {
-                var idx = lines.findIndex(function(l) { return l.left <= 0; });
-                if (idx >= 0) {
-                    scrollDelta = lines[idx].right + gap - w;
-                }
-            }
-            
-            var originalScrollX = window.pageXOffset;
-            var absoluteTargetX = originalScrollX + scrollDelta;
-            var maxScrollX = document.documentElement.scrollWidth - w; // w로 변경
-            
-            var maxScrollLeft = -(w + 100);
-            if (absoluteTargetX < -maxScrollX) {
-                scrollDelta = -maxScrollX - originalScrollX;
-            } else if (scrollDelta < maxScrollLeft) {
-                scrollDelta = maxScrollLeft;
-            }
-            window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-        }
-        
-        window.detectAndReportLine();
-        window.detectAndReportLine();
-        window.updateMask();
-        return;
-    }
-                                                     
-                                                     // pagingMode !== 1 인 경우 (한 줄 남기기 모드)
-                                                     var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
-                                                     var moveSize = pageSize - 40;
-                                                     if (isVertical) {
-                                                         window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                                                     } else {
-                                                         window.scrollBy({ top: moveSize, behavior: 'instant' });
-                                                     }
-                                                     window.detectAndReportLine();
-                                                     window.updateMask();
-                                                 };
+                                                           container.insertBefore(chunkWrapper, container.firstChild);
 
-                                                 window.pageUp = function() {
-window._scrollDir = -1;
-    var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-    var h = window.innerHeight;
+                                                           // 삽입 후 문서 전체 크기
+                                                           var newScrollWidth = document.documentElement.scrollWidth;
+                                                           var newScrollHeight = document.documentElement.scrollHeight;
 
-    var isAtTop = false;
-    if (!isVertical) {
-        if (window.pageYOffset <= 5) isAtTop = true;
-    } else {
-        if (window.pageXOffset >= -10) isAtTop = true;
-    }
+                                                           // [핵심] 늘어난 크기만큼 즉시 스크롤을 밀어내어 사용자 시야 고정
+                                                           if (isVertical) {
+                                                               var diff = newScrollWidth - oldScrollWidth;
+                                                               window.scrollBy(-diff, 0); 
+                                                           } else {
+                                                               var diff = newScrollHeight - oldScrollHeight;
+                                                               window.scrollBy(0, diff); 
+                                                           }
 
-    if (isAtTop) {
-        Android.autoLoadPrev();
-        return;
-    }
+                                                           setTimeout(function() {
+                                                               window.enforceChunkLimit(false); 
+                                                               window.updateMask();
+                                                               window.isScrolling = false; // 락 해제
+                                                           }, 100);
+                                                       } catch(e) { console.error(e); window.isScrolling = false; }
+                                                   };
 
-    if (pagingMode === 1) {
-        var lines = window.getVisualLines();
-        var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-        var gap = FS * 0.8;
-        var buffer = 15; // 수정 2: 안전 버퍼 추가
-        
-        if (!isVertical) {
-            var firstFullIdx = -1;
-            for (var i = 0; i < lines.length; i++) {
-                if (lines[i].top >= -2) { firstFullIdx = i; break; }
-            }
-            var prevIdx = firstFullIdx > 0 ? firstFullIdx - 1 : lines.length - 1;
-            if (firstFullIdx === 0 && lines.length > 0) prevIdx = -1;
-            
-            if (prevIdx >= 0) {
-                var targetBottom = lines[prevIdx].bottom;
-                var topIdx = prevIdx;
-                for (var i = prevIdx; i >= 0; i--) {
-                    if (targetBottom - lines[i].top <= h - gap) {
-                        topIdx = i;
-                    } else {
-                        break;
-                    }
-                }
-                var scrollDelta = lines[topIdx].top - gap;
-                scrollDelta = Math.max(scrollDelta, -(h - buffer)); // 버퍼 적용
-                window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-            } else {
-                window.scrollBy({ top: -(h - buffer), behavior: 'instant' });
-            }
-        } else {
-            var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-            var scrollDelta = w - buffer;
-            if (visible.length > 0) {
-                var firstVisibleLine = visible[0]; // 맨 오른쪽 줄
-                
-                var prevIdx = lines.indexOf(firstVisibleLine) - 1; // 이전 줄
-                
-                if (prevIdx >= 0) {
-                    var targetLeft = lines[prevIdx].left; // 이전 줄의 왼쪽 위치
-                    // 맨 왼쪽 가장자리(gap만큼 여유)에 표시
-                    scrollDelta = targetLeft - gap;
-                } else {
-                    scrollDelta = w - buffer;
-                }
-            } else if (lines.length > 0) {
-                var idx = lines.findIndex(function(l) { return l.right >= w; });
-                if (idx >= 0) {
-                    scrollDelta = lines[idx].left - gap;
-                }
-            }
-            
-            scrollDelta = Math.min(scrollDelta, w + 100);
-            window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-        }
-        
-        window.detectAndReportLine();
-        window.detectAndReportLine();
-        window.updateMask();
-        return;
-    }
-                                                     
-                                                     // pagingMode !== 1 인 경우 (한 줄 남기기 모드)
-                                                     var pageSize = isVertical ? document.documentElement.clientWidth : document.documentElement.clientHeight;
-                                                     var moveSize = pageSize - 40;
-                                                     if (isVertical) {
-                                                         window.scrollBy({ left: moveSize, behavior: 'instant' });
-                                                     } else {
-                                                         window.scrollBy({ top: -moveSize, behavior: 'instant' });
-                                                     }
-                                                     window.detectAndReportLine();
-                                                     setTimeout(window.updateMask, 50);
-                                                 };
-         
-                                                  var scrollTimer = null;
+                                                   window.enforceChunkLimit = function(isAppend) {
+                                                       var chunks = document.querySelectorAll('.content-chunk');
+                                                       if (chunks.length > window.MAX_CHUNKS) {
+                                                           if (isAppend) {
+                                                               // 뒤로 스크롤 중: 맨 앞(위/오른쪽)의 가장 오래된 청크 삭제
+                                                               var oldestChunk = chunks[0];
+                                                               var oldScrollWidth = document.documentElement.scrollWidth;
+                                                               var oldScrollHeight = document.documentElement.scrollHeight;
+
+                                                               oldestChunk.parentNode.removeChild(oldestChunk);
+
+                                                               var newScrollWidth = document.documentElement.scrollWidth;
+                                                               var newScrollHeight = document.documentElement.scrollHeight;
+
+                                                               // [핵심] 줄어든 크기만큼 즉시 스크롤을 당겨옴
+                                                               if (isVertical) {
+                                                                   var diff = oldScrollWidth - newScrollWidth;
+                                                                   window.scrollBy(diff, 0);
+                                                               } else {
+                                                                   var diff = oldScrollHeight - newScrollHeight;
+                                                                   window.scrollBy(0, -diff);
+                                                               }
+                                                           } else {
+                                                               // 앞으로 스크롤 중: 맨 뒤(아래/왼쪽)의 청크 삭제 (보정 불필요)
+                                                               var newestChunk = chunks[chunks.length - 1];
+                                                               newestChunk.parentNode.removeChild(newestChunk);
+                                                           }
+                                                       }
+                                                   };
+
+                                                  window.detectAndReportLine = function() {
+                                                      var width = window.innerWidth;
+                                                      var height = window.innerHeight;
+                                                      var points = [];
+                                                      if (isVertical) {
+                                                          var offsetsX = [5, 15, 30, 50, 80];
+                                                          var offsetsY = [0.1, 0.25, 0.5, 0.75, 0.9];
+                                                          for (var i = 0; i < offsetsX.length; i++) {
+                                                              for (var j = 0; j < offsetsY.length; j++) {
+                                                                  if (width - offsetsX[i] > 0) {
+                                                                      points.push({x: width - offsetsX[i], y: height * offsetsY[j]});
+                                                                  }
+                                                              }
+                                                          }
+                                                      } else {
+                                                          var cx = width / 2;
+                                                          var ty = 20;
+                                                          points = [{x: cx, y: ty}, {x: cx - 50, y: ty}, {x: cx + 50, y: ty}, {x: cx, y: ty + 40}];
+                                                      }
+                                                      var foundLineStr = null;
+                                                      for (var i = 0; i < points.length; i++) {
+                                                          var el = document.elementFromPoint(points[i].x, points[i].y);
+                                                          while (el && el.tagName !== 'BODY' && el.tagName !== 'HTML') {
+                                                              if (el.id && el.id.startsWith('line-')) {
+                                                                  foundLineStr = el.id.replace('line-', '');
+                                                                  break;
+                                                              }
+                                                              el = el.parentElement;
+                                                          }
+                                                          if (foundLineStr) break;
+                                                      }
+                                                      if (foundLineStr) {
+                                                          Android.onLineChangedStr(foundLineStr);
+                                                      }
+                                                  };
+
+                                                  window.getVisualLines = function() {
+                                                      var w = window.innerWidth;
+                                                      var h = window.innerHeight;
+                                                      var textLines = [];
+                                                      var seenRuby = new Set();
+                                                      var padding = isVertical ? w : h;
+                                                      
+                                                      var walker = document.createTreeWalker(
+                                                          document.body,
+                                                          NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+                                                          {
+                                                              acceptNode: function(node) {
+                                                                  if (node.nodeType === 1) {
+                                                                      if (node.tagName === 'IMG') return NodeFilter.FILTER_REJECT;
+                                                                      var tag = node.tagName;
+                                                                      if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
+                                                                          var r = node.getBoundingClientRect();
+                                                                          if (!isVertical) {
+                                                                              if (r.bottom < -padding || r.top > h + padding) return NodeFilter.FILTER_REJECT;
+                                                                          } else {
+                                                                              if (r.left > w + padding || r.right < -padding) return NodeFilter.FILTER_REJECT;
+                                                                          }
+                                                                      }
+                                                                      return NodeFilter.FILTER_SKIP;
+                                                                  }
+                                                                  if (node.nodeType === 3 && node.nodeValue.trim().length > 0) return NodeFilter.FILTER_ACCEPT;
+                                                                  return NodeFilter.FILTER_SKIP;
+                                                              }
+                                                          }
+                                                      );
+                                                      
+                                                      var node;
+                                                      while ((node = walker.nextNode())) {
+                                                          var el = node.parentElement;
+                                                          if (!el) continue;
+                                                          var rubyParent = el.closest('ruby');
+                                                          if (rubyParent) {
+                                                              if (seenRuby.has(rubyParent)) continue;
+                                                              seenRuby.add(rubyParent);
+                                                              var rubyWalker = document.createTreeWalker(rubyParent, NodeFilter.SHOW_TEXT, null);
+                                                              var rNode;
+                                                              var rRects = [];
+                                                              while ((rNode = rubyWalker.nextNode())) {
+                                                                  if (rNode.nodeValue.trim().length === 0) continue;
+                                                                  var range = document.createRange();
+                                                                  range.selectNodeContents(rNode);
+                                                                  var rects = range.getClientRects();
+                                                                  for (var i = 0; i < rects.length; i++) {
+                                                                      if (rects[i].width > 0 && rects[i].height > 0) rRects.push({
+                                                                          top: rects[i].top, bottom: rects[i].bottom, left: rects[i].left, right: rects[i].right
+                                                                      });
+                                                                  }
+                                                              }
+                                                              if (rRects.length > 0) {
+                                                                  var parts = [];
+                                                                  for (var i = 0; i < rRects.length; i++) {
+                                                                      var current = rRects[i];
+                                                                      var added = false;
+                                                                      for (var j = 0; j < parts.length; j++) {
+                                                                          var p = parts[j];
+                                                                          var hOverlap = Math.min(p.right, current.right) - Math.max(p.left, current.left);
+                                                                          var vOverlap = Math.min(p.bottom, current.bottom) - Math.max(p.top, current.top);
+                                                                          var isSamePart = false;
+                                                                          if (!isVertical) {
+                                                                              if (hOverlap > -10 && vOverlap > -10) isSamePart = true;
+                                                                          } else {
+                                                                              if (vOverlap > -10 && hOverlap > -10) isSamePart = true;
+                                                                          }
+                                                                          if (isSamePart) {
+                                                                              p.top = Math.min(p.top, current.top);
+                                                                              p.bottom = Math.max(p.bottom, current.bottom);
+                                                                              p.left = Math.min(p.left, current.left);
+                                                                              p.right = Math.max(p.right, current.right);
+                                                                              added = true;
+                                                                              break;
+                                                                          }
+                                                                      }
+                                                                      if (!added) {
+                                                                          parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right });
+                                                                      }
+                                                                  }
+                                                                  for (var i = 0; i < parts.length; i++) {
+                                                                      textLines.push(parts[i]);
+                                                                  }
+                                                              }
+                                                          } else {
+                                                              var range = document.createRange();
+                                                              range.selectNodeContents(node);
+                                                              var rects = range.getClientRects();
+                                                              for (var i = 0; i < rects.length; i++) {
+                                                                  var r = rects[i];
+                                                                  if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+                                                              }
+                                                          }
+                                                      }
+                                                      
+                                                      if (!isVertical) {
+                                                          textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
+                                                          var lines = [];
+                                                          if (textLines.length === 0) return lines;
+                                                          var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
+                                                          for (var i = 1; i < textLines.length; i++) {
+                                                              var r = textLines[i];
+                                                              var vOverlap = Math.min(currentLine.bottom, r.bottom) - Math.max(currentLine.top, r.top);
+                                                              var minHeight = Math.min(currentLine.bottom - currentLine.top, r.bottom - r.top);
+                                                              if (vOverlap > Math.max(2, minHeight * 0.6)) { 
+                                                                  currentLine.top = Math.min(currentLine.top, r.top);
+                                                                  currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
+                                                                  currentLine.left = Math.min(currentLine.left, r.left);
+                                                                  currentLine.right = Math.max(currentLine.right, r.right);
+                                                              } else {
+                                                                  lines.push(currentLine);
+                                                                  currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+                                                              }
+                                                          }
+                                                          lines.push(currentLine);
+                                                          return lines;
+                                                      } else {
+                                                          textLines.sort(function(a, b) { var diff = b.right - a.right; return diff !== 0 ? diff : a.top - b.top; });
+                                                          var lines = [];
+                                                          if (textLines.length === 0) return lines;
+                                                          var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right };
+                                                          for (var i = 1; i < textLines.length; i++) {
+                                                              var r = textLines[i];
+                                                              var hOverlap = Math.min(currentLine.right, r.right) - Math.max(currentLine.left, r.left);
+                                                              var minWidth = Math.min(currentLine.right - currentLine.left, r.right - r.left);
+                                                              if (hOverlap > Math.max(2, minWidth * 0.6)) { 
+                                                                  currentLine.top = Math.min(currentLine.top, r.top);
+                                                                  currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
+                                                                  currentLine.left = Math.min(currentLine.left, r.left);
+                                                                  currentLine.right = Math.max(currentLine.right, r.right);
+                                                              } else {
+                                                                  lines.push(currentLine);
+                                                                  currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right };
+                                                              }
+                                                          }
+                                                          lines.push(currentLine);
+                                                          return lines;
+                                                      }
+                                                  };
+
+                                                  window.calculateMasks = function() {
+                                                      var masks = { top: 0, bottom: 0, left: 0, right: 0 };
+                                                      if (pagingMode !== 1) return masks;
+                                                      if (window._scrollDir === -1) return masks;
+                                                      var lines = window.getVisualLines();
+                                                      if (lines.length === 0) return masks;
+                                                      var w = window.innerWidth;
+                                                      var h = window.innerHeight;
+                                                      if (!isVertical) {
+                                                          var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                                          if (visible.length === 0) return masks;
+                                                          var first = visible[0];
+                                                          if (first.top < -2 && first.bottom > 0) masks.top = Math.min(h, Math.ceil(first.bottom));
+                                                          var last = visible[visible.length - 1];
+                                                          if (last.bottom > h + 2 && last.top < h) masks.bottom = Math.min(h, Math.ceil(h - last.top));
+                                                      } else {
+                                                          var visible = lines.filter(function(l) { return l.right > -2 && l.left < w + 2; });
+                                                          if (visible.length === 0) return masks;
+                                                          var first = visible[0];
+                                                          if (first.right > w + 2 && first.left < w) masks.right = Math.min(w, Math.ceil(w - first.left));
+                                                          var last = visible[visible.length - 1];
+                                                          if (last.left < -2 && last.right > 0) masks.left = Math.min(w, Math.ceil(last.right));
+                                                      }
+                                                      if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
+                                                      return masks;
+                                                  };
+
+                                                  window.updateMask = function() {
+                                                      if (pagingMode !== 1) {
+                                                          Android.updateBottomMask(0); Android.updateTopMask(0); Android.updateLeftMask(0); Android.updateRightMask(0);
+                                                          return;
+                                                      }
+                                                      var masks = window.calculateMasks();
+                                                      Android.updateTopMask(masks.top > 0 ? masks.top : 0);
+                                                      Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
+                                                      Android.updateLeftMask(masks.left > 0 ? masks.left : 0);
+                                                      Android.updateRightMask(masks.right > 0 ? masks.right : 0);
+                                                  };
+
+                                                  window.jumpToBottom = function() {
+                                                      var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                      var gap = FS * 0.8;
+                                                      if (isVertical) {
+                                                          window.scrollTo(-1000000, 0);
+                                                          if (pagingMode === 1) {
+                                                              var w = document.documentElement.clientWidth;
+                                                              var lines = window.getVisualLines();
+                                                              if (lines.length > 0) {
+                                                                  var farRightLine = lines[0];
+                                                                  if (farRightLine.right > w) {
+                                                                      var scrollDelta = farRightLine.right - (w - gap);
+                                                                      window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+                                                                  }
+                                                              }
+                                                          }
+                                                      } else {
+                                                          window.scrollTo(0, 1000000);
+                                                          if (pagingMode === 1) {
+                                                              var lines = window.getVisualLines();
+                                                              if (lines.length > 0) {
+                                                                  var topCutLine = lines[0];
+                                                                  if (topCutLine.top < 0) {
+                                                                      var scrollDelta = topCutLine.top - gap;
+                                                                      window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+                                                                  }
+                                                              }
+                                                          }
+                                                      }
+                                                  };
+
+                                                  window.pageDown = function() {
+                                                      window._scrollDir = 1;
+                                                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+                                                      var h = window.innerHeight;
+                                                      var isAtBottom = false;
+                                                      if (!isVertical) {
+                                                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
+                                                      } else {
+                                                          var maxScrollX = document.documentElement.scrollWidth - w;
+                                                          if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
+                                                      }
+                                                      if (isAtBottom) { Android.autoLoadNext(); return; }
+                                                      if (pagingMode === 1) {
+                                                          var lines = window.getVisualLines();
+                                                          var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                          var gap = FS * 0.8;
+                                                          if (!isVertical) {
+                                                              var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                                              var scrollDelta = h;
+                                                              if (visible.length > 0) {
+                                                                  var last = visible[visible.length - 1];
+                                                                  if (last.bottom > h + 2 && last.top < h) scrollDelta = last.top - gap;
+                                                                  else {
+                                                                      var idx = lines.indexOf(last);
+                                                                      if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].top - gap;
+                                                                  }
+                                                              }
+                                                              window.scrollBy({ top: Math.min(scrollDelta, h - 15), behavior: 'instant' });
+                                                          } else {
+                                                              var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+                                                              var scrollDelta = -w;
+                                                              if (visible.length > 0) {
+                                                                  var last = visible[visible.length - 1];
+                                                                  if (last.left < 0) scrollDelta = last.right + gap - w;
+                                                                  else {
+                                                                      var idx = lines.indexOf(last);
+                                                                      if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].right + gap - w;
+                                                                  }
+                                                              }
+                                                              window.scrollBy({ left: Math.max(scrollDelta, -w + 15), behavior: 'instant' });
+                                                          }
+                                                      } else {
+                                                          var moveSize = (isVertical ? w : h) - 40;
+                                                          if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
+                                                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
+                                                      }
+                                                      window.detectAndReportLine(); window.updateMask();
+                                                  };
+
+                                                  window.pageUp = function() {
+                                                      window._scrollDir = -1;
+                                                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+                                                      var h = window.innerHeight;
+                                                      var isAtTop = false;
+                                                      if (!isVertical) { if (window.pageYOffset <= 5) isAtTop = true; }
+                                                      else { if (window.pageXOffset >= -10) isAtTop = true; }
+                                                      if (isAtTop) { Android.autoLoadPrev(); return; }
+                                                      if (pagingMode === 1) {
+                                                          var lines = window.getVisualLines();
+                                                          var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                          var gap = FS * 0.8;
+                                                          if (!isVertical) {
+                                                              var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
+                                                              var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
+                                                              if (prevIdx >= 0) {
+                                                                  var targetBottom = lines[prevIdx].bottom;
+                                                                  var topIdx = prevIdx;
+                                                                  for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
+                                                                  window.scrollBy({ top: Math.max(lines[topIdx].top - gap, -h + 15), behavior: 'instant' });
+                                                              } else window.scrollBy({ top: -h + 15, behavior: 'instant' });
+                                                          } else {
+                                                              var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
+                                                              var prevIdx = firstVisible ? lines.indexOf(firstVisible) - 1 : -1;
+                                                              if (prevIdx >= 0) window.scrollBy({ left: Math.min(lines[prevIdx].left - gap, w - 15), behavior: 'instant' });
+                                                              else window.scrollBy({ left: w - 15, behavior: 'instant' });
+                                                          }
+                                                      } else {
+                                                          var moveSize = (isVertical ? w : h) - 40;
+                                                          if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
+                                                      else window.scrollBy({ top: -moveSize, behavior: 'instant' });
+                                                      }
+                                                      window.detectAndReportLine(); window.updateMask();
+                                                  };
+
+                                                   var scrollTimer = null;
                                                    window.onscroll = function() {
                                                        if (scrollTimer) clearTimeout(scrollTimer);
                                                        scrollTimer = setTimeout(function() {
                                                            window.detectAndReportLine();
                                                            window.updateMask();
                                                            
-                                                           var isScrolling = false; 
-                                                         
-                                                         if ($enableAutoLoading) {
-                                                             if (isVertical) {
-                                                                 var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
-                                                                 if (window.pageXOffset <= -(maxScrollX - 10)) {
-                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadNext(); }
-                                                                 }
-                                                                 else if (window.pageXOffset >= -10) { 
-                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadPrev(); }
-                                                                 }
-                                                             } else {
-                                                                 var scrollPosition = window.innerHeight + window.pageYOffset;
-                                                                 var bottomPosition = document.documentElement.scrollHeight;
-                                                                 if (scrollPosition >= bottomPosition - 5) {
-                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadNext(); }
-                                                                 }
-                                                                 else if (window.pageYOffset <= 0) {
-                                                                    if (!isScrolling) { isScrolling = true; Android.autoLoadPrev(); }
-                                                                 }
-                                                             }
-                                                         }
-                                                     }, 100);
-                                                  };
-                                                  
-                                                  // Initial mask check
+                                                           if (window.isScrolling) return; // 중복 호출 방지
+                                                           
+                                                           if (enableAutoLoading) {
+                                                               if (isVertical) {
+                                                                   var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
+                                                                   // 오른쪽 끝 (다음 청크)
+                                                                   if (window.pageXOffset <= -(maxScrollX - 100)) {
+                                                                       window.isScrolling = true; Android.autoLoadNext();
+                                                                   }
+                                                                   // 왼쪽 끝 (이전 청크) - 여유 공간을 -50px로 넉넉하게 변경!
+                                                                   else if (window.pageXOffset >= -50) { 
+                                                                       window.isScrolling = true; Android.autoLoadPrev();
+                                                                   }
+                                                               } else {
+                                                                   var scrollPosition = window.innerHeight + window.pageYOffset;
+                                                                   var bottomPosition = document.documentElement.scrollHeight;
+                                                                   
+                                                                   // 바닥 (다음 청크)
+                                                                   if (scrollPosition >= bottomPosition - 100) {
+                                                                       window.isScrolling = true; Android.autoLoadNext();
+                                                                   }
+                                                                   // 천장 (이전 청크) - 여유 공간 50px!
+                                                                   else if (window.pageYOffset <= 50) {
+                                                                       window.isScrolling = true; Android.autoLoadPrev();
+                                                                   }
+                                                               }
+                                                           }
+                                                       }, 100); // 디바운싱 시간
+                                                   };
+
                                                   setTimeout(window.updateMask, 100);
                                               })();
                                           """.trimIndent()
@@ -1273,99 +1171,105 @@ window._scrollDir = -1;
                                            overscroll-behavior: none !important;
                                            /* 터치 동작 제한 (세로쓰기면 좌우 스크롤만 허용) */
                                            touch-action: ${if (uiState.isVertical) "pan-x" else "pan-y"} !important;
+                                           overflow-anchor: auto !important;
                                            
                                            /* [중요] html에도 writing-mode 적용하여 브라우저 좌표축 동기화 */
                                            writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                                            -webkit-writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                                        }
                                    
-                                       body {
-                                           height: 100vh !important;
-                                           min-height: 100vh !important;
-                                           width: ${if (uiState.isVertical) "auto" else "100%"} !important;
-                                           margin: 0 !important;
-                                           padding: 0 !important; /* body 패딩 제거 (좌표 계산 오차 원인) */
-                                           
-                                           background-color: $bgColor !important;
-                                           color: $textColor !important;
-                                           
-                                           writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                                           -webkit-writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                                           
-                                           font-family: ${uiState.fontFamily} !important;
-                                           font-size: ${uiState.fontSize}px !important;
-                                           line-height: 1.8 !important;
-                                           
-                                           /* 안전 영역 패딩 */
-                                           padding-top: env(safe-area-inset-top, 0) !important;
-                                           padding-bottom: env(safe-area-inset-bottom, 0) !important;
+                                        body {
+                                            min-height: 100vh !important;
+                                            height: ${if (uiState.isVertical) "100vh" else "auto"} !important; /* 가로쓰기 시 auto로 두어야 무한 세로 스크롤 가능 */
+                                            width: ${if (uiState.isVertical) "auto" else "100%"} !important; /* 세로쓰기 시 auto로 두어야 무한 가로 스크롤 가능 */
+                                            margin: 0 !important;
+                                            padding: 0 !important; /* body 패딩 제거 (좌표 계산 오차 원인) */
+                                            
+                                            background-color: $bgColor !important;
+                                            color: $textColor !important;
+                                            
+                                            writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                            -webkit-writing-mode: ${if (uiState.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                            
+                                            font-family: ${uiState.fontFamily} !important;
+                                            font-size: ${uiState.fontSize}px !important;
+                                            line-height: 1.8 !important;
+                                            
+                                            /* 안전 영역 패딩 */
+                                            padding-top: env(safe-area-inset-top, 0) !important;
+                                            padding-bottom: env(safe-area-inset-bottom, 0) !important;
+                                            overflow-anchor: auto !important;
+                                        }
+                                        
+                                        /* 2. 문단 설정: 여백이 터치 감지를 방해하지 않도록 조정 */
+                                        p, div, h1, h2, h3, h4, h5, h6 {
+                                            display: block !important; 
+                                            height: auto !important;
+                                            width: auto !important;
+                                            margin-top: 0 !important;
+                                            /* 줄 간격 */
+                                            margin-bottom: ${if (uiState.isVertical) "0" else "0.5em"} !important;
+                                            margin-left: ${if (uiState.isVertical) "1em" else "0"} !important;
+                                            
+                                            /* 전체 여백 적용 */
+                                            padding-left: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-right: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-top: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                            padding-bottom: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                            
+                                             box-sizing: border-box !important;
+                                             text-align: left !important;
+                                         }
+                                         .content-chunk {
+                                             overflow-anchor: auto !important;
+                                         }
+                                        /* Remove padding for images to make them edge-to-edge */
+                                        div:has(img), p:has(img) {
+                                            padding: 0 !important;
+                                        }
+                                        img {
+                                            max-width: 100% !important;
+                                            height: auto !important;
+                                            display: block !important;
+                                            margin: 1em auto !important;
+                                            object-fit: contain !important;
+                                        }
+                                        img[style*="display: none"] {
+                                            margin: 0 !important;
+                                            height: 0 !important;
+                                        }
+                                       /* Table wrapping support */
+                                       table {
+                                           width: 100% !important;
+                                           table-layout: fixed !important;
+                                           border-collapse: collapse !important;
+                                           margin: 1em 0 !important;
                                        }
-                                       
-                                       /* 2. 문단 설정: 여백이 터치 감지를 방해하지 않도록 조정 */
-                                       p, div, h1, h2, h3, h4, h5, h6 {
-                                           display: block !important; 
-                                           height: auto !important;
-                                           width: auto !important;
-                                           margin-top: 0 !important;
-                                           /* 줄 간격 */
-                                           margin-bottom: ${if (uiState.isVertical) "0" else "0.5em"} !important;
-                                           margin-left: ${if (uiState.isVertical) "1em" else "0"} !important;
-                                           
-                                           /* 전체 여백 적용 */
-                                           padding-left: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
-                                           padding-right: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
-                                           padding-top: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
-                                           padding-bottom: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
-                                           
-                                           box-sizing: border-box !important;
+                                       th, td {
+                                           border: 1px solid #888 !important;
+                                           padding: 8px !important;
+                                           white-space: normal !important;
+                                           word-wrap: break-word !important;
+                                           overflow-wrap: break-word !important;
+                                           vertical-align: top !important;
                                        }
-                                       /* Remove padding for images to make them edge-to-edge */
-                                       div:has(img), p:has(img) {
-                                           padding: 0 !important;
+                                       rt {
+                                           font-size: 0.5em !important;
+                                           text-align: center !important;
                                        }
-                                       img {
-                                           max-width: 100% !important;
-                                           height: auto !important;
-                                           display: block !important;
-                                           margin: 1em auto !important;
-                                           object-fit: contain !important;
+                                       .ruby-wide {
+                                           margin-left: -0.3em !important;
+                                           margin-right: -0.3em !important;
                                        }
-                                       img[style*="display: none"] {
-                                           margin: 0 !important;
-                                           height: 0 !important;
+                                       .ruby-wide span {
+                                           display: inline-block !important;
+                                           transform: scaleX(0.75) !important;
+                                           transform-origin: center bottom !important;
+                                           white-space: nowrap !important;
                                        }
-                                      /* Table wrapping support */
-                                      table {
-                                          width: 100% !important;
-                                          table-layout: fixed !important;
-                                          border-collapse: collapse !important;
-                                          margin: 1em 0 !important;
-                                      }
-                                      th, td {
-                                          border: 1px solid #888 !important;
-                                          padding: 8px !important;
-                                          white-space: normal !important;
-                                          word-wrap: break-word !important;
-                                          overflow-wrap: break-word !important;
-                                          vertical-align: top !important;
-                                      }
-                                      rt {
-                                          font-size: 0.5em !important;
-                                          text-align: center !important;
-                                      }
-                                      .ruby-wide {
-                                          margin-left: -0.3em !important;
-                                          margin-right: -0.3em !important;
-                                      }
-                                      .ruby-wide span {
-                                          display: inline-block !important;
-                                          transform: scaleX(0.75) !important;
-                                          transform-origin: center bottom !important;
-                                          white-space: nowrap !important;
-                                      }
-                                      div[id^="line-"] {
-                                          break-inside: avoid !important;
-                                      }
+                                       div[id^="line-"] {
+                                           break-inside: avoid !important;
+                                       }
                                       </style>
                                   """
                                    // Inject style intelligently and prevent Quirks Mode
@@ -1395,28 +1299,31 @@ window._scrollDir = -1;
                                        """.trimIndent()
                                    }
       
-                                  if (contentWithStyle.hashCode() != previousHash) {
-                                      wv.tag = contentWithStyle.hashCode()
-                                      isPageLoading = true
-                                      // If navigation was triggered, ensure isNavigating lock is on
-                                      isNavigating = true 
-                                      
-                                      if (uiState.url != null) {
-                                          wv.loadUrl(uiState.url!!)
-                                      } else {
-                                          // Use provided baseUrl or fallback to parent directory of filePath
-                                          val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
-                                          wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
-                                      }
-                                      
-                                      // Restore Scroll after load (if not navigating which handles it in onPageFinished)
-                                      wv.post {
-                                          if (!isNavigating && currentLine > 1 && uiState.totalLines > 0) {
-                                              val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
-                                              wv.evaluateJavascript(js, null)
-                                          }
-                                      }
-                                  }
+                                   if (uiState.contentUpdateType == 0) { // 전체 리로드(점프, 최초 진입)일 때만 실행
+                                       if (contentWithStyle.hashCode() != previousHash) {
+                                           wv.tag = contentWithStyle.hashCode()
+                                           isPageLoading = true
+                                           // If navigation was triggered, ensure isNavigating lock is on
+                                           isNavigating = true 
+                                           
+                                           if (uiState.url != null) {
+                                               wv.loadUrl(uiState.url!!)
+                                           } else {
+                                               // Use provided baseUrl or fallback to parent directory of filePath
+                                               val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
+                                               wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
+                                           }
+                                           
+                                           // Restore Scroll after load (if not navigating which handles it in onPageFinished)
+                                           wv.post {
+                                               if (!isNavigating && currentLine > 1 && uiState.totalLines > 0) {
+                                                   val linePostfix = if (type == FileEntry.FileType.EPUB) "${uiState.currentChapterIndex}-" else ""
+                                                   val js = "var el = document.getElementById('line-$linePostfix$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                                   wv.evaluateJavascript(js, null)
+                                               }
+                                           }
+                                       }
+                                   }
                              }
                           )
                           if (uiState.pagingMode == 1 && bottomMaskHeight > 0f && !uiState.isVertical) {

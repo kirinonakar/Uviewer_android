@@ -127,7 +127,7 @@ object EpubParser {
         )
     }
 
-    fun prepareHtmlForViewer(html: String, resetCss: String, baseDir: File? = null): Pair<String, Int> {
+    fun prepareHtmlForViewer(html: String, resetCss: String, baseDir: File? = null, idPrefix: String = "", isVertical: Boolean = false): Pair<String, Int> {
         val doc = Jsoup.parse(html)
         
         // [추가] 이미지 경로를 절대 경로로 변경
@@ -188,21 +188,29 @@ object EpubParser {
             if (hasBlockChild && el.ownText().isBlank()) continue
             
             count++
-            el.attr("id", "line-$count")
+            el.attr("id", "line-$idPrefix$count")
         }
         
         // If no block elements found, wrap the whole body text to ensure at least one line exists
         if (count == 0) {
             val content = body.html()
-            body.html("<div id=\"line-1\">$content</div>")
+            body.html("<div id=\"line-$idPrefix" + "1\">$content</div>")
             count = 1
         }
         
+        // 3. Wrap body content in a chunk div for sliding window
+        val originalBodyHtml = body.html()
+        body.html("<div class=\"content-chunk\" data-index=\"${idPrefix.removeSuffix("-")}\">$originalBodyHtml</div>")
+        
         // Append robust spacer and marker to prevent last line cutting. 
-        body.append("""
-            <div style="height: 100vh; width: 100%; clear: both;"></div>
-            <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
-        """.trimIndent())
+        if (isVertical) {
+            body.append("<div id=\"end-marker\" style=\"display:inline-block; width:1px; height:100vh;\"></div>")
+        } else {
+            body.append("""
+                <div style="height: 100vh; width: 100%; clear: both;"></div>
+                <div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>
+            """.trimIndent())
+        }
         
         return doc.outerHtml() to count
     }

@@ -42,7 +42,9 @@ data class DocumentViewerUiState(
     val customDocTextColor: String = "#000000",
     val sideMargin: Int = 8,
     val pagingMode: Int = 0,
-    val loadProgress: Float = 1f
+    val loadProgress: Float = 1f,
+    val contentUpdateType: Int = 0, // 0: Refresh, 1: Append, 2: Prepend
+    val appendTrigger: Long = 0L
 )
 
 
@@ -72,6 +74,10 @@ class DocumentViewerViewModel(
     companion object {
         const val LINES_PER_CHUNK = 2000
     }
+    private var loadedStartChunk = 0
+    private var loadedEndChunk = 0
+    private var loadedStartChapter = 0
+    private var loadedEndChapter = 0
     private var currentFilePath: String = ""
     private var currentFileType: FileEntry.FileType? = null
     private var isWebDavContext: Boolean = false
@@ -110,8 +116,10 @@ class DocumentViewerViewModel(
                     isVertical = vertical,
                     pagingMode = pMode
                 )
-                if (largeTextReader != null && currentFileType == FileEntry.FileType.TEXT) {
+                if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
+                } else if (currentFileType == FileEntry.FileType.EPUB && _uiState.value.epubChapters.isNotEmpty()) {
+                    loadChapter(_uiState.value.currentChapterIndex, initialLine = _uiState.value.currentLine)
                 }
             }.collect {}
 
@@ -200,10 +208,14 @@ class DocumentViewerViewModel(
                     
                     val chapterIdx = savedLine / 1000000
                     val lineInChapter = savedLine % 1000000
+                    
+                    loadedStartChapter = chapterIdx
+                    loadedEndChapter = chapterIdx
+                    
                     if (chapterIdx in book.spine.indices) {
-                        loadChapter(chapterIdx, lineInChapter)
+                        loadChapter(chapterIdx, lineInChapter, updateType = 0)
                     } else {
-                        loadChapter(0)
+                        loadChapter(0, updateType = 0)
                     }
                 } else {
                     // Text / HTML / CSV
@@ -301,7 +313,9 @@ class DocumentViewerViewModel(
                             currentLine = savedLine,
                             baseUrl = baseUrl
                         )
-                        loadTextChunk(chunkIdx)
+                        loadedStartChunk = chunkIdx
+                        loadedEndChunk = chunkIdx
+                        loadTextChunk(chunkIdx, updateType = 0)
                     }
                 }
             } catch (e: Exception) {
@@ -371,14 +385,23 @@ class DocumentViewerViewModel(
             }
         }
     }
-    private fun loadTextChunk(chunkIndex: Int) {
+
+    fun setEpubPosition(chapterIndex: Int, line: Int) {
+        _uiState.value = _uiState.value.copy(currentChapterIndex = chapterIndex, currentLine = line)
+    }
+
+    private fun loadTextChunk(chunkIndex: Int, updateType: Int = 0) {
         val reader = largeTextReader ?: return
         val startLine = chunkIndex * LINES_PER_CHUNK + 1
         val totalLines = reader.getTotalLines()
         if (startLine > totalLines) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            if (updateType == 0) {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+                loadedStartChunk = chunkIndex
+                loadedEndChunk = chunkIndex
+            }
             val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
             val globalLineOffset = startLine - 1
             
@@ -405,6 +428,7 @@ class DocumentViewerViewModel(
                             overflow-y: ${if (_uiState.value.isVertical) "hidden" else "scroll"} !important;
                             overscroll-behavior: none !important;
                             touch-action: ${if (_uiState.value.isVertical) "pan-x" else "pan-y"} !important;
+                            overflow-anchor: auto !important;
                             
                             /* [추가] 뷰포트 스크롤 좌표계를 위해 html에도 writing-mode 적용 */
                             writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
@@ -424,6 +448,7 @@ class DocumentViewerViewModel(
                             padding: 0 !important;
                             
                             overflow: visible !important;
+                            overflow-anchor: auto !important;
                             
                             background-color: ${colors.first} !important; 
                             color: ${colors.second} !important; 
@@ -454,6 +479,10 @@ class DocumentViewerViewModel(
                             white-space: normal !important;
                             overflow-wrap: break-word !important;
                             box-sizing: border-box !important;
+                            text-align: left !important;
+                        }
+                        .content-chunk {
+                            overflow-anchor: auto !important;
                         }
                         
                         img { 
@@ -541,7 +570,8 @@ class DocumentViewerViewModel(
                         _uiState.value.fontSize, 
                         colors.first, 
                         colors.second,
-                        _uiState.value.sideMargin
+                        _uiState.value.sideMargin,
+                        chunkIndex
                     )
                 }
             }
@@ -550,31 +580,24 @@ class DocumentViewerViewModel(
                 content = processed,
                 isLoading = false,
                 currentChunkIndex = chunkIndex,
-                hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines
+                hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines,
+                contentUpdateType = updateType,
+                appendTrigger = System.currentTimeMillis()
             )
         }
     }
 
     fun nextChunk() {
         if (_uiState.value.hasMoreContent) {
-            val nextChunkIdx = _uiState.value.currentChunkIndex + 1
-            val targetLine = nextChunkIdx * LINES_PER_CHUNK + 1
-            
-            _uiState.value = _uiState.value.copy(currentLine = targetLine, isLoading = true)
-            loadTextChunk(nextChunkIdx)
+            loadedEndChunk++
+            loadTextChunk(loadedEndChunk, updateType = 1) // Append
         }
     }
     
     fun prevChunk() {
-        if (_uiState.value.currentChunkIndex > 0) {
-            val prevChunkIdx = _uiState.value.currentChunkIndex - 1
-            val totalLines = largeTextReader?.getTotalLines() ?: 0
-            // When going back, we want to go to the LAST line of the previous chunk
-            val targetLine = (prevChunkIdx + 1) * LINES_PER_CHUNK 
-            val clampedLine = targetLine.coerceAtMost(totalLines)
-            
-            _uiState.value = _uiState.value.copy(currentLine = clampedLine, isLoading = true)
-            loadTextChunk(prevChunkIdx)
+        if (loadedStartChunk > 0) {
+            loadedStartChunk--
+            loadTextChunk(loadedStartChunk, updateType = 2) // Prepend
         }
     }
 
@@ -594,21 +617,16 @@ class DocumentViewerViewModel(
             it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
         }.coerceAtLeast(0)
 
-        if (targetChunk != _uiState.value.currentChunkIndex) {
-            // [Modified] Set isLoading to true immediately to signal UI to lock reporters
-            _uiState.value = _uiState.value.copy(
-                currentLine = line, 
-                currentChapterIndex = chapterIdx,
-                isLoading = true 
-            )
-            loadTextChunk(targetChunk)
-        } else {
-            // Even if same chunk, update currentLine to target
-            _uiState.value = _uiState.value.copy(
-                currentLine = line, 
-                currentChapterIndex = chapterIdx
-            )
-        }
+        // Reset window for jump
+        loadedStartChunk = targetChunk
+        loadedEndChunk = targetChunk
+        
+        _uiState.value = _uiState.value.copy(
+            currentLine = line, 
+            currentChapterIndex = chapterIdx,
+            isLoading = true 
+        )
+        loadTextChunk(targetChunk, updateType = 0)
     }
 
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {
@@ -704,7 +722,7 @@ class DocumentViewerViewModel(
         }
     }
 
-    fun loadChapter(index: Int, initialLine: Int = 1) {
+    fun loadChapter(index: Int, initialLine: Int = 1, updateType: Int = 0) {
         val chapters = _uiState.value.epubChapters
         if (index in chapters.indices) {
             val chapter = chapters[index]
@@ -712,7 +730,11 @@ class DocumentViewerViewModel(
             if (currentFileType == FileEntry.FileType.EPUB) {
                 val chapterFile = File(chapter.href)
                 viewModelScope.launch {
-                    _uiState.value = _uiState.value.copy(isLoading = true) 
+                    if (updateType == 0) {
+                        _uiState.value = _uiState.value.copy(isLoading = true)
+                        loadedStartChapter = index
+                        loadedEndChapter = index
+                    }
                     val rawContent = try {
                          chapterFile.readText()
                     } catch (e: Exception) {
@@ -739,6 +761,7 @@ class DocumentViewerViewModel(
                                 padding: 0 !important;
                                 overflow-x: ${if (_uiState.value.isVertical) "auto" else "hidden"} !important;
                                 overflow-y: ${if (_uiState.value.isVertical) "hidden" else "auto"} !important;
+                                overflow-anchor: auto !important;
                             }
                             body { 
                                 width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
@@ -754,6 +777,7 @@ class DocumentViewerViewModel(
                                 -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                                 text-orientation: mixed !important;
                                 overflow: visible !important;
+                                overflow-anchor: auto !important;
                                 padding-top: env(safe-area-inset-top, 0) !important;
                                 padding-bottom: env(safe-area-inset-bottom, 0) !important;
                                 padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
@@ -798,6 +822,10 @@ class DocumentViewerViewModel(
                                 margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
                                 white-space: normal !important;
                                 overflow-wrap: break-word !important;
+                                text-align: left !important;
+                            }
+                            .content-chunk {
+                                overflow-anchor: auto !important;
                             }
                             img { 
                                 max-width: 100% !important; 
@@ -819,7 +847,7 @@ class DocumentViewerViewModel(
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
                     """.trimIndent()
 
-                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss, baseDir = chapterFile.parentFile)
+                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss, baseDir = chapterFile.parentFile, idPrefix = "$index-", isVertical = _uiState.value.isVertical)
                     val processedContent = processedResult.first
                     val lineCount = processedResult.second
 
@@ -832,7 +860,9 @@ class DocumentViewerViewModel(
                         currentChapterIndex = index,
                         isLoading = false,
                         currentLine = if (initialLine == -1) lineCount else initialLine,
-                        totalLines = lineCount
+                        totalLines = lineCount,
+                        contentUpdateType = updateType,
+                        appendTrigger = System.currentTimeMillis()
                     )
                 }
             } else {
@@ -846,16 +876,16 @@ class DocumentViewerViewModel(
     }
 
     fun nextChapter() {
-        val next = _uiState.value.currentChapterIndex + 1
-        if (next < _uiState.value.epubChapters.size) {
-            loadChapter(next)
+        if (loadedEndChapter + 1 < _uiState.value.epubChapters.size) {
+            loadedEndChapter++
+            loadChapter(loadedEndChapter, updateType = 1)
         }
     }
 
     fun prevChapter() {
-        val prev = _uiState.value.currentChapterIndex - 1
-        if (prev >= 0) {
-            loadChapter(prev, initialLine = -1)
+        if (loadedStartChapter > 0) {
+            loadedStartChapter--
+            loadChapter(loadedStartChapter, updateType = 2)
         }
     }
 
