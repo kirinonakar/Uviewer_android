@@ -892,6 +892,19 @@ class DocumentViewerViewModel(
                     val newCounts = _uiState.value.chapterLineCounts.toMutableMap()
                     newCounts[index] = lineCount
 
+                    // [추가됨] 대상 챕터, 혹은 직전 챕터가 '이미지만 있는 챕터(라인수 5 이하 + 이미지 래퍼 존재)'인지 판별
+                    val isImageOnly = lineCount <= 5 && processedContent.contains("image-page-wrapper")
+                    val wasImageOnly = _uiState.value.totalLines <= 5 && _uiState.value.content.contains("image-page-wrapper")
+
+                    // [추가됨] 이어붙이기(1, 2) 모드였더라도 이미지가 얽혀있으면 목차 이동과 동일한 전체 새로고침(0)으로 강제 변환
+                    val effectiveUpdateType = if (updateType != 0 && (isImageOnly || wasImageOnly)) 0 else updateType
+
+                    // 강제 새로고침이 발생하면 이어서 붙여오던 청크(Chunk) 인덱스 기록을 초기화
+                    if (effectiveUpdateType == 0 && updateType != 0) {
+                        loadedStartChapter = index
+                        loadedEndChapter = index
+                    }
+
                     _uiState.value = _uiState.value.copy(
                         url = null, 
                         baseUrl = baseUrl,
@@ -900,7 +913,7 @@ class DocumentViewerViewModel(
                         isLoading = false,
                         currentLine = if (initialLine == -1) lineCount else initialLine,
                         totalLines = lineCount,
-                        contentUpdateType = updateType,
+                        contentUpdateType = effectiveUpdateType, // [수정됨] 강제 변환된 타입 적용
                         appendTrigger = System.currentTimeMillis(),
                         chapterLineCounts = newCounts
                     )
@@ -936,7 +949,8 @@ class DocumentViewerViewModel(
     fun prevChapter() {
         if (loadedStartChapter > 0) {
             loadedStartChapter--
-            loadChapter(loadedStartChapter, updateType = 2)
+            // [수정됨] 전체 리로드(0)로 강제 전환될 경우를 대비해 이전 챕터의 마지막 라인으로 이동하도록 -1 전달
+            loadChapter(loadedStartChapter, initialLine = -1, updateType = 2)
         }
     }
 
