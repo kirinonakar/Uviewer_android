@@ -1115,10 +1115,13 @@ fun DocumentViewerScreen(
                                                                masks.left = Math.ceil(maxR + 1);
                                                            }
                                                        }
-                                                       // Navigation direction filter: hide masks on the side we're coming from
-                                                       if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
-                                                       if (window._scrollDir === -1) { masks.bottom = 0; masks.left = 0; }
-                                                       return masks;
+                                                        // Navigation direction filter: hide masks on the side we're coming from
+                                                        if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
+                                                        if (window._scrollDir === -1) { 
+                                                            masks.bottom = 0; masks.left = 0;
+                                                            if (isVertical) masks.right = 0; // 세로모드 이전 페이지는 가리지 않음
+                                                        }
+                                                        return masks;
                                                    };
 
                                                   window.updateMask = function() {
@@ -1196,22 +1199,24 @@ fun DocumentViewerScreen(
                                                                   }
                                                               }
                                                               window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
-                                                          } else {
-                                                              var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-                                                              var scrollDelta = -w;
-                                                              if (visible.length > 0) {
-                                                                  var last = visible[visible.length - 1];
-                                                                  if (last.left < 0) scrollDelta = last.right + (last.isImageWrapper ? 0 : gap) - w;
-                                                                  else {
-                                                                      var idx = lines.indexOf(last);
-                                                                      if (idx >= 0 && idx < lines.length - 1) {
-                                                                          var nextLine = lines[idx + 1];
-                                                                          scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap) - w;
-                                                                      }
-                                                                  }
-                                                              }
-                                                              window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
-                                                          }
+                                                            } else {
+                                                                var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+                                                                var scrollDelta = -w;
+                                                                if (visible.length > 0) {
+                                                                    var last = visible[visible.length - 1]; // 가시 영역의 가장 왼쪽 줄
+                                                                    if (last.left < 0) {
+                                                                        // 왼쪽이 잘려 있다면 해당 줄의 오른쪽 끝을 화면 오른쪽(w-gap)에 맞춤 (루비 노출)
+                                                                        scrollDelta = last.right + (last.isImageWrapper ? 0 : gap) - w;
+                                                                    } else {
+                                                                        var idx = lines.indexOf(last);
+                                                                        if (idx >= 0 && idx < lines.length - 1) {
+                                                                            var nextLine = lines[idx + 1]; // 다음 페이지의 첫 줄
+                                                                            scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap) - w;
+                                                                        }
+                                                                    }
+                                                                }
+                                                                window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
+                                                            }
                                                       } else {
                                                           var moveSize = (isVertical ? w : h) - 40;
                                                           if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
@@ -1243,14 +1248,18 @@ fun DocumentViewerScreen(
                                                                   // [수정] 대상이 이미지인 경우 gap을 0으로 처리
                                                                   window.scrollBy({ top: Math.max(targetLine.top - (targetLine.isImageWrapper ? 0 : gap), -h), behavior: 'instant' });
                                                               } else window.scrollBy({ top: -h, behavior: 'instant' });
-                                                          } else {
-                                                              var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
-                                                              var prevIdx = firstVisible ? lines.indexOf(firstVisible) - 1 : -1;
-                                                              if (prevIdx >= 0) {
-                                                                  var targetLine = lines[prevIdx];
-                                                                  window.scrollBy({ left: Math.min(targetLine.left - (targetLine.isImageWrapper ? 0 : gap), w), behavior: 'instant' });
-                                                              } else window.scrollBy({ left: w, behavior: 'instant' });
-                                                          }
+                                                            } else {
+                                                                var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
+                                                                var scrollDelta = w;
+                                                                if (firstVisible) {
+                                                                    var firstIdx = lines.indexOf(firstVisible);
+                                                                    if (firstIdx > 0) {
+                                                                        var targetLine = lines[firstIdx - 1]; // 현재 화면 바로 오른쪽(이전 페이지 끝) 줄
+                                                                        scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap) - w;
+                                                                    }
+                                                                }
+                                                                window.scrollBy({ left: Math.min(scrollDelta, w), behavior: 'instant' });
+                                                            }
                                                       } else {
                                                           var moveSize = (isVertical ? w : h) - 40;
                                                           if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
