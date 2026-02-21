@@ -927,7 +927,9 @@ fun DocumentViewerScreen(
                                                           {
                                                               acceptNode: function(node) {
                                                                   if (node.nodeType === 1) {
-                                                                      if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE' || node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_ACCEPT;
+                                                                       // [핵심 수정] 이미지 래퍼는 마스크 계산에서 완전 제외 (화면 가림 방지)
+                                                                       if (node.classList && node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_REJECT;
+                                                                       if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') return NodeFilter.FILTER_ACCEPT;
                                                                       var tag = node.tagName;
                                                                       if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
                                                                           var r = node.getBoundingClientRect();
@@ -1151,10 +1153,10 @@ fun DocumentViewerScreen(
                                                        var h = window.innerHeight;
                                                        var isAtBottom = false;
                                                        if (!isVertical) {
-                                                           if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
+                                                           if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
                                                        } else {
                                                            var maxScrollX = document.documentElement.scrollWidth - w;
-                                                           if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
+                                                           if (window.pageXOffset <= -(maxScrollX - 20)) isAtBottom = true;
                                                        }
                                                        if (isAtBottom) { Android.autoLoadNext(); return; }
                                                        if (pagingMode === 1) {
@@ -1199,8 +1201,8 @@ fun DocumentViewerScreen(
                                                        var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                                                        var h = window.innerHeight;
                                                        var isAtTop = false;
-                                                       if (!isVertical) { if (window.pageYOffset <= 5) isAtTop = true; }
-                                                       else { if (window.pageXOffset >= -10) isAtTop = true; }
+                                                       if (!isVertical) { if (window.pageYOffset <= 20) isAtTop = true; }
+                                                       else { if (window.pageXOffset >= -20) isAtTop = true; }
                                                        if (isAtTop) { Android.autoLoadPrev(); return; }
                                                        if (pagingMode === 1) {
                                                            var lines = window.getVisualLines();
@@ -1344,6 +1346,8 @@ fun DocumentViewerScreen(
                                             width: ${if (uiState.isVertical) "auto" else "100%"} !important; /* 세로쓰기 시 auto로 두어야 무한 가로 스크롤 가능 */
                                             margin: 0 !important;
                                             padding: 0 !important; /* body 패딩 제거 (좌표 계산 오차 원인) */
+                                            padding-left: 0 !important;
+                                            padding-right: 0 !important;
                                             
                                             background-color: $bgColor !important;
                                             color: $textColor !important;
@@ -1372,10 +1376,10 @@ fun DocumentViewerScreen(
                                             margin-left: ${if (uiState.isVertical) "1em" else "0"} !important;
                                             
                                             /* 전체 여백 적용 */
-                                            padding-left: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
-                                            padding-right: ${if (uiState.isVertical) "0" else "${uiState.sideMargin / 20.0}em"} !important;
-                                            padding-top: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
-                                            padding-bottom: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                            padding-left: ${if (uiState.isVertical) "1.2em" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-right: ${if (uiState.isVertical) "1.2em" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-top: ${if (uiState.isVertical) "1.2em" else "0"} !important;
+                                            padding-bottom: ${if (uiState.isVertical) "1.2em" else "0"} !important;
                                             
                                              box-sizing: border-box !important;
                                              text-align: left !important;
@@ -1401,8 +1405,7 @@ fun DocumentViewerScreen(
                                             margin: 0 !important;
                                             padding: 0 !important;
                                             box-sizing: border-box !important;
-                                            page-break-after: always !important;
-                                            break-after: page !important;
+                                            break-inside: avoid !important; /* 대체 속성 */
                                         }
                                         img, svg, figure {
                                             max-width: 100% !important;

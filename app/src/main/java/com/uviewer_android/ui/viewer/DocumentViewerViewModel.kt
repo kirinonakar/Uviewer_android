@@ -468,6 +468,8 @@ class DocumentViewerViewModel(
                             /* 안전 영역 설정 (여백은 문단으로 이동) */
                             padding-top: env(safe-area-inset-top, 0) !important;
                             padding-bottom: env(safe-area-inset-bottom, 0) !important;
+                            padding-left: 0 !important;
+                            padding-right: 0 !important;
                             display: block !important;
                         }
                         
@@ -480,8 +482,8 @@ class DocumentViewerViewModel(
                             margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
                             margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
                             
-                            padding-left: ${if (_uiState.value.isVertical) "0" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                            padding-right: ${if (_uiState.value.isVertical) "0" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                            padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                            padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
                             padding-top: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
                             padding-bottom: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
                             
@@ -790,8 +792,8 @@ class DocumentViewerViewModel(
                                 overflow-anchor: auto !important;
                                 padding-top: env(safe-area-inset-top, 0) !important;
                                 padding-bottom: env(safe-area-inset-bottom, 0) !important;
-                                padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                                padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                                padding-left: 0 !important;
+                                padding-right: 0 !important;
                                 line-height: 1.8 !important;
                             }
                             rt {
@@ -830,6 +832,8 @@ class DocumentViewerViewModel(
                                 margin-top: 0 !important;
                                 margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
                                 margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
+                                padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
+                                padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
                                 white-space: normal !important;
                                 overflow-wrap: break-word !important;
                                 text-align: left !important;
@@ -855,8 +859,7 @@ class DocumentViewerViewModel(
                                 margin: 0 !important;
                                 padding: 0 !important;
                                 box-sizing: border-box !important;
-                                page-break-after: always !important;
-                                break-after: page !important;
+                                break-inside: avoid !important; /* 대체 속성 */
                             }
                             img, svg, figure { 
                                 max-width: 100% !important; 
