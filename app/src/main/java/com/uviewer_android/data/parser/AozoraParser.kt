@@ -254,13 +254,16 @@ object AozoraParser {
                 styles.add("padding-bottom: ${n}em")
             }
 
-            val classAttr = if (classes.isNotEmpty()) " class=\"${classes.joinToString(" ")}\"" else ""
+            val classAttr = if (classes.isNotEmpty() || lineContent.isBlank()) {
+                val combinedClasses = if (lineContent.isBlank()) classes + "blank-line" else classes
+                " class=\"${combinedClasses.joinToString(" ")}\""
+            } else ""
             val styleAttr = if (styles.isNotEmpty()) " style=\"${styles.joinToString("; ")}\"" else ""
             
             if (lineContent.isBlank()) {
-                "<div id=\"line-${index + lineOffset + 1}\" $classAttr $styleAttr>&nbsp;</div>"
+                "<div id=\"line-${index + lineOffset + 1}\"$classAttr $styleAttr>&nbsp;</div>"
             } else {
-                "<div id=\"line-${index + lineOffset + 1}\" $classAttr $styleAttr>$lineContent</div>"
+                "<div id=\"line-${index + lineOffset + 1}\"$classAttr $styleAttr>$lineContent</div>"
             }
         }
 
@@ -425,8 +428,8 @@ object AozoraParser {
                         height: auto !important;
                         width: auto !important;
                         margin-top: 0 !important;
-                        margin-bottom: ${if (isVertical) "0" else "0.5em"} !important;
-                        margin-left: ${if (isVertical) "1em" else "0"} !important;
+                        margin-bottom: ${if (isVertical) "0" else "0.2em"} !important;
+                        margin-left: ${if (isVertical) "0.3em" else "0"} !important;
                         padding-left: ${if (isVertical) "0" else "${marginEm}em"} !important;
                         padding-right: ${if (isVertical) "0" else "${marginEm}em"} !important;
                         padding-top: ${if (isVertical) "${marginEm}em" else "0"} !important;
@@ -476,7 +479,11 @@ object AozoraParser {
                     
                     h1, h2, h3 {
                         text-align: center;
-                        margin: 1.5em 0;
+                        margin: 1.5em 0 !important;
+                    }
+                    .blank-line {
+                        margin: 0 !important;
+                        line-height: 1.0 !important;
                     }
                     rt {
                         font-size: 0.5em;
