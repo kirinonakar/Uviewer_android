@@ -1079,8 +1079,8 @@ fun DocumentViewerScreen(
                                                            var visible = lines.filter(function(l) { return l.bottom > 0.05 && l.top < h - 0.05; });
                                                            if (visible.length === 0) return masks;
                                                            
-                                                           // [수정] 이미지는 마스크 드로잉에서 완벽히 제외
                                                            var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
+                                                           var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
                                                            
                                                            var cutTop = textVisible.filter(function(l) { return l.top < -0.05; });
                                                            if (cutTop.length > 0) {
@@ -1095,11 +1095,30 @@ fun DocumentViewerScreen(
                                                                for (var i = 0; i < cutBottom.length; i++) { if (cutBottom[i].top < minT) minT = cutBottom[i].top; }
                                                                masks.bottom = Math.ceil(h - minT + 1);
                                                            }
+
+                                                           // Adjust for images: don't cover them
+                                                           imageVisible.forEach(function(img) {
+                                                               if (img.top < masks.top) masks.top = Math.max(0, Math.floor(img.top));
+                                                               if (img.bottom > h - masks.bottom) masks.bottom = Math.max(0, Math.floor(h - img.bottom));
+                                                           });
+
+                                                           // Protect fully visible text from being covered by adjacent masks
+                                                           var fullText = textVisible.filter(function(l) { return l.top >= -0.05 && l.bottom <= h + 0.05; });
+                                                           if (fullText.length > 0) {
+                                                               var minTVal = h, maxBVal = 0;
+                                                               fullText.forEach(function(l) {
+                                                                   if (l.top < minTVal) minTVal = l.top;
+                                                                   if (l.bottom > maxBVal) maxBVal = l.bottom;
+                                                               });
+                                                               if (masks.top > minTVal) masks.top = Math.max(0, Math.floor(minTVal));
+                                                               if (masks.bottom > (h - maxBVal)) masks.bottom = Math.max(0, Math.floor(h - maxBVal));
+                                                           }
                                                        } else {
                                                            var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
                                                            if (visible.length === 0) return masks;
                                                            
                                                            var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
+                                                           var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
                                                            
                                                            var cutRight = textVisible.filter(function(l) { return l.right > w + 0.05; });
                                                            if (cutRight.length > 0) {
@@ -1114,12 +1133,37 @@ fun DocumentViewerScreen(
                                                                for (var i = 0; i < cutLeft.length; i++) { if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; }
                                                                masks.left = Math.ceil(maxR + 1);
                                                            }
+
+                                                           // Adjust for images: don't cover them
+                                                           imageVisible.forEach(function(img) {
+                                                               if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
+                                                               if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
+                                                           });
+
+                                                           // Protect fully visible text from being covered by adjacent masks
+                                                           var fullTextV = textVisible.filter(function(l) { return l.left >= -0.05 && l.right <= w + 0.05; });
+                                                           if (fullTextV.length > 0) {
+                                                               var minLVal = w, maxRVal = 0;
+                                                               fullTextV.forEach(function(l) {
+                                                                   if (l.left < minLVal) minLVal = l.left;
+                                                                   if (l.right > maxRVal) maxRVal = l.right;
+                                                               });
+                                                               if (masks.left > minLVal) masks.left = Math.max(0, Math.floor(minLVal));
+                                                               if (masks.right > (w - maxRVal)) masks.right = Math.max(0, Math.floor(w - maxRVal));
+                                                           }
                                                        }
                                                         // Navigation direction filter: hide masks on the side we're coming from
-                                                        if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
-                                                        if (window._scrollDir === -1) { 
-                                                            masks.bottom = 0; masks.left = 0;
-                                                            if (isVertical) masks.right = 0; // 세로모드 이전 페이지는 가리지 않음
+                                                        if (!isVertical) {
+                                                            if (window._scrollDir === 1) { masks.top = 0; }
+                                                            if (window._scrollDir === -1) { masks.bottom = 0; }
+                                                        } else {
+                                                            if (window._scrollDir === 1) {
+                                                                masks.right = 0; // Hides previous page content on the right, keep left for next
+                                                            }
+                                                            if (window._scrollDir === -1) { 
+                                                                masks.left = 0;
+                                                                masks.right = 0; // Show everything on previous
+                                                            }
                                                         }
                                                         return masks;
                                                    };

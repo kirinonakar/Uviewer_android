@@ -453,7 +453,7 @@ object AozoraParser {
                         margin: 1em 0;
                     }
                     .small-text-2 {
-                        font-size: 0.7em !important;
+                        font-size: 0.8em !important;
                     }
                     .tcy {
                         text-combine-upright: all;

@@ -687,11 +687,12 @@ class DocumentViewerViewModel(
                 // Rule 1: Same file and same position -> Move to top
                 favoriteDao.updateFavorite(existing.copy(
                     timestamp = System.currentTimeMillis(),
-                    isPinned = wasPinned || existing.isPinned
+                    isPinned = wasPinned || existing.isPinned,
+                    pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else existing.pinOrder
                 ))
                 // If a DIFFERENT item was pinned, unpin it
                 if (wasPinned && pinnedItem?.id != existing.id) {
-                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
                 }
             } else {
                 // Rule 2: Same document, different location/position -> Max 3
@@ -721,13 +722,14 @@ class DocumentViewerViewModel(
                         type = type,
                         position = savePosition,
                         isPinned = wasPinned, // Transfer pin status
+                        pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else 0,
                         progress = progress,
                         timestamp = System.currentTimeMillis()
                     )
                 )
                 // Unpin the old one if it was different
-                if (wasPinned) {
-                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                if (wasPinned && (pinnedItem?.path != path || pinnedItem?.position != savePosition)) {
+                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
                 }
             }
         }

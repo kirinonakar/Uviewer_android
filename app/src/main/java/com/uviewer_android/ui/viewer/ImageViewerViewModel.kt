@@ -121,12 +121,13 @@ enum class ViewMode {
                         favoriteDao.updateFavorite(existing.copy(
                             timestamp = System.currentTimeMillis(),
                             isPinned = wasPinned || existing.isPinned,
+                            pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else existing.pinOrder,
                             progress = progress,
                             positionTitle = imageName
                         ))
                         // If a DIFFERENT item was pinned, unpin it
                         if (wasPinned && pinnedItem?.id != existing.id) {
-                            favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                            favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
                         }
                     } else {
                         // Rule 2: Same document/archive, different location/position -> Max 3
@@ -149,13 +150,14 @@ enum class ViewMode {
                                 position = index,
                                 positionTitle = imageName,
                                 isPinned = wasPinned, // Transfer pin status
+                                pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else 0,
                                 progress = progress,
                                 timestamp = System.currentTimeMillis()
                             )
                         )
                         // Unpin the old one if it was different
-                        if (wasPinned) {
-                            favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                        if (wasPinned && (pinnedItem?.path != path || pinnedItem?.position != index)) {
+                             favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
                         }
                     }
                 } catch (e: Exception) {
