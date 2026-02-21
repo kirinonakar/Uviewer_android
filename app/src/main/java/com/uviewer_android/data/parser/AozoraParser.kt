@@ -261,7 +261,8 @@ object AozoraParser {
             val styleAttr = if (styles.isNotEmpty()) " style=\"${styles.joinToString("; ")}\"" else ""
             
             if (lineContent.isBlank()) {
-                "<div id=\"line-${index + lineOffset + 1}\"$classAttr $styleAttr>&nbsp;</div>"
+                // &nbsp;를 제거하여 내부 텍스트에 의한 너비 확장을 막습니다.
+                "<div id=\"line-${index + lineOffset + 1}\"$classAttr $styleAttr></div>"
             } else {
                 "<div id=\"line-${index + lineOffset + 1}\"$classAttr $styleAttr>$lineContent</div>"
             }
@@ -481,10 +482,15 @@ object AozoraParser {
                         text-align: center;
                         margin: 1.5em 0 !important;
                     }
-                    .blank-line {
-                        margin: 0 !important;
-                        line-height: 1.0 !important;
-                    }
+.blank-line {
+    margin: 0 !important;
+    padding: 0 !important;
+    /* 세로모드에서 가로 너비를 0.2자 정도로 제한 */
+    width: 0.2em !important; 
+    min-width: 0.2em !important;
+    height: auto !important;
+    display: block !important;
+}
                     rt {
                         font-size: 0.5em;
                         text-align: center;

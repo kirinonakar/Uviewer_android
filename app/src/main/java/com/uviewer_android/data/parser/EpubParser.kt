@@ -206,6 +206,9 @@ object EpubParser {
             
             count++
             el.attr("id", "line-$idPrefix$count")
+            if (el.text().isBlank() && el.select("img, svg, figure").isEmpty()) {
+                el.addClass("blank-line")
+            }
         }
         
         // If no block elements found, wrap the whole body text to ensure at least one line exists

@@ -1401,13 +1401,13 @@ fun DocumentViewerScreen(
                                             margin-top: 0 !important;
                                             /* 줄 간격 */
                                             margin-bottom: ${if (uiState.isVertical) "0" else "0.5em"} !important;
-                                            margin-left: ${if (uiState.isVertical) "1em" else "0"} !important;
+                                            margin-left: ${if (uiState.isVertical) "0.4em" else "0"} !important;
                                             
                                             /* 전체 여백 적용 */
-                                            padding-left: ${if (uiState.isVertical) "1.2em" else "${uiState.sideMargin / 20.0}em"} !important;
-                                            padding-right: ${if (uiState.isVertical) "1.2em" else "${uiState.sideMargin / 20.0}em"} !important;
-                                            padding-top: ${if (uiState.isVertical) "1.2em" else "0"} !important;
-                                            padding-bottom: ${if (uiState.isVertical) "1.2em" else "0"} !important;
+                                            padding-left: ${if (uiState.isVertical) "0.3em" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-right: ${if (uiState.isVertical) "0.3em" else "${uiState.sideMargin / 20.0}em"} !important;
+                                            padding-top: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
+                                            padding-bottom: ${if (uiState.isVertical) "${uiState.sideMargin / 20.0}em" else "0"} !important;
                                             
                                              box-sizing: border-box !important;
                                              text-align: left !important;
@@ -1480,6 +1480,15 @@ fun DocumentViewerScreen(
                                        div[id^="line-"] {
                                            break-inside: avoid !important;
                                        }
+                                        .blank-line {
+                                            margin: 0 !important;
+                                            padding: 0 !important;
+                                            width: ${if (uiState.isVertical) "0.2em" else "auto"} !important;
+                                            min-width: ${if (uiState.isVertical) "0.2em" else "auto"} !important;
+                                            height: ${if (uiState.isVertical) "auto" else "0.2em"} !important;
+                                            min-height: ${if (uiState.isVertical) "auto" else "0.2em"} !important;
+                                            display: block !important;
+                                        }
                                       </style>
                                   """
                                    // Inject style intelligently and prevent Quirks Mode
