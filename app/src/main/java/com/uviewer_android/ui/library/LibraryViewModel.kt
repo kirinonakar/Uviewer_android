@@ -176,7 +176,23 @@ class LibraryViewModel(
                 )
             },
             favoritePaths = favorites.map { it.path }.toSet(),
-            pinnedFiles = pinnedOverride ?: favoriteEntries.filter { it.isPinned }.sortedBy { it.pinOrder },
+            pinnedFiles = if (pinnedOverride != null) {
+                pinnedOverride.mapNotNull { file ->
+                    // Find the current pinned favorite for this path to get latest metadata
+                    val fav = favorites.find { it.path == file.path && it.isPinned }
+                    if (fav != null) {
+                        file.copy(
+                            name = fav.title,
+                            position = fav.position,
+                            positionTitle = fav.positionTitle,
+                            progress = fav.progress,
+                            isPinned = true
+                        )
+                    } else null // Item is no longer pinned in DB
+                }
+            } else {
+                favoriteEntries.filter { it.isPinned }.sortedBy { it.pinOrder }
+            },
             sortOption = sort,
             mostRecentFile = mostRecent
         )
@@ -200,6 +216,7 @@ class LibraryViewModel(
         if (_state.value.selectedTabIndex == index) return
         
         userPreferencesRepository.setLastLibraryTab(index)
+        _pinnedFilesOverride.value = null // Clear override when switching tabs
         
         if (index == 2) {
             _state.value = _state.value.copy(selectedTabIndex = index)
@@ -390,6 +407,8 @@ class LibraryViewModel(
             if (updates.isNotEmpty()) {
                 favoriteDao.updateFavorites(updates)
             }
+            // Clear override after DB is updated to ensure we sync with source of truth
+            _pinnedFilesOverride.value = null
         }
     }
 
