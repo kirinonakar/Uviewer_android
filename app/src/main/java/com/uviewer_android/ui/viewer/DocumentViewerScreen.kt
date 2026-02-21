@@ -927,7 +927,7 @@ fun DocumentViewerScreen(
                                                           {
                                                               acceptNode: function(node) {
                                                                   if (node.nodeType === 1) {
-                                                                      if (node.tagName === 'IMG') return NodeFilter.FILTER_REJECT;
+                                                                      if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE' || node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_ACCEPT;
                                                                       var tag = node.tagName;
                                                                       if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
                                                                           var r = node.getBoundingClientRect();
@@ -949,6 +949,7 @@ fun DocumentViewerScreen(
                                                       while ((node = walker.nextNode())) {
                                                           var el = node.parentElement;
                                                           if (!el) continue;
+                                                           if (node.nodeType === 1 && node.tagName === 'IMG' && el.classList.contains('image-page-wrapper')) continue;
                                                           var rubyParent = el.closest('ruby');
                                                           if (rubyParent) {
                                                               if (seenRuby.has(rubyParent)) continue;
@@ -1000,9 +1001,7 @@ fun DocumentViewerScreen(
                                                                   }
                                                               }
                                                           } else {
-                                                              var range = document.createRange();
-                                                              range.selectNodeContents(node);
-                                                              var rects = range.getClientRects();
+                                                               var rects; if (node.nodeType === 1) { rects = [node.getBoundingClientRect()]; } else { var range = document.createRange(); range.selectNodeContents(node); rects = range.getClientRects(); }
                                                               for (var i = 0; i < rects.length; i++) {
                                                                   var r = rects[i];
                                                                   if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
@@ -1161,7 +1160,7 @@ fun DocumentViewerScreen(
                                                       if (pagingMode === 1) {
                                                           var lines = window.getVisualLines();
                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                          var gap = FS * 0.8;
+                                                          var gap = (lines.some(l => l.bottom - l.top > h * 0.8)) ? 0 : FS * 0.8;
                                                           if (!isVertical) {
                                                               var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
                                                               var scrollDelta = h;
@@ -1173,7 +1172,7 @@ fun DocumentViewerScreen(
                                                                       if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].top - gap;
                                                                   }
                                                               }
-                                                              window.scrollBy({ top: Math.min(scrollDelta, h - 15), behavior: 'instant' });
+                                                              window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
                                                           } else {
                                                               var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
                                                               var scrollDelta = -w;
@@ -1185,7 +1184,7 @@ fun DocumentViewerScreen(
                                                                       if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].right + gap - w;
                                                                   }
                                                               }
-                                                              window.scrollBy({ left: Math.max(scrollDelta, -w + 15), behavior: 'instant' });
+                                                              window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
                                                           }
                                                       } else {
                                                           var moveSize = (isVertical ? w : h) - 40;
@@ -1206,7 +1205,7 @@ fun DocumentViewerScreen(
                                                       if (pagingMode === 1) {
                                                           var lines = window.getVisualLines();
                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                          var gap = FS * 0.8;
+                                                          var gap = (lines.some(l => l.bottom - l.top > h * 0.8)) ? 0 : FS * 0.8;
                                                           if (!isVertical) {
                                                               var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
                                                               var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
@@ -1214,13 +1213,13 @@ fun DocumentViewerScreen(
                                                                   var targetBottom = lines[prevIdx].bottom;
                                                                   var topIdx = prevIdx;
                                                                   for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
-                                                                  window.scrollBy({ top: Math.max(lines[topIdx].top - gap, -h + 15), behavior: 'instant' });
-                                                              } else window.scrollBy({ top: -h + 15, behavior: 'instant' });
+                                                                  window.scrollBy({ top: Math.max(lines[topIdx].top - gap, -h), behavior: 'instant' });
+                                                              } else window.scrollBy({ top: -h, behavior: 'instant' });
                                                           } else {
                                                               var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
                                                               var prevIdx = firstVisible ? lines.indexOf(firstVisible) - 1 : -1;
-                                                              if (prevIdx >= 0) window.scrollBy({ left: Math.min(lines[prevIdx].left - gap, w - 15), behavior: 'instant' });
-                                                              else window.scrollBy({ left: w - 15, behavior: 'instant' });
+                                                              if (prevIdx >= 0) window.scrollBy({ left: Math.min(lines[prevIdx].left - gap, w), behavior: 'instant' });
+                                                              else window.scrollBy({ left: w, behavior: 'instant' });
                                                           }
                                                       } else {
                                                           var moveSize = (isVertical ? w : h) - 40;
@@ -1385,14 +1384,27 @@ fun DocumentViewerScreen(
                                              overflow-anchor: auto !important;
                                          }
                                         /* Remove padding for images to make them edge-to-edge */
-                                        div:has(img), p:has(img) {
+                                        div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
                                             padding: 0 !important;
+                                            margin: 0 !important;
                                         }
-                                        img {
+                                        .image-page-wrapper {
+                                            width: 100vw !important;
+                                            height: 100vh !important;
+                                            display: flex !important;
+                                            justify-content: center !important;
+                                            align-items: center !important;
+                                            overflow: hidden !important;
+                                            page-break-after: always !important;
+                                            break-after: page !important;
+                                        }
+                                        img, svg, figure {
                                             max-width: 100% !important;
+                                            max-height: 100% !important;
+                                            width: auto !important;
                                             height: auto !important;
                                             display: block !important;
-                                            margin: 1em auto !important;
+                                            margin: 0 auto !important;
                                             object-fit: contain !important;
                                         }
                                         img[style*="display: none"] {
@@ -1471,7 +1483,7 @@ fun DocumentViewerScreen(
                                                wv.loadUrl(uiState.url!!)
                                            } else {
                                                // Use provided baseUrl or fallback to parent directory of filePath
-                                               val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file://${java.io.File(filePath).parent}/" else null)
+                                               val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file:///${java.io.File(filePath).parent?.replace(java.io.File.separator, "/")}/" else null)
                                                wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
                                            }
                                            

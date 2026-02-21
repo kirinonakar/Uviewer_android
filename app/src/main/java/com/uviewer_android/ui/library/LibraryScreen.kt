@@ -24,6 +24,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
@@ -69,6 +76,14 @@ fun LibraryScreen(
     val currentGridState = rememberLazyGridState()
 
     var showAddServerDialog by remember { mutableStateOf(false) }
+
+    // Drag and Drop state for Pinned Tab reordering
+    var draggedItemPath by remember { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    var dragOffsetX by remember { mutableStateOf(0f) }
+    var currentItemIndex by remember { mutableStateOf<Int?>(null) }
+    var gridInitialNodeOffset by remember { mutableStateOf(IntOffset.Zero) }
+    var listInitialNodeOffset by remember { mutableStateOf(0) }
 
     BackHandler(enabled = true) {
         if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
@@ -224,53 +239,187 @@ fun LibraryScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(listToShow) { file ->
-                                val isFavorite = uiState.favoritePaths.contains(file.path)
-                                FileItemGridCard(
-                                    file = file,
-                                    isFavorite = isFavorite,
-                                    isPinnedTab = selectedTab == 2,
-                                    isRemoteTab = selectedTab == 1,
-                                    onToggleFavorite = { viewModel.toggleFavorite(file) },
-                                    onTogglePin = { viewModel.togglePin(file) },
-                                    onClick = {
-                                        if (file.isDirectory) {
-                                            if (file.path.startsWith("server:")) {
-                                                viewModel.openFolder("/", file.serverId)
-                                            } else {
-                                                viewModel.navigateTo(file)
-                                            }
-                                        } else {
-                                            onNavigateToViewer(file)
+                            itemsIndexed(listToShow, key = { _, file -> file.path }) { index, file ->
+                                val isDragging = draggedItemPath == file.path
+                                val isPinnedTab = selectedTab == 2
+                                val itemModifier = if (isPinnedTab) {
+                                    Modifier
+                                        .zIndex(if (isDragging) 10f else 0f)
+                                        .pointerInput(file.path) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { 
+                                                    draggedItemPath = file.path
+                                                    val info = currentGridState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                    gridInitialNodeOffset = info?.offset ?: IntOffset.Zero
+                                                    currentItemIndex = info?.index ?: index
+                                                    dragOffsetX = 0f
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetX += dragAmount.x
+                                                    dragOffsetY += dragAmount.y
+                                                    
+                                                    val info = currentGridState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                    // 레이아웃이 완전히 갱신되었을 때만 다음 스왑 처리를 허용 (튀는 현상 방지)
+                                                    if (info != null && info.index == currentItemIndex) {
+                                                        val visualCenterX = gridInitialNodeOffset.x + dragOffsetX + info.size.width / 2
+                                                        val visualCenterY = gridInitialNodeOffset.y + dragOffsetY + info.size.height / 2
+                                                        
+                                                        val targetItem = currentGridState.layoutInfo.visibleItemsInfo.find { 
+                                                            visualCenterX.toInt() in it.offset.x..(it.offset.x + it.size.width) &&
+                                                            visualCenterY.toInt() in it.offset.y..(it.offset.y + it.size.height)
+                                                        }
+                                                        
+                                                        if (targetItem != null && targetItem.key != file.path) {
+                                                            currentItemIndex = targetItem.index // 기대하는 다음 인덱스로 업데이트
+                                                            viewModel.reorderPinnedFiles(info.index, targetItem.index)
+                                                        }
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggedItemPath = null
+                                                    dragOffsetX = 0f
+                                                    dragOffsetY = 0f
+                                                    currentItemIndex = null
+                                                },
+                                                onDragCancel = {
+                                                    draggedItemPath = null
+                                                    dragOffsetX = 0f
+                                                    dragOffsetY = 0f
+                                                    currentItemIndex = null
+                                                }
+                                            )
                                         }
-                                    }
-                                )
+                                        .offset {
+                                            if (isDragging) {
+                                                // offset 블록 내부(Layout Phase)에서 읽어야 재구성(Recomposition) 성능 저하가 없습니다.
+                                                val currentInfo = currentGridState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                val adjX = if (currentInfo != null) gridInitialNodeOffset.x - currentInfo.offset.x else 0
+                                                val adjY = if (currentInfo != null) gridInitialNodeOffset.y - currentInfo.offset.y else 0
+                                                IntOffset(
+                                                    (dragOffsetX + adjX).toInt(), 
+                                                    (dragOffsetY + adjY).toInt()
+                                                )
+                                            } else IntOffset.Zero
+                                        }
+                                        .graphicsLayer {
+                                            if (isDragging) {
+                                                scaleX = 1.05f
+                                                scaleY = 1.05f
+                                                shadowElevation = 8f
+                                            }
+                                        }
+                                } else Modifier
+
+                                Box(modifier = itemModifier) {
+                                    val isFavorite = uiState.favoritePaths.contains(file.path)
+                                    FileItemGridCard(
+                                        file = file,
+                                        isFavorite = isFavorite,
+                                        isPinnedTab = isPinnedTab,
+                                        isRemoteTab = selectedTab == 1,
+                                        onToggleFavorite = { viewModel.toggleFavorite(file) },
+                                        onTogglePin = { viewModel.togglePin(file) },
+                                        onClick = {
+                                            if (file.isDirectory) {
+                                                if (file.path.startsWith("server:")) {
+                                                    viewModel.openFolder("/", file.serverId)
+                                                } else {
+                                                    viewModel.navigateTo(file)
+                                                }
+                                            } else {
+                                                onNavigateToViewer(file)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     } else {
                         LazyColumn(state = currentListState, modifier = Modifier.fillMaxSize()) {
-                            items(listToShow) { file ->
-                                val isFavorite = uiState.favoritePaths.contains(file.path)
-                                FileItemRow(
-                                    file = file,
-                                    isFavorite = isFavorite,
-                                    isPinnedTab = selectedTab == 2,
-                                    isRemoteTab = selectedTab == 1,
-                                    onToggleFavorite = { viewModel.toggleFavorite(file) },
-                                    onTogglePin = { viewModel.togglePin(file) },
-                                    onClick = {
-                                        if (file.isDirectory) {
-                                            if (file.path.startsWith("server:")) {
-                                                // When clicking a server from the list, ALWAYS start at root "/"
-                                                viewModel.openFolder("/", file.serverId)
-                                            } else {
-                                                viewModel.navigateTo(file)
-                                            }
-                                        } else {
-                                            onNavigateToViewer(file)
+                            itemsIndexed(listToShow, key = { _, file -> file.path }) { index, file ->
+                                val isDragging = draggedItemPath == file.path
+                                val isPinnedTab = selectedTab == 2
+                                val itemModifier = if (isPinnedTab) {
+                                    Modifier
+                                        .zIndex(if (isDragging) 10f else 0f)
+                                        .pointerInput(file.path) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { 
+                                                    draggedItemPath = file.path
+                                                    val info = currentListState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                    listInitialNodeOffset = info?.offset ?: 0
+                                                    currentItemIndex = info?.index ?: index
+                                                    dragOffsetY = 0f
+                                                },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragOffsetY += dragAmount.y
+                                                    
+                                                    val info = currentListState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                    if (info != null && info.index == currentItemIndex) {
+                                                        val visualCenterY = listInitialNodeOffset + dragOffsetY + info.size / 2
+                                                        val targetItem = currentListState.layoutInfo.visibleItemsInfo.find { 
+                                                            visualCenterY.toInt() in it.offset..(it.offset + it.size)
+                                                        }
+                                                        if (targetItem != null && targetItem.key != file.path) {
+                                                            currentItemIndex = targetItem.index
+                                                            viewModel.reorderPinnedFiles(info.index, targetItem.index)
+                                                        }
+                                                    }
+                                                },
+                                                onDragEnd = {
+                                                    draggedItemPath = null
+                                                    dragOffsetY = 0f
+                                                    currentItemIndex = null
+                                                },
+                                                onDragCancel = {
+                                                    draggedItemPath = null
+                                                    dragOffsetY = 0f
+                                                    currentItemIndex = null
+                                                }
+                                            )
                                         }
-                                    }
-                                )
+                                        .offset {
+                                            if (isDragging) {
+                                                val currentInfo = currentListState.layoutInfo.visibleItemsInfo.find { it.key == file.path }
+                                                val adjY = if (currentInfo != null) listInitialNodeOffset - currentInfo.offset else 0
+                                                IntOffset(0, (dragOffsetY + adjY).toInt())
+                                            } else IntOffset.Zero
+                                        }
+                                        .graphicsLayer {
+                                            if (isDragging) {
+                                                scaleX = 1.05f
+                                                scaleY = 1.05f
+                                                shadowElevation = 8f
+                                            }
+                                        }
+                                } else Modifier
+
+                                Box(modifier = itemModifier) {
+                                    val isFavorite = uiState.favoritePaths.contains(file.path)
+                                    FileItemRow(
+                                        file = file,
+                                        isFavorite = isFavorite,
+                                        isPinnedTab = isPinnedTab,
+                                        isRemoteTab = selectedTab == 1,
+                                        onToggleFavorite = { viewModel.toggleFavorite(file) },
+                                        onTogglePin = { viewModel.togglePin(file) },
+                                        onClick = {
+                                            if (file.isDirectory) {
+                                                if (file.path.startsWith("server:")) {
+                                                    // When clicking a server from the list, ALWAYS start at root "/"
+                                                    viewModel.openFolder("/", file.serverId)
+                                                } else {
+                                                    viewModel.navigateTo(file)
+                                                }
+                                            } else {
+                                                onNavigateToViewer(file)
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

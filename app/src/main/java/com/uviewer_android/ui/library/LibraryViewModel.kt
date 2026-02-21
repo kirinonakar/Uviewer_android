@@ -44,6 +44,7 @@ class LibraryViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _sortOption = MutableStateFlow(SortOption.NAME)
+    private val _pinnedFilesOverride = MutableStateFlow<List<FileEntry>?>(null)
 
     init {
         val lastTab = userPreferencesRepository.getLastLibraryTab()
@@ -84,8 +85,16 @@ class LibraryViewModel(
         favoriteDao.getAllFavorites(),
         _sortOption,
         recentFileDao.getMostRecentFile().onStart { emit(null) },
-        _servers
-    ) { state, favorites, sort, mostRecent, servers ->
+        _servers,
+        _pinnedFilesOverride
+    ) { flows ->
+        val state = flows[0] as LibraryUiState
+        val favorites = flows[1] as List<FavoriteItem>
+        val sort = flows[2] as SortOption
+        val mostRecent = flows[3] as com.uviewer_android.data.RecentFile?
+        val servers = flows[4] as List<com.uviewer_android.data.WebDavServer>
+        val pinnedOverride = flows[5] as List<FileEntry>?
+
         var listToProcess = state.fileList
         
         // If we are in WebDAV tab and explicitly at the server list path OR no server selected
@@ -127,6 +136,7 @@ class LibraryViewModel(
                     isWebDav = it.isWebDav,
                     serverId = it.serverId,
                     isPinned = it.isPinned,
+                    pinOrder = it.pinOrder,
                     position = it.position,
                     positionTitle = it.positionTitle,
                     progress = it.progress
@@ -144,6 +154,7 @@ class LibraryViewModel(
                         isWebDav = it.isWebDav,
                         serverId = it.serverId,
                         isPinned = it.isPinned,
+                        pinOrder = it.pinOrder,
                         position = it.position,
                         positionTitle = it.positionTitle,
                         progress = it.progress
@@ -158,13 +169,14 @@ class LibraryViewModel(
                 val favorite = favorites.find { it.path == file.path }
                 file.copy(
                     isPinned = favorite?.isPinned == true,
+                    pinOrder = favorite?.pinOrder ?: 0,
                     position = favorite?.position ?: -1,
                     positionTitle = favorite?.positionTitle,
                     progress = favorite?.progress ?: 0f
                 )
             },
             favoritePaths = favorites.map { it.path }.toSet(),
-            pinnedFiles = favoriteEntries.filter { it.isPinned }.sortedBy { it.name.lowercase() },
+            pinnedFiles = pinnedOverride ?: favoriteEntries.filter { it.isPinned }.sortedBy { it.pinOrder },
             sortOption = sort,
             mostRecentFile = mostRecent
         )
@@ -331,8 +343,13 @@ class LibraryViewModel(
             }
 
             if (existing != null) {
-                favoriteDao.updateFavorite(existing.copy(isPinned = !existing.isPinned))
+                val maxOrder = favorites.filter { it.isPinned }.maxOfOrNull { it.pinOrder } ?: 0
+                favoriteDao.updateFavorite(existing.copy(
+                    isPinned = !existing.isPinned,
+                    pinOrder = if (!existing.isPinned) maxOrder + 1 else 0
+                ))
             } else {
+                val maxOrder = favorites.filter { it.isPinned }.maxOfOrNull { it.pinOrder } ?: 0
                 favoriteDao.insertFavorite(
                     FavoriteItem(
                         title = entry.name,
@@ -340,9 +357,38 @@ class LibraryViewModel(
                         isWebDav = entry.isWebDav,
                         serverId = entry.serverId,
                         type = entry.type.name,
-                        isPinned = true
+                        isPinned = true,
+                        pinOrder = maxOrder + 1
                     )
                 )
+            }
+            // Clear override to refresh from DB
+            _pinnedFilesOverride.value = null
+        }
+    }
+
+    fun reorderPinnedFiles(fromIndex: Int, toIndex: Int) {
+        val pinned = uiState.value.pinnedFiles
+        if (fromIndex !in pinned.indices || toIndex !in pinned.indices) return
+        
+        val newList = pinned.toMutableList()
+        val item = newList.removeAt(fromIndex)
+        newList.add(toIndex, item)
+        
+        // Update local state immediately
+        _pinnedFilesOverride.value = newList
+        
+        viewModelScope.launch {
+            // Re-assign pinOrder based on new positions
+            val favorites = favoriteDao.getAllFavorites().first()
+            val updates = newList.mapIndexedNotNull { index, file ->
+                val fav = favorites.find { it.path == file.path }
+                if (fav != null && fav.pinOrder != index) {
+                    fav.copy(pinOrder = index)
+                } else null
+            }
+            if (updates.isNotEmpty()) {
+                favoriteDao.updateFavorites(updates)
             }
         }
     }

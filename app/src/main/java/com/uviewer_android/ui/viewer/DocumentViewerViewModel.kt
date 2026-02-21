@@ -304,7 +304,8 @@ class DocumentViewerViewModel(
 
                         // Set Base URL for WebDAV to support relative remote images
                         // [Modification] Use local cache dir as base for WebDAV to allow file:// resources
-                        var baseUrl: String? = "file://${file.parentFile.absolutePath}/"
+                        val separator = File.separator
+                        var baseUrl: String? = "file:///${file.parentFile.absolutePath.replace(separator, "/")}/"
                         // If it's WebDAV, we still might need the remote URL for some cases, but for images and basic security, file:// base is better.
                         // val remoteBaseUrl = if (isWebDav && serverId != null) { ... } else null
                         
@@ -552,7 +553,8 @@ class DocumentViewerViewModel(
             } else {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
                     val imageRootPath = if (!isWebDavContext) {
-                        "file://${java.io.File(currentFilePath).parentFile?.absolutePath ?: ""}"
+                        val separator = File.separator
+                        "file:///${java.io.File(currentFilePath).parentFile?.absolutePath?.replace(separator, "/") ?: ""}"
                     } else ""
                     
                     var htmlBody = if (currentFilePath.endsWith(".md", ignoreCase = true)) {
@@ -735,7 +737,8 @@ class DocumentViewerViewModel(
             val chapter = chapters[index]
             
             if (currentFileType == FileEntry.FileType.EPUB) {
-                val chapterFile = File(chapter.href)
+                val cleanHref = chapter.href.substringBefore("#")
+                val chapterFile = File(cleanHref)
                 viewModelScope.launch {
                     if (updateType == 0) {
                         _uiState.value = _uiState.value.copy(isLoading = true)
@@ -834,13 +837,31 @@ class DocumentViewerViewModel(
                             .content-chunk {
                                 overflow-anchor: auto !important;
                             }
-                            img { 
+                            /* Remove padding for images to make them edge-to-edge */
+                            div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
+                                padding: 0 !important;
+                                margin: 0 !important;
+                            }
+                            .image-page-wrapper {
+                                width: 100vw !important;
+                                height: 100vh !important;
+                                display: flex !important;
+                                justify-content: center !important;
+                                align-items: center !important;
+                                overflow: hidden !important;
+                                margin: 0 !important;
+                                padding: 0 !important;
+                                page-break-after: always !important;
+                                break-after: page !important;
+                            }
+                            img, svg, figure { 
                                 max-width: 100% !important; 
                                 max-height: 100% !important; 
                                 width: auto !important;
                                 height: auto !important;
                                 display: block !important; 
-                                margin: 1em auto !important; 
+                                margin: 0 auto !important; 
+                                object-fit: contain !important;
                             }
                             th, td {
                                 border: 1px solid #888 !important;
@@ -858,7 +879,8 @@ class DocumentViewerViewModel(
                     val processedContent = processedResult.first
                     val lineCount = processedResult.second
 
-                    val baseUrl = "file://${chapterFile.parent}/"
+                    val separator = File.separator
+                    val baseUrl = "file:///${chapterFile.parent?.replace(separator, "/")}/"
                     
                     val newCounts = _uiState.value.chapterLineCounts.toMutableMap()
                     newCounts[index] = lineCount
@@ -1130,7 +1152,8 @@ class DocumentViewerViewModel(
                 }
 
                 if (imgFile.exists()) {
-                    val encoded = encodeFileName("file://${imgFile.absolutePath}")
+                    val separator = File.separator
+                    val encoded = encodeFileName("file:///${imgFile.absolutePath.replace(separator, "/")}")
                     result = result.replace(match.value, match.value.replace(originalSrc, encoded))
                 }
             }

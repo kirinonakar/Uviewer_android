@@ -130,31 +130,48 @@ object EpubParser {
     fun prepareHtmlForViewer(html: String, resetCss: String, baseDir: File? = null, idPrefix: String = "", isVertical: Boolean = false): Pair<String, Int> {
         val doc = Jsoup.parse(html)
         
-        // [추가] 이미지 경로를 절대 경로로 변경
+        // [추가] 이미지 경로를 절대 경로로 변경 및 한 페이지에 하나씩 표시되도록 래핑
         if (baseDir != null) {
             val images = doc.select("img")
             for (img in images) {
                 val src = img.attr("src")
                 // http나 file로 시작하지 않는 상대 경로만 처리
                 if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
-                    val imgFile = File(baseDir, src) // 상대 경로 결합
-                    val encodedPath = imgFile.canonicalPath.split("/").joinToString("/") { segment ->
+                    val imgFile = File(baseDir, src)
+                    val separator = File.separator
+                    val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
                         java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                     }
-                    img.attr("src", "file://$encodedPath")
+                    img.attr("src", "file:///$encodedPath")
                 }
+                
+                // [추가] 이미지 한 페이지 표시를 위한 래핑
+                img.wrap("<div class=\"image-page-wrapper\"></div>")
             }
             
             // SVG image 태그 등도 필요하면 처리 (xlink:href 등)
-            val svgs = doc.select("image")
-            for (svg in svgs) {
-                val href = svg.attr("xlink:href")
+            val svgImages = doc.select("image")
+            for (img in svgImages) {
+                val href = if (img.hasAttr("xlink:href")) img.attr("xlink:href") else img.attr("href")
                 if (href.isNotEmpty() && !href.startsWith("http") && !href.startsWith("file://")) {
                     val imgFile = File(baseDir, href)
-                    val encodedPath = imgFile.canonicalPath.split("/").joinToString("/") { segment ->
+                    val separator = File.separator
+                    val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
                         java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                     }
-                    svg.attr("xlink:href", "file://$encodedPath")
+                    val finalUrl = "file:///$encodedPath"
+                    if (img.hasAttr("xlink:href")) img.attr("xlink:href", finalUrl)
+                    if (img.hasAttr("href")) img.attr("href", finalUrl)
+                }
+            }
+
+            // SVG 자체와 Figure도 래핑 (이미지 전문 챕터 대응)
+            val rootMedia = doc.select("body svg, body figure")
+            for (media in rootMedia) {
+                // 이미 래퍼가 있거나, 너무 깊게 박힌 게 아니면 래핑
+                if (media.parent()?.className() != "image-page-wrapper" && 
+                    (media.parent()?.tagName() == "body" || media.parent()?.tagName() == "div" || media.parent()?.tagName() == "article" || media.parent()?.tagName() == "section")) {
+                    media.wrap("<div class=\"image-page-wrapper\"></div>")
                 }
             }
         }
@@ -201,9 +218,11 @@ object EpubParser {
         // 추가 예외 처리: img나 svg, figure가 혼자 덩그러니 있는 경우에도 라인 ID 부여
         val mediaElements = body.select("img, svg, figure")
         for (media in mediaElements) {
-            if (!media.hasAttr("id") || !media.attr("id").startsWith("line-")) {
+            // [수정] 래퍼가 있으면 래퍼에 ID 부여 (페이지 이동 시 스냅 기준이 됨)
+            val target = if (media.parent()?.className() == "image-page-wrapper") media.parent()!! else media
+            if (!target.hasAttr("id") || !target.attr("id").startsWith("line-")) {
                 count++
-                media.attr("id", "line-$idPrefix$count")
+                target.attr("id", "line-$idPrefix$count")
             }
         }
         

@@ -14,6 +14,9 @@ interface FavoriteDao {
     @Update
     suspend fun updateFavorite(item: FavoriteItem)
 
+    @Update
+    suspend fun updateFavorites(items: List<FavoriteItem>)
+
     @Delete
     suspend fun deleteFavorite(item: FavoriteItem)
 
