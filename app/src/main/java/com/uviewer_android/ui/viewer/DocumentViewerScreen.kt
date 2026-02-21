@@ -690,8 +690,8 @@ fun DocumentViewerScreen(
                                                        var w = window.innerWidth;
                                                        var h = window.innerHeight;
                                                        // 여유 마진을 화면의 1.5배로 크게 잡음 (사용자가 도달하기 전에 미리 로드)
-                                                       var preloadMarginX = w * 1.5; 
-                                                       var preloadMarginY = h * 1.5;
+                                                       var preloadMarginX = w * 0.3; 
+                                                       var preloadMarginY = h * 0.3;
 
                                                        if (isVertical) {
                                                            var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
@@ -1145,89 +1145,89 @@ fun DocumentViewerScreen(
                                                       }
                                                   };
 
-                                                  window.pageDown = function() {
-                                                      window._scrollDir = 1;
-                                                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-                                                      var h = window.innerHeight;
-                                                      var isAtBottom = false;
-                                                      if (!isVertical) {
-                                                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
-                                                      } else {
-                                                          var maxScrollX = document.documentElement.scrollWidth - w;
-                                                          if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
-                                                      }
-                                                      if (isAtBottom) { Android.autoLoadNext(); return; }
-                                                      if (pagingMode === 1) {
-                                                          var lines = window.getVisualLines();
-                                                          var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                          var gap = (lines.some(l => l.bottom - l.top > h * 0.8)) ? 0 : FS * 0.8;
-                                                          if (!isVertical) {
-                                                              var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                                                              var scrollDelta = h;
-                                                              if (visible.length > 0) {
-                                                                  var last = visible[visible.length - 1];
-                                                                  if (last.bottom > h + 2 && last.top < h) scrollDelta = last.top - gap;
-                                                                  else {
-                                                                      var idx = lines.indexOf(last);
-                                                                      if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].top - gap;
-                                                                  }
-                                                              }
-                                                              window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
-                                                          } else {
-                                                              var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-                                                              var scrollDelta = -w;
-                                                              if (visible.length > 0) {
-                                                                  var last = visible[visible.length - 1];
-                                                                  if (last.left < 0) scrollDelta = last.right + gap - w;
-                                                                  else {
-                                                                      var idx = lines.indexOf(last);
-                                                                      if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].right + gap - w;
-                                                                  }
-                                                              }
-                                                              window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
-                                                          }
-                                                      } else {
-                                                          var moveSize = (isVertical ? w : h) - 40;
-                                                          if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                                                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
-                                                      }
-                                                      window.detectAndReportLine(); window.updateMask();
-                                                  };
+                                                   window.pageDown = function() {
+                                                       window._scrollDir = 1;
+                                                       var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+                                                       var h = window.innerHeight;
+                                                       var isAtBottom = false;
+                                                       if (!isVertical) {
+                                                           if (h + window.pageYOffset >= document.documentElement.scrollHeight - 5) isAtBottom = true;
+                                                       } else {
+                                                           var maxScrollX = document.documentElement.scrollWidth - w;
+                                                           if (window.pageXOffset <= -(maxScrollX - 10)) isAtBottom = true;
+                                                       }
+                                                       if (isAtBottom) { Android.autoLoadNext(); return; }
+                                                       if (pagingMode === 1) {
+                                                           var lines = window.getVisualLines();
+                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                           var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
+                                                           if (!isVertical) {
+                                                               var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                                               var scrollDelta = h;
+                                                               if (visible.length > 0) {
+                                                                   var last = visible[visible.length - 1];
+                                                                   if (last.bottom > h + 2 && last.top < h) scrollDelta = last.top - gap;
+                                                                   else {
+                                                                       var idx = lines.indexOf(last);
+                                                                       if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].top - gap;
+                                                                   }
+                                                               }
+                                                               window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
+                                                           } else {
+                                                               var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
+                                                               var scrollDelta = -w;
+                                                               if (visible.length > 0) {
+                                                                   var last = visible[visible.length - 1];
+                                                                   if (last.left < 0) scrollDelta = last.right + gap - w;
+                                                                   else {
+                                                                       var idx = lines.indexOf(last);
+                                                                       if (idx >= 0 && idx < lines.length - 1) scrollDelta = lines[idx + 1].right + gap - w;
+                                                                   }
+                                                               }
+                                                               window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
+                                                           }
+                                                       } else {
+                                                           var moveSize = (isVertical ? w : h) - 40;
+                                                           if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
+                                                           else window.scrollBy({ top: moveSize, behavior: 'instant' });
+                                                       }
+                                                       window.detectAndReportLine(); window.updateMask();
+                                                   };
 
-                                                  window.pageUp = function() {
-                                                      window._scrollDir = -1;
-                                                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
-                                                      var h = window.innerHeight;
-                                                      var isAtTop = false;
-                                                      if (!isVertical) { if (window.pageYOffset <= 5) isAtTop = true; }
-                                                      else { if (window.pageXOffset >= -10) isAtTop = true; }
-                                                      if (isAtTop) { Android.autoLoadPrev(); return; }
-                                                      if (pagingMode === 1) {
-                                                          var lines = window.getVisualLines();
-                                                          var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                                                          var gap = (lines.some(l => l.bottom - l.top > h * 0.8)) ? 0 : FS * 0.8;
-                                                          if (!isVertical) {
-                                                              var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
-                                                              var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
-                                                              if (prevIdx >= 0) {
-                                                                  var targetBottom = lines[prevIdx].bottom;
-                                                                  var topIdx = prevIdx;
-                                                                  for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
-                                                                  window.scrollBy({ top: Math.max(lines[topIdx].top - gap, -h), behavior: 'instant' });
-                                                              } else window.scrollBy({ top: -h, behavior: 'instant' });
-                                                          } else {
-                                                              var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
-                                                              var prevIdx = firstVisible ? lines.indexOf(firstVisible) - 1 : -1;
-                                                              if (prevIdx >= 0) window.scrollBy({ left: Math.min(lines[prevIdx].left - gap, w), behavior: 'instant' });
-                                                              else window.scrollBy({ left: w, behavior: 'instant' });
-                                                          }
-                                                      } else {
-                                                          var moveSize = (isVertical ? w : h) - 40;
-                                                          if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
-                                                      else window.scrollBy({ top: -moveSize, behavior: 'instant' });
-                                                      }
-                                                      window.detectAndReportLine(); window.updateMask();
-                                                  };
+                                                   window.pageUp = function() {
+                                                       window._scrollDir = -1;
+                                                       var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+                                                       var h = window.innerHeight;
+                                                       var isAtTop = false;
+                                                       if (!isVertical) { if (window.pageYOffset <= 5) isAtTop = true; }
+                                                       else { if (window.pageXOffset >= -10) isAtTop = true; }
+                                                       if (isAtTop) { Android.autoLoadPrev(); return; }
+                                                       if (pagingMode === 1) {
+                                                           var lines = window.getVisualLines();
+                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                                                           var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
+                                                           if (!isVertical) {
+                                                               var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
+                                                               var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
+                                                               if (prevIdx >= 0) {
+                                                                   var targetBottom = lines[prevIdx].bottom;
+                                                                   var topIdx = prevIdx;
+                                                                   for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
+                                                                   window.scrollBy({ top: Math.max(lines[topIdx].top - gap, -h), behavior: 'instant' });
+                                                               } else window.scrollBy({ top: -h, behavior: 'instant' });
+                                                           } else {
+                                                               var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
+                                                               var prevIdx = firstVisible ? lines.indexOf(firstVisible) - 1 : -1;
+                                                               if (prevIdx >= 0) window.scrollBy({ left: Math.min(lines[prevIdx].left - gap, w), behavior: 'instant' });
+                                                               else window.scrollBy({ left: w, behavior: 'instant' });
+                                                           }
+                                                       } else {
+                                                           var moveSize = (isVertical ? w : h) - 40;
+                                                           if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
+                                                       else window.scrollBy({ top: -moveSize, behavior: 'instant' });
+                                                       }
+                                                       window.detectAndReportLine(); window.updateMask();
+                                                   };
 
                                                     // [수정됨] 기존 window.onscroll 전체를 아래 코드로 교체
                                                    var scrollTimer = null;
@@ -1391,10 +1391,16 @@ fun DocumentViewerScreen(
                                         .image-page-wrapper {
                                             width: 100vw !important;
                                             height: 100vh !important;
+                                            min-width: 100vw !important;  /* 추가: 축소 방지 */
+                                            min-height: 100vh !important; /* 추가: 축소 방지 */
+                                            flex-shrink: 0 !important;    /* 추가: flex 레이아웃에서 찌그러짐 방지 */
                                             display: flex !important;
                                             justify-content: center !important;
                                             align-items: center !important;
                                             overflow: hidden !important;
+                                            margin: 0 !important;
+                                            padding: 0 !important;
+                                            box-sizing: border-box !important;
                                             page-break-after: always !important;
                                             break-after: page !important;
                                         }

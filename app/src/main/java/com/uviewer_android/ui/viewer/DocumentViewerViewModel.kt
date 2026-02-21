@@ -845,12 +845,16 @@ class DocumentViewerViewModel(
                             .image-page-wrapper {
                                 width: 100vw !important;
                                 height: 100vh !important;
+                                min-width: 100vw !important;  /* 추가: 축소 방지 */
+                                min-height: 100vh !important; /* 추가: 축소 방지 */
+                                flex-shrink: 0 !important;    /* 추가: flex 레이아웃에서 찌그러짐 방지 */
                                 display: flex !important;
                                 justify-content: center !important;
                                 align-items: center !important;
                                 overflow: hidden !important;
                                 margin: 0 !important;
                                 padding: 0 !important;
+                                box-sizing: border-box !important;
                                 page-break-after: always !important;
                                 break-after: page !important;
                             }
