@@ -974,32 +974,53 @@ fun DocumentViewerScreen(
                                                       }
                                                   };
 
-                                                  window.calculateMasks = function() {
-                                                      var masks = { top: 0, bottom: 0, left: 0, right: 0 };
-                                                      if (pagingMode !== 1) return masks;
-                                                      if (window._scrollDir === -1) return masks;
-                                                      var lines = window.getVisualLines();
-                                                      if (lines.length === 0) return masks;
-                                                      var w = window.innerWidth;
-                                                      var h = window.innerHeight;
-                                                      if (!isVertical) {
-                                                          var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                                                          if (visible.length === 0) return masks;
-                                                          var first = visible[0];
-                                                          if (first.top < -2 && first.bottom > 0) masks.top = Math.min(h, Math.ceil(first.bottom));
-                                                          var last = visible[visible.length - 1];
-                                                          if (last.bottom > h + 2 && last.top < h) masks.bottom = Math.min(h, Math.ceil(h - last.top));
-                                                      } else {
-                                                          var visible = lines.filter(function(l) { return l.right > -2 && l.left < w + 2; });
-                                                          if (visible.length === 0) return masks;
-                                                          var first = visible[0];
-                                                          if (first.right > w + 2 && first.left < w) masks.right = Math.min(w, Math.ceil(w - first.left));
-                                                          var last = visible[visible.length - 1];
-                                                          if (last.left < -2 && last.right > 0) masks.left = Math.min(w, Math.ceil(last.right));
-                                                      }
-                                                      if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
-                                                      return masks;
-                                                  };
+                                                   window.calculateMasks = function() {
+                                                       var masks = { top: 0, bottom: 0, left: 0, right: 0 };
+                                                       if (pagingMode !== 1) return masks;
+                                                       var lines = window.getVisualLines();
+                                                       if (lines.length === 0) return masks;
+                                                       var w = window.innerWidth;
+                                                       var h = window.innerHeight;
+                                                       if (!isVertical) {
+                                                           var visible = lines.filter(function(l) { return l.bottom > 0.05 && l.top < h - 0.05; });
+                                                           if (visible.length === 0) return masks;
+                                                           
+                                                           var cutTop = visible.filter(function(l) { return l.top < -0.05; });
+                                                           if (cutTop.length > 0) {
+                                                               var maxB = 0;
+                                                               for (var i = 0; i < cutTop.length; i++) { if (cutTop[i].bottom > maxB) maxB = cutTop[i].bottom; }
+                                                               masks.top = Math.ceil(maxB + 1);
+                                                           }
+                                                           
+                                                           var cutBottom = visible.filter(function(l) { return l.bottom > h + 0.05; });
+                                                           if (cutBottom.length > 0) {
+                                                               var minT = h;
+                                                               for (var i = 0; i < cutBottom.length; i++) { if (cutBottom[i].top < minT) minT = cutBottom[i].top; }
+                                                               masks.bottom = Math.ceil(h - minT + 1);
+                                                           }
+                                                       } else {
+                                                           var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
+                                                           if (visible.length === 0) return masks;
+                                                           
+                                                           var cutRight = visible.filter(function(l) { return l.right > w + 0.05; });
+                                                           if (cutRight.length > 0) {
+                                                               var minL = w;
+                                                               for (var i = 0; i < cutRight.length; i++) { if (cutRight[i].left < minL) minL = cutRight[i].left; }
+                                                               masks.right = Math.ceil(w - minL + 1);
+                                                           }
+                                                           
+                                                           var cutLeft = visible.filter(function(l) { return l.left < -0.05; });
+                                                           if (cutLeft.length > 0) {
+                                                               var maxR = 0;
+                                                               for (var i = 0; i < cutLeft.length; i++) { if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; }
+                                                               masks.left = Math.ceil(maxR + 1);
+                                                           }
+                                                       }
+                                                       // Navigation direction filter: hide masks on the side we're coming from
+                                                       if (window._scrollDir === 1) { masks.top = 0; masks.right = 0; }
+                                                       if (window._scrollDir === -1) { masks.bottom = 0; masks.left = 0; }
+                                                       return masks;
+                                                   };
 
                                                   window.updateMask = function() {
                                                       if (pagingMode !== 1) {
