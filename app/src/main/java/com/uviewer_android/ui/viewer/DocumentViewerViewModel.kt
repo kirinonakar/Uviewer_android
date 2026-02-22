@@ -406,8 +406,8 @@ class DocumentViewerViewModel(
         if (startLine > totalLines) return
 
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
             if (updateType == 0) {
-                _uiState.value = _uiState.value.copy(isLoading = true)
                 loadedStartChunk = chunkIndex
                 loadedEndChunk = chunkIndex
             }
@@ -744,8 +744,8 @@ class DocumentViewerViewModel(
                 val cleanHref = chapter.href.substringBefore("#")
                 val chapterFile = File(cleanHref)
                 viewModelScope.launch {
+                    _uiState.value = _uiState.value.copy(isLoading = true)
                     if (updateType == 0) {
-                        _uiState.value = _uiState.value.copy(isLoading = true)
                         loadedStartChapter = index
                         loadedEndChapter = index
                     }

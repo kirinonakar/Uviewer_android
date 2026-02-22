@@ -17,15 +17,14 @@ object ViewerScripts {
                 var enableAutoLoading = $enableAutoLoading;
                 
                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
-                 window.isSystemScrolling = false;
+                 window.isSystemScrolling = true; // 시작 시 락을 걸어 초기 복원 중 이벤트 무시
                  window.sysScrollTimer = null;
 
                  // 2. JS가 강제로 스크롤을 조작할 때 사용할 안전한 래퍼 함수
                  window.safeScrollBy = function(x, y) {
-                     window.isSystemScrolling = true; // 스크롤 이벤트 무시 시작
+                     window.isSystemScrolling = true; 
                      window.scrollBy(x, y);
                      
-                     // 보정이 끝난 후 충분한 시간(250ms)이 지난 뒤에 락을 풉니다.
                      if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);
                      window.sysScrollTimer = setTimeout(function() {
                          window.isSystemScrolling = false;
@@ -49,8 +48,14 @@ object ViewerScripts {
                      }
                  }
 
+                 // 초기 복원 완료 후 락 해제
+                 if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);
+                 window.sysScrollTimer = setTimeout(function() {
+                     window.isSystemScrolling = false;
+                 }, 500);
+
                    // [수정됨] 청크 개수 제한을 5로 늘려 이전2 + 현재 + 이후2 구조가 가능하게 함
-                  window.MAX_CHUNKS = 5; 
+                  window.MAX_CHUNKS = 12; 
                   
                   // [추가됨] 앞뒤 청크를 미리(미리보기 화면의 1.5배 전부터) 불러오는 독립 함수
                   window.checkPreload = function() {
@@ -108,10 +113,10 @@ object ViewerScripts {
                               window.enforceChunkLimit(true);
                               window.updateMask();
                               window.isScrolling = false; 
-                          }, 100);
+                          }, 300);
 
                           // [추가] 
-                          setTimeout(function() { window.checkPreload(); }, 400);
+                          setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
@@ -178,7 +183,7 @@ object ViewerScripts {
                           }, 150);
                           
                           // [추가]
-                          setTimeout(function() { window.checkPreload(); }, 400);
+                          setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
@@ -227,26 +232,21 @@ object ViewerScripts {
                       var chunks = document.querySelectorAll('.content-chunk');
                       if (chunks.length > window.MAX_CHUNKS) {
                           if (isAppend) {
-                              // 뒤로 스크롤 중: 맨 앞(위/오른쪽)의 가장 오래된 청크 삭제
-                              var oldestChunk = chunks[0];
-                              var oldScrollWidth = document.documentElement.scrollWidth;
-                              var oldScrollHeight = document.documentElement.scrollHeight;
+                              window.isSystemScrolling = true; var oldestChunk = chunks[0];
+                              // 제거될 청크의 높이/너비를 정확히 측정
+                              var rect = oldestChunk.getBoundingClientRect();
+                              var shiftW = isVertical ? rect.width : 0;
+                              var shiftH = isVertical ? 0 : rect.height;
 
                               oldestChunk.parentNode.removeChild(oldestChunk);
 
-                              var newScrollWidth = document.documentElement.scrollWidth;
-                              var newScrollHeight = document.documentElement.scrollHeight;
-
-                              // [핵심] 줄어든 크기만큼 즉시 스크롤을 당겨옴
+                              // 즉각적인 보정 (RTL 수평 스크롤 혹은 LTR 수직 스크롤)
                               if (isVertical) {
-                                  var diff = oldScrollWidth - newScrollWidth;
-                                  window.safeScrollBy(diff, 0);
+                                  window.safeScrollBy(shiftW, 0);
                               } else {
-                                  var diff = oldScrollHeight - newScrollHeight;
-                                  window.safeScrollBy(0, -diff);
+                                  window.safeScrollBy(0, -shiftH);
                               }
                           } else {
-                              // 앞으로 스크롤 중: 맨 뒤(아래/왼쪽)의 청크 삭제 (보정 불필요)
                               var newestChunk = chunks[chunks.length - 1];
                               newestChunk.parentNode.removeChild(newestChunk);
                           }

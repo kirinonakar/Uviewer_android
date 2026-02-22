@@ -278,12 +278,12 @@ fun DocumentViewerScreen(
                                 
                                 // Handle same chunk scroll restoration
                                 if (webViewRef != null && targetChunk == uiState.currentChunkIndex) {
-                                    val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                    val js = "var el = document.getElementById('line-$line'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });"
                                     webViewRef?.evaluateJavascript(js) {
                                         webViewRef?.postDelayed({
                                             isNavigating = false
                                             isPageLoading = false
-                                        }, 500) // 100 -> 500ms
+                                        }, 800) // 500 -> 800ms
                                     }
                                 }
                             } else {
@@ -496,12 +496,12 @@ fun DocumentViewerScreen(
                                         
                                         // 동일 청크 내 점프인 경우의 스크롤 복구
                                         if (targetChunk == uiState.currentChunkIndex) {
-                                            val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
+                                            val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });"
                                             webViewRef?.evaluateJavascript(js) {
                                                 webViewRef?.postDelayed({
                                                     isPageLoading = false
                                                     isNavigating = false
-                                                }, 500)
+                                                }, 800)
                                             }
                                         }
                                     }
@@ -571,22 +571,24 @@ fun DocumentViewerScreen(
                                         }
                                     }
                                     @android.webkit.JavascriptInterface
-                                     fun autoLoadNext() {
-                                         post {
-                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
-                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
-                                                 return@post
-                                             }
-                                             
-                                             if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
-                                                 viewModel.nextChunk()
-                                             } else if (type == FileEntry.FileType.EPUB) {
-                                                 viewModel.nextChapter()
-                                             } else {
-                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
-                                             }
-                                         }
-                                     }
+                                    fun autoLoadNext() {
+                                        post {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                                return@post
+                                            }
+                                            
+                                            isNavigating = true // 즉각 락 설정
+                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
+                                                viewModel.nextChunk()
+                                            } else if (type == FileEntry.FileType.EPUB) {
+                                                viewModel.nextChapter()
+                                            } else {
+                                                isNavigating = false
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                            }
+                                        }
+                                    }
                                     @android.webkit.JavascriptInterface
                                      fun autoLoadPrev() {
                                          post {
@@ -674,7 +676,7 @@ val jsScrollLogic = ViewerScripts.getScrollLogic(
                                             webViewRef?.postDelayed({
                                                 isPageLoading = false
                                                 isNavigating = false
-                                            }, 500) // 100 -> 500ms
+                                            }, 800) // 500 -> 800ms
                                         }
                                     }
                                 }
@@ -783,15 +785,6 @@ val style = ViewerScripts.getStyleSheet(
                                                // Use provided baseUrl or fallback to parent directory of filePath
                                                val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file:///${java.io.File(filePath).parent?.replace(java.io.File.separator, "/")}/" else null)
                                                wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
-                                           }
-                                           
-                                           // Restore Scroll after load (if not navigating which handles it in onPageFinished)
-                                           wv.post {
-                                               if (!isNavigating && currentLine > 1 && uiState.totalLines > 0) {
-                                                   val linePostfix = if (type == FileEntry.FileType.EPUB) "${uiState.currentChapterIndex}-" else ""
-                                                   val js = "var el = document.getElementById('line-$linePostfix$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start' });"
-                                                   wv.evaluateJavascript(js, null)
-                                               }
                                            }
                                        }
                                    }
