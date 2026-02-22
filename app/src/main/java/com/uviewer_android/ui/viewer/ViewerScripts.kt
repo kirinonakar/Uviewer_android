@@ -876,16 +876,7 @@ object ViewerScripts {
                     font-size: 0.5em !important;
                     text-align: center !important;
                 }
-                .ruby-wide {
-                    margin-left: -0.3em !important;
-                    margin-right: -0.3em !important;
-                }
-                .ruby-wide span {
-                    display: inline-block !important;
-                    transform: scaleX(0.75) !important;
-                    transform-origin: center bottom !important;
-                    white-space: nowrap !important;
-                }
+
                 div[id^="line-"] {
                     break-inside: avoid !important;
                 }
