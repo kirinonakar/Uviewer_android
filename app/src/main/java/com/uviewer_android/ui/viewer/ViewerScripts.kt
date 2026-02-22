@@ -227,7 +227,7 @@ object ViewerScripts {
                           }, 400);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
-                  
+
 window.enforceChunkLimit = function(isAppend) {
     var chunks = document.querySelectorAll('.content-chunk');
     if (chunks.length > window.MAX_CHUNKS) {
@@ -502,45 +502,49 @@ window.enforceChunkLimit = function(isAppend) {
                               if (masks.top > minTVal) masks.top = Math.max(0, Math.floor(minTVal));
                               if (masks.bottom > (h - maxBVal)) masks.bottom = Math.max(0, Math.floor(h - maxBVal));
                           }
-                      } else {
-                          var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
-                          if (visible.length === 0) return masks;
-                          
-                          var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
-                          var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
-                          
-                          // [Vertical Next Mode Masking]
-                          // Hide text that is partially cut on the left edge (start of next page area)
-                          var cutLeft = textVisible.filter(function(l) { return l.left < -0.05; });
-                          if (cutLeft.length > 0) {
-                              var maxR = 0;
-                              for (var i = 0; i < cutLeft.length; i++) { 
-                                  // If any part of the line (base or ruby) is cut, hide the whole line
-                                  if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
-                              }
-                              masks.left = Math.ceil(maxR + 4);
-                          }
-                          
-                          // [Protection] Never mask text that is fully visible on the left side
-                          var leftVisibleText = textVisible.filter(function(l) { return l.left >= -0.05; });
-                          if (leftVisibleText.length > 0) {
-                              var minL = w;
-                              for (var i = 0; i < leftVisibleText.length; i++) {
-                                  if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
-                              }
-                              // Ensure the mask stops exactly where the first uncut line begins
-                              if (masks.left > minL - 1) masks.left = Math.max(0, Math.floor(minL - 1));
-                          }
+} else {
+    var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
+    if (visible.length === 0) return masks;
+    
+    var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
+    var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
+    
+    // [Vertical Next Mode Masking]
+    // 왼쪽으로 잘려나간 줄 탐색
+    var cutLeft = textVisible.filter(function(l) { return l.left < -0.05; });
+    if (cutLeft.length > 0) {
+        var maxR = 0;
+        for (var i = 0; i < cutLeft.length; i++) { 
+            if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
+        }
+        // [수정] 기존 +4였던 패딩을 +1로 줄여 인접 줄 침범을 최소화
+        masks.left = Math.ceil(maxR + 1);
+    }
+    
+    // [Protection] 온전한 줄 보호 로직 완화
+    var leftVisibleText = textVisible.filter(function(l) { return l.left >= -0.05; });
+    if (leftVisibleText.length > 0) {
+        var minL = w;
+        for (var i = 0; i < leftVisibleText.length; i++) {
+            if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
+        }
+        // [핵심 수정] 기존에는 영역이 1px만 겹쳐도 마스크를 확 줄여버려 잘린 줄을 노출시켰음.
+        // 루비 글자 등으로 박스가 약간 겹치는 경우는 masks.left를 유지하여 잘린 텍스트를 확실히 덮고,
+        // 비정상적으로 마스크가 커지는 경우(예: 3px 이상 침범)에만 온전한 줄의 시작점(minL)으로 마스크를 제한.
+        if (masks.left > minL + 3) { 
+            masks.left = Math.max(0, Math.floor(minL));
+        }
+    }
 
-                          // [Vertical Mode Right Mask] 
-                          masks.right = 0;
+    // [Vertical Mode Right Mask] 
+    masks.right = 0;
 
-                          // [Images Protection] Never cover images, cut or not
-                          imageVisible.forEach(function(img) {
-                              if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
-                              if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
-                          });
-                      }
+    // [Images Protection] Never cover images, cut or not
+    imageVisible.forEach(function(img) {
+        if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
+        if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
+    });
+}
                        // Navigation direction filter: hide masks on the side we're coming from
                        if (!isVertical) {
                            if (window._scrollDir === 1) { masks.top = 0; }
@@ -620,45 +624,56 @@ window.enforceChunkLimit = function(isAppend) {
                        }
 
                       if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
-                     if (pagingMode === 1) {
-                         var lines = window.getVisualLines();
-                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                         var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
-                         if (!isVertical) {
-                             var visible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                             var scrollDelta = h;
-                             if (visible.length > 0) {
-                                 var last = visible[visible.length - 1];
-                                 // [수정] 대상이 이미지인 경우 gap을 0으로 만들어 오차 없이 정렬
-                                 if (last.bottom > h + 2 && last.top < h) scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
-                                 else {
-                                     var idx = lines.indexOf(last);
-                                     if (idx >= 0 && idx < lines.length - 1) {
-                                         var nextLine = lines[idx + 1];
-                                         scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
-                                     }
-                                 }
-                             }
-                             window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
-                           } else {
-                               var visible = lines.filter(function(l) { return l.left < w + 2 && l.right > -2; });
-                               var scrollDelta = -w;
-                               if (visible.length > 0) {
-                                   var last = visible[visible.length - 1]; // 가시 영역의 가장 왼쪽 줄
-                                   if (last.left < -0.05) {
-                                       // 왼쪽이 잘려 있다면 해당 줄의 오른쪽 끝을 화면 오른쪽(w-gap)에 맞춤 (루비 노출)
-                                       scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
-                                   } else {
-                                       var idx = lines.indexOf(last);
-                                       if (idx >= 0 && idx < lines.length - 1) {
-                                           var nextLine = lines[idx + 1]; // 다음 페이지의 첫 줄
-                                           var alignDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap * 1.25) - w; var skipDelta = -(w - last.left + 5); scrollDelta = Math.min(alignDelta, skipDelta);
-                                       }
-                                   }
-                               }
-                               window.scrollBy({ left: Math.max(scrollDelta, -w * 1.5), behavior: 'instant' });
-                           }
-                     } else {
+if (pagingMode === 1) {
+    var lines = window.getVisualLines();
+    var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+    var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
+    
+    if (!isVertical) {
+        // [수정] 오차 마진(+2)을 없애고 정확히 화면(0~h) 내에 있는 요소만 필터링
+        var visible = lines.filter(function(l) { return l.bottom > 0 && l.top < h; });
+        var scrollDelta = h;
+        if (visible.length > 0) {
+            var last = visible[visible.length - 1];
+            // 마지막 줄이 화면 하단으로 잘렸다면 해당 줄부터 다음 페이지 시작
+            if (last.bottom > h) {
+                scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
+            } else {
+                // 완전히 다 보였다면 그 다음 줄부터 시작
+                var idx = lines.indexOf(last);
+                if (idx >= 0 && idx < lines.length - 1) {
+                    var nextLine = lines[idx + 1];
+                    scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
+                }
+            }
+        }
+        window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
+    } else {
+        // [수정] 세로쓰기 역시 화면(0~w) 내 요소만 엄격하게 필터링
+        var visible = lines.filter(function(l) { return l.left < w && l.right > 0; });
+        var scrollDelta = -w;
+        if (visible.length > 0) {
+            var last = visible[visible.length - 1]; // 가시 영역의 가장 왼쪽(마지막) 줄
+            
+            // 해당 줄이 화면 왼쪽으로 잘려 나갔다면 해당 줄부터 다음 페이지 시작
+            if (last.left < 0) {
+                scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
+            } else {
+                // 완전히 다 보였다면 다음 줄부터 시작
+                var idx = lines.indexOf(last);
+                if (idx >= 0 && idx < lines.length - 1) {
+                    var nextLine = lines[idx + 1];
+                    scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap * 1.25) - w;
+                    // [핵심] 줄넘김을 강제 유발하던 skipDelta 관련 악성 로직 완전 삭제
+                }
+            }
+        }
+        // [핵심] -w * 1.5로 인해 한 화면 이상 넘어가던 버그 방지 (최대 -w(1화면)까지만 이동 허용)
+        window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
+    }
+}
+                     
+                     else {
                          var moveSize = (isVertical ? w : h) - 40;
                          if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
