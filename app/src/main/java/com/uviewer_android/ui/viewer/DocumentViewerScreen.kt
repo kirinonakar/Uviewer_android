@@ -564,29 +564,39 @@ fun DocumentViewerScreen(
                                         }
                                     }
                                     @android.webkit.JavascriptInterface
-                                    fun autoLoadNext() {
-                                        post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
-                                            
-                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
-                                                viewModel.nextChunk()
-                                            } else if (type == FileEntry.FileType.EPUB) {
-                                                viewModel.nextChapter()
-                                            }
-                                        }
-                                    }
+                                     fun autoLoadNext() {
+                                         post {
+                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                                 return@post
+                                             }
+                                             
+                                             if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
+                                                 viewModel.nextChunk()
+                                             } else if (type == FileEntry.FileType.EPUB) {
+                                                 viewModel.nextChapter()
+                                             } else {
+                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                             }
+                                         }
+                                     }
                                     @android.webkit.JavascriptInterface
-                                    fun autoLoadPrev() {
-                                        post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
-                                            
-                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
-                                                viewModel.prevChunk()
-                                            } else if (type == FileEntry.FileType.EPUB) {
-                                                viewModel.prevChapter()
-                                            }
-                                        }
-                                    }
+                                     fun autoLoadPrev() {
+                                         post {
+                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                                  webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                                  return@post
+                                             }
+                                             
+                                             if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
+                                                 viewModel.prevChunk()
+                                             } else if (type == FileEntry.FileType.EPUB) {
+                                                 viewModel.prevChapter()
+                                             } else {
+                                                  webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                             }
+                                         }
+                                     }
 
                                     @android.webkit.JavascriptInterface
                                     fun updateBottomMask(height: Float) {
@@ -686,12 +696,12 @@ fun DocumentViewerScreen(
                                                    
                                                    // [추가됨] 앞뒤 청크를 미리(미리보기 화면의 1.5배 전부터) 불러오는 독립 함수
                                                    window.checkPreload = function() {
-                                                       if (!enableAutoLoading) return;
+                                                       if (!enableAutoLoading) return; if (window.isScrolling) return;
                                                        var w = window.innerWidth;
                                                        var h = window.innerHeight;
                                                        // 여유 마진을 화면의 1.5배로 크게 잡음 (사용자가 도달하기 전에 미리 로드)
-                                                       var preloadMarginX = w * 0.3; 
-                                                       var preloadMarginY = h * 0.3;
+                                                       var preloadMarginX = w * 0.7; 
+                                                       var preloadMarginY = h * 0.7;
 
                                                        if (isVertical) {
                                                            var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
@@ -709,6 +719,7 @@ fun DocumentViewerScreen(
                                                                window.isScrolling = true; Android.autoLoadPrev();
                                                            }
                                                        }
+                                                        if (window.isScrolling) { if (window._scrollingLockTimeout) clearTimeout(window._scrollingLockTimeout); window._scrollingLockTimeout = setTimeout(function() { window.isScrolling = false; }, 5000); }
                                                    };
                                                    window.appendHtmlBase64 = function(base64Str, chunkIndex) {
                                                        try {
@@ -1238,7 +1249,15 @@ fun DocumentViewerScreen(
                                                           var maxScrollX = document.documentElement.scrollWidth - w;
                                                           if (window.pageXOffset <= -(maxScrollX - 20)) isAtBottom = true;
                                                       }
-                                                      if (isAtBottom) { Android.autoLoadNext(); return; }
+                                                      if (pagingMode === 1) {
+                                                           var lines = window.getVisualLines();
+                                                           if (lines.length > 0) {
+                                                               var lastVisible = lines.filter(function(l) { return isVertical ? (l.left < w + 2 && l.right > -2) : (l.bottom > -2 && l.top < h + 2); }).pop();
+                                                               if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
+                                                            }
+                                                        }
+
+                                                       if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
                                                       if (pagingMode === 1) {
                                                           var lines = window.getVisualLines();
                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
@@ -1292,7 +1311,15 @@ fun DocumentViewerScreen(
                                                       var isAtTop = false;
                                                       if (!isVertical) { if (window.pageYOffset <= 20) isAtTop = true; }
                                                       else { if (window.pageXOffset >= -20) isAtTop = true; }
-                                                      if (isAtTop) { Android.autoLoadPrev(); return; }
+                                                      if (pagingMode === 1) {
+                                                           var lines = window.getVisualLines();
+                                                           if (lines.length > 0) {
+                                                               var firstVisible = lines.find(function(l) { return isVertical ? (l.left < w + 2 && l.right > -2) : (l.bottom > -2 && l.top < h + 2); });
+                                                               if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
+                                                           }
+                                                       }
+
+                                                       if (isAtTop) { window.isScrolling = true; Android.autoLoadPrev(); return; }
                                                       if (pagingMode === 1) {
                                                           var lines = window.getVisualLines();
                                                           var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
@@ -1309,16 +1336,30 @@ fun DocumentViewerScreen(
                                                                   window.scrollBy({ top: Math.max(targetLine.top - (targetLine.isImageWrapper ? 0 : gap), -h), behavior: 'instant' });
                                                               } else window.scrollBy({ top: -h, behavior: 'instant' });
                                                             } else {
-                                                                var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
-                                                                var scrollDelta = w;
-                                                                if (firstVisible) {
-                                                                    var firstIdx = lines.indexOf(firstVisible);
-                                                                    if (firstIdx > 0) {
-                                                                        var targetLine = lines[firstIdx - 1]; // 현재 화면 바로 오른쪽(이전 페이지 끝) 줄
-                                                                        scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap * 1.25) - w;
-                                                                    }
-                                                                }
-                                                                window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
+var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
+var scrollDelta = w;
+if (firstVisible) {
+    var firstIdx = lines.indexOf(firstVisible);
+    if (firstIdx > 0) {
+        var prevIdx = firstIdx - 1; // 화면 오른쪽 바깥의 첫 번째 줄 (이전 페이지의 왼쪽 끝)
+        var targetLeft = lines[prevIdx].left; // 이전 페이지 블록의 왼쪽 기준 좌표
+        var topIdx = prevIdx;
+        
+        // 오른쪽(과거 방향)으로 탐색하며 한 화면 너비(w)에 들어오는 가장 첫 줄(오른쪽 끝)을 찾음
+        for (var i = prevIdx; i >= 0; i--) {
+            // 현재 탐색 중인 줄의 오른쪽 끝 - 기준점의 왼쪽 끝 = 누적된 너비
+            if (lines[i].right - targetLeft <= w - gap) {
+                topIdx = i;
+            } else {
+                break;
+            }
+        }
+        var targetLine = lines[topIdx];
+        // 찾아낸 첫 줄을 화면 오른쪽 끝(w)에 맞추기 위한 스크롤 이동량 계산
+        scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap * 1.25) - w;
+    }
+}
+window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
                                                             }
                                                       } else {
                                                           var moveSize = (isVertical ? w : h) - 40;
