@@ -148,6 +148,16 @@ object AozoraParser {
                 }
             }
 
+            // --- [수정된 자동 縦中横 처리] ---
+            if (isVertical) {
+                // 전각/반각 느낌표, 물음표가 '1개 이상' 연속될 때 무조건 매칭 (단일 부호 포함)
+                val puncRegex = Regex("([!\\?！？]+)")
+                l = l.replace(puncRegex) { match ->
+                    "<span class=\"tcy\">${match.value}</span>"
+                }
+            }
+            // -----------------------------
+
             // [추가] 특정 단어 볼드 처리: ［＃「단어」은/는/は太字］
             val boldSpecificRegex = Regex("［＃「(.+?)」[は는은]太字］")
             val boldSpecificMatches = boldSpecificRegex.findAll(l).toList()
