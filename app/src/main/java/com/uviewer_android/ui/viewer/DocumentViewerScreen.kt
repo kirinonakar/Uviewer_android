@@ -97,11 +97,18 @@ fun DocumentViewerScreen(
     }
 
     val context = LocalContext.current
-    val currentActivity = activity ?: (context as? MainActivity)
+    val currentActivity = activity ?: (context as? MainActivity) ?: remember(context) {
+        var c = context
+        while (c is android.content.ContextWrapper) {
+            if (c is MainActivity) break
+            c = c.baseContext
+        }
+        c as? MainActivity
+    }
 
     // Keep screen on while viewing document
     DisposableEffect(currentActivity) {
-        val window = (context as? android.app.Activity)?.window
+        val window = currentActivity?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         currentActivity?.volumeKeyPagingActive = true
         onDispose {

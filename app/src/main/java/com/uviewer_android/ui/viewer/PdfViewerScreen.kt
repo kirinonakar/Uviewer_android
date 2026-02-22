@@ -63,7 +63,6 @@ fun PdfViewerScreen(
     
     val listState = rememberLazyListState()
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex } }
-    val currentActivity = activity ?: (context as? MainActivity)
 
     // Track and save progress
     LaunchedEffect(currentPage, pageCount) {
@@ -105,8 +104,17 @@ fun PdfViewerScreen(
         false // PDF full screen background is black
     }
     
+    val currentActivity = activity ?: (context as? MainActivity) ?: remember(context) {
+        var c = context
+        while (c is android.content.ContextWrapper) {
+            if (c is MainActivity) break
+            c = c.baseContext
+        }
+        c as? MainActivity
+    }
+    
     DisposableEffect(currentActivity) {
-        val window = (context as? android.app.Activity)?.window
+        val window = currentActivity?.window
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
@@ -122,7 +130,6 @@ fun PdfViewerScreen(
                 fileDescriptor?.close()
             } catch (e: Exception) {}
 
-            val window = (context as? android.app.Activity)?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -132,7 +139,7 @@ fun PdfViewerScreen(
     }
 
     LaunchedEffect(useLightStatusBar, isFullScreen) {
-        val window = (context as? android.app.Activity)?.window
+        val window = currentActivity?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = useLightStatusBar

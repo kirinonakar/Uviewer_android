@@ -65,7 +65,14 @@ fun MediaPlayerScreen(
     BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    val currentActivity = activity ?: (context as? android.app.Activity)
+    val currentActivity = activity ?: (context as? MainActivity) ?: remember(context) {
+        var c = context
+        while (c is android.content.ContextWrapper) {
+            if (c is MainActivity) break
+            c = c.baseContext
+        }
+        c as? MainActivity
+    }
     
     var currentOrientation by remember { mutableIntStateOf(currentActivity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
     // Ensure status bar icons are visible (white) on dark background even in light theme
@@ -73,7 +80,7 @@ fun MediaPlayerScreen(
     // For Audio: Keep status bar visible
     val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     DisposableEffect(isFullScreen, fileType) {
-        val window = (context as? android.app.Activity)?.window
+        val window = currentActivity?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
             insetsController.isAppearanceLightStatusBars = false // White icons on dark background
@@ -92,7 +99,7 @@ fun MediaPlayerScreen(
             }
         }
         onDispose {
-            val window = (context as? android.app.Activity)?.window
+            val window = currentActivity?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
@@ -101,10 +108,12 @@ fun MediaPlayerScreen(
         }
     }
 
-    // Keep Screen On
-    DisposableEffect(currentActivity) {
+    // Keep Screen On (Only for Video)
+    DisposableEffect(currentActivity, fileType) {
         val window = currentActivity?.window
-        window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (fileType == FileEntry.FileType.VIDEO) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         (currentActivity as? MainActivity)?.volumeKeyPagingActive = false
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
