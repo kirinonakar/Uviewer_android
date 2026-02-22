@@ -108,8 +108,10 @@ object ViewerScripts {
                               window.enforceChunkLimit(true);
                               window.updateMask();
                               window.isScrolling = false; 
-                              window.checkPreload(); // 추가됨: 로드 직후 한 번 더 공간 검사
                           }, 100);
+
+                          // [추가] 
+                          setTimeout(function() { window.checkPreload(); }, 400);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
@@ -173,8 +175,10 @@ object ViewerScripts {
                               window.enforceChunkLimit(false); 
                               window.updateMask();
                               window.isScrolling = false; 
-                              window.checkPreload(); // 추가됨
                           }, 150);
+                          
+                          // [추가]
+                          setTimeout(function() { window.checkPreload(); }, 400);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
@@ -209,11 +213,13 @@ object ViewerScripts {
                               }
                               window.updateMask();
                               window.isScrolling = false;
-                              window.checkPreload(); 
-                              
-                              // [추가됨] 점프가 끝난 즉시 안드로이드에 현재 라인 번호를 쏴줍니다.
                               window.detectAndReportLine();
                           }, 50);
+
+                          // [수정] 안드로이드 점프 잠금(300ms) 해제 후 실행되도록 400ms 타이머로 분리
+                          setTimeout(function() {
+                              window.checkPreload();
+                          }, 400);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
@@ -732,6 +738,11 @@ object ViewerScripts {
                   };
 
                  setTimeout(window.updateMask, 100);
+
+                 // [핵심 추가] 안드로이드 로딩 잠금(500ms)이 풀린 직후, 현재 위치를 파악해 이전/다음 챕터를 즉시 미리 로드합니다.
+                 setTimeout(function() {
+                     window.checkPreload();
+                 }, 600);
              })();
         """.trimIndent()
     }
