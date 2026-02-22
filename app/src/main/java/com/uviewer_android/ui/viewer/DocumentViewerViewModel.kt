@@ -1019,86 +1019,89 @@ class DocumentViewerViewModel(
     }
 
 
-    private fun convertMarkdownToHtml(md: String): String {
+private fun convertMarkdownToHtml(md: String): String {
         var html = md
             .replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
-            .replace("&lt;br&gt;", "<br/>", ignoreCase = true)
-            .replace("&lt;br/&gt;", "<br/>", ignoreCase = true)
-        
-        // Tables - Improved Regex and parsing
-        val tableRegex = Regex("(^(?:\\|.*\\|.*\\|*)+(?:\\r?\\n\\|[ :\\-\\| ]+\\|*)+(?:\\r?\\n(?:\\|.*\\|.*\\|*)+)*)", RegexOption.MULTILINE)
-        html = html.replace(tableRegex) { match ->
-            val lines = match.value.trim().split(Regex("\\r?\\n"))
-            if (lines.size < 2) return@replace match.value
+            // 유저가 직접 입력한 <br>, <br/>, <br /> 등을 실제 줄바꿈 태그로 복구
+            .replace(Regex("&lt;br\\s*/?&gt;", RegexOption.IGNORE_CASE), "<br/>")
             
-            val header = lines[0].trim().trim('|').split("|").map { it.trim() }
-            val rows = lines.drop(2).map { row ->
-                row.trim().trim('|').split("|").map { it.trim() }
+        // 인라인 문법(볼드, 이탤릭, 이미지, 링크) 처리 헬퍼 함수
+        fun applyInlineFormatting(text: String): String {
+            var t = text
+            t = t.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
+            t = t.replace(Regex("__(.*?)__"), "<b>$1</b>")
+            t = t.replace(Regex("\\*(.*?)\\*"), "<i>$1</i>")
+            t = t.replace(Regex("_(.*?)_"), "<i>$1</i>")
+            t = t.replace(Regex("!\\[(.*?)\\]\\((.*?)\\)"), "<img src=\"$2\" alt=\"$1\" />")
+            t = t.replace(Regex("\\[(.*?)\\]\\((.*?)\\)"), "<a href=\"$2\">$1</a>")
+            return t
+        }
+
+        // 1. 테이블 HTML을 임시로 보관할 맵
+        val tableMap = mutableMapOf<String, String>()
+        
+        // 2. 테이블 블록 추출
+        val tableRegex = Regex("^(.*\\|.*)\\r?\\n([-:\\s|]+)\\r?\\n((?:.*\\|.*(?:\\r?\\n|$))*)", RegexOption.MULTILINE)
+        
+        html = html.replace(tableRegex) { match ->
+            val headerLine = match.groupValues[1]
+            val sepLine = match.groupValues[2]
+            val bodyLines = match.groupValues[3]
+            
+            if (!sepLine.contains("-")) return@replace match.value
+            
+            // 헤더와 각 행(row)의 셀 텍스트에 applyInlineFormatting() 적용
+            val headers = headerLine.trim().trim('|').split("|").map { applyInlineFormatting(it.trim()) }
+            val rows = bodyLines.trimEnd().split(Regex("\\r?\\n")).filter { it.isNotBlank() }.map { row ->
+                row.trim().trim('|').split("|").map { applyInlineFormatting(it.trim()) }
             }
             
             val sb = StringBuilder("<div class='table-container' style='overflow-x: auto; margin: 1em 0; background-color: transparent;'>")
             sb.append("<table style='width: 100%; table-layout: fixed; border-collapse: collapse; margin: 1em 0;'>")
             sb.append("<thead style='background-color: rgba(128,128,128,0.2);'><tr>")
-            header.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px; text-align: center; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>$it</th>") }
+            headers.forEach { sb.append("<th style='border: 1px solid #888; padding: 8px; text-align: center; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>$it</th>") }
             sb.append("</tr></thead><tbody>")
             rows.forEach { row ->
                 sb.append("<tr>")
-                for (i in 0 until header.size) {
+                for (i in 0 until headers.size) {
                     val cell = row.getOrNull(i) ?: ""
                     sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>$cell</td>")
                 }
                 sb.append("</tr>")
             }
             sb.append("</tbody></table></div>")
-            sb.toString()
+            
+            val marker = "%%%TABLE_${tableMap.size}%%%"
+            tableMap[marker] = sb.toString()
+            "\n\n$marker\n\n"
         }
 
-        // Headers
+        // 3. 마크다운 헤더
         html = html.replace(Regex("^# (.*)$", RegexOption.MULTILINE), "<h1>$1</h1>")
         html = html.replace(Regex("^## (.*)$", RegexOption.MULTILINE), "<h2>$1</h2>")
         html = html.replace(Regex("^### (.*)$", RegexOption.MULTILINE), "<h3>$1</h3>")
         
-        // Bold
-        html = html.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
-        html = html.replace(Regex("__(.*?)__"), "<b>$1</b>")
-        
-        // Italic
-        html = html.replace(Regex("\\*(.*?)\\*"), "<i>$1</i>")
-        html = html.replace(Regex("_(.*?)_"), "<i>$1</i>")
-        
-        // Links
-        html = html.replace(Regex("\\[(.*?)\\]\\((.*?)\\)"), "<a href=\"$2\">$1</a>")
+        // 4. 본문 나머지 영역에 인라인 포맷팅 일괄 적용
+        html = applyInlineFormatting(html)
 
-        // Newlines to <br> (only for lines that are not inside HTML tags we just created)
-        var insideTag = false
-        html = html.split("\n").joinToString("\n") { line ->
-            val trimmed = line.trim()
-            if (trimmed.startsWith("<table") || trimmed.startsWith("<div class='table-container'")) {
-                insideTag = true
-                line
-            } else if (trimmed.endsWith("</table>") || trimmed.endsWith("</div>")) {
-                insideTag = false
-                line
-            } else if (insideTag || (trimmed.startsWith("<") && trimmed.endsWith(">"))) {
-                line
+        // 5. 문단 나누기 및 줄바꿈 처리
+        html = html.split(Regex("\\n\\n+")).joinToString("\n\n") { p ->
+            val trimmed = p.trim()
+            if (trimmed.isEmpty()) return@joinToString ""
+            
+            if (trimmed.startsWith("<h") || trimmed.startsWith("<img") || trimmed.startsWith("%%%TABLE_")) {
+                trimmed
             } else {
-                "$line<br/>"
+                val content = trimmed.replace(Regex("\\r?\\n"), "<br/>")
+                "<p>$content</p>"
             }
         }
         
-        // Images handled by resolveLocalImages later
-        html = html.replace(Regex("!\\[(.*?)\\]\\((.*?)\\)"), "<img src=\"$2\" alt=\"$1\" />")
-        
-        // Paragraphs with line break preservation
-        html = html.split(Regex("\\n\\n+")).joinToString("") { p ->
-            if (p.startsWith("<h") || p.startsWith("<img") || p.startsWith("<table")) {
-                p
-            } else {
-                val content = p.trim().replace("\n", "<br/>")
-                if (content.isEmpty()) "" else "<p>$content</p>"
-            }
+        // 6. 숨겨두었던 테이블 HTML을 마커 위치에 복구
+        tableMap.forEach { (marker, tableHtml) ->
+            html = html.replace(marker, tableHtml)
         }
         
         return html
