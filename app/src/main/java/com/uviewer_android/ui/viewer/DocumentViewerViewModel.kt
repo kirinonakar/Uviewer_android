@@ -437,7 +437,7 @@ class DocumentViewerViewModel(
                             overflow-y: ${if (_uiState.value.isVertical) "hidden" else "scroll"} !important;
                             overscroll-behavior: none !important;
                             touch-action: ${if (_uiState.value.isVertical) "pan-x" else "pan-y"} !important;
-                            overflow-anchor: auto !important;
+                            overflow-anchor: none !important;
                             
                             /* [추가] 뷰포트 스크롤 좌표계를 위해 html에도 writing-mode 적용 */
                             writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
@@ -457,7 +457,7 @@ class DocumentViewerViewModel(
                             padding: 0 !important;
                             
                             overflow: visible !important;
-                            overflow-anchor: auto !important;
+                            overflow-anchor: none !important;
                             
                             background-color: ${colors.first} !important; 
                             color: ${colors.second} !important; 
@@ -493,7 +493,7 @@ class DocumentViewerViewModel(
                             text-align: left !important;
                         }
                         .content-chunk {
-                            overflow-anchor: auto !important;
+                            overflow-anchor: none !important;
                         }
                         
                         img { 
@@ -775,7 +775,7 @@ class DocumentViewerViewModel(
                                 padding: 0 !important;
                                 overflow-x: ${if (_uiState.value.isVertical) "auto" else "hidden"} !important;
                                 overflow-y: ${if (_uiState.value.isVertical) "hidden" else "auto"} !important;
-                                overflow-anchor: auto !important;
+                                overflow-anchor: none !important;
                             }
                             body { 
                                 width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
@@ -791,7 +791,7 @@ class DocumentViewerViewModel(
                                 -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                                 text-orientation: mixed !important;
                                 overflow: visible !important;
-                                overflow-anchor: auto !important;
+                                overflow-anchor: none !important;
                                 padding-top: env(safe-area-inset-top, 0) !important;
                                 padding-bottom: env(safe-area-inset-bottom, 0) !important;
                                 padding-left: 0 !important;
@@ -841,7 +841,7 @@ class DocumentViewerViewModel(
                                 text-align: left !important;
                             }
                             .content-chunk {
-                                overflow-anchor: auto !important;
+                                overflow-anchor: none !important;
                             }
                             /* Remove padding for images to make them edge-to-edge */
                             div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
@@ -898,8 +898,8 @@ class DocumentViewerViewModel(
                     val isImageOnly = lineCount <= 5 && processedContent.contains("image-page-wrapper")
                     val wasImageOnly = _uiState.value.totalLines <= 5 && _uiState.value.content.contains("image-page-wrapper")
 
-                    // [추가됨] 이어붙이기(1, 2) 모드였더라도 이미지가 얽혀있으면 목차 이동과 동일한 전체 새로고침(0)으로 강제 변환
-                    val effectiveUpdateType = if (updateType != 0 && (isImageOnly || wasImageOnly)) 0 else updateType
+                    // 강제 새로고침을 제거하여 이전 챕터도 무조건 부드럽게 이어 붙이도록(Prepend) 유지합니다.
+                    val effectiveUpdateType = updateType 
 
                     // 강제 새로고침이 발생하면 이어서 붙여오던 청크(Chunk) 인덱스 기록을 초기화
                     if (effectiveUpdateType == 0 && updateType != 0) {

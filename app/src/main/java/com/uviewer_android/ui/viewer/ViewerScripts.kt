@@ -57,9 +57,9 @@ object ViewerScripts {
                       if (!enableAutoLoading) return; if (window.isScrolling) return;
                       var w = window.innerWidth;
                       var h = window.innerHeight;
-                      // 여유 마진을 화면의 1.5배로 크게 잡음 (사용자가 도달하기 전에 미리 로드)
-                      var preloadMarginX = w * 0.7; 
-                      var preloadMarginY = h * 0.7;
+                      // 여유 마진을 넉넉하게 1.5배 이상으로 수정하여 유저가 터치하기 전에 미리 로딩되게 함
+                      var preloadMarginX = w * 1.5; 
+                      var preloadMarginY = h * 1.5;
 
                       if (isVertical) {
                           var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
@@ -373,7 +373,7 @@ object ViewerScripts {
                                          }
                                      }
                                      if (!added) {
-                                         parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right });
+                                         parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right, isImageWrapper: false });
                                      }
                                  }
                                  for (var i = 0; i < parts.length; i++) {
@@ -382,9 +382,10 @@ object ViewerScripts {
                              }
                          } else {
                               var rects; if (node.nodeType === 1) { rects = [node.getBoundingClientRect()]; } else { var range = document.createRange(); range.selectNodeContents(node); rects = range.getClientRects(); }
+                              var isImg = node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE');
                              for (var i = 0; i < rects.length; i++) {
                                  var r = rects[i];
-                                 if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right });
+                                 if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg });
                              }
                          }
                      }
@@ -393,7 +394,7 @@ object ViewerScripts {
                          textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
                          var lines = [];
                          if (textLines.length === 0) return lines;
-                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: textLines[0].isImageWrapper };
+                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper };
                          for (var i = 1; i < textLines.length; i++) {
                              var r = textLines[i];
                              var vOverlap = Math.min(currentLine.bottom, r.bottom) - Math.max(currentLine.top, r.top);
@@ -403,10 +404,10 @@ object ViewerScripts {
                                  currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
                                  currentLine.left = Math.min(currentLine.left, r.left);
                                  currentLine.right = Math.max(currentLine.right, r.right);
-                                 currentLine.isImageWrapper = currentLine.isImageWrapper || r.isImageWrapper;
+                                 currentLine.isImageWrapper = currentLine.isImageWrapper || !!r.isImageWrapper;
                              } else {
                                  lines.push(currentLine);
-                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: r.isImageWrapper };
+                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper };
                              }
                          }
                          lines.push(currentLine);
@@ -415,7 +416,7 @@ object ViewerScripts {
                          textLines.sort(function(a, b) { var diff = b.right - a.right; return diff !== 0 ? diff : a.top - b.top; });
                          var lines = [];
                          if (textLines.length === 0) return lines;
-                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: textLines[0].isImageWrapper };
+                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper };
                          for (var i = 1; i < textLines.length; i++) {
                              var r = textLines[i];
                              var hOverlap = Math.min(currentLine.right, r.right) - Math.max(currentLine.left, r.left);
@@ -425,10 +426,10 @@ object ViewerScripts {
                                  currentLine.bottom = Math.max(currentLine.bottom, r.bottom);
                                  currentLine.left = Math.min(currentLine.left, r.left);
                                  currentLine.right = Math.max(currentLine.right, r.right);
-                                 currentLine.isImageWrapper = currentLine.isImageWrapper || r.isImageWrapper;
+                                 currentLine.isImageWrapper = currentLine.isImageWrapper || !!r.isImageWrapper;
                              } else {
                                  lines.push(currentLine);
-                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: r.isImageWrapper };
+                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper };
                              }
                          }
                          lines.push(currentLine);
@@ -498,7 +499,7 @@ object ViewerScripts {
                                   // If any part of the line (base or ruby) is cut, hide the whole line
                                   if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
                               }
-                              masks.left = Math.ceil(maxR + 1);
+                              masks.left = Math.ceil(maxR + 4);
                           }
                           
                           // [Protection] Never mask text that is fully visible on the left side
@@ -509,27 +510,11 @@ object ViewerScripts {
                                   if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
                               }
                               // Ensure the mask stops exactly where the first uncut line begins
-                              if (masks.left > minL - 2) masks.left = Math.max(0, Math.floor(minL - 2));
+                              if (masks.left > minL - 1) masks.left = Math.max(0, Math.floor(minL - 1));
                           }
 
                           // [Vertical Mode Right Mask] 
-                          // Normally 0 for vertical-rl next page, but calculate if needed for consistency
-                          var cutRight = textVisible.filter(function(l) { return l.right > w + 0.05; });
-                          if (cutRight.length > 0) {
-                              var minLForRight = w;
-                              for (var i = 0; i < cutRight.length; i++) { if (cutRight[i].left < minLForRight) minLForRight = cutRight[i].left; }
-                              masks.right = Math.ceil(w - minLForRight + 1);
-                              
-                              // Protect text fully visible on the right
-                              var rightVisibleText = textVisible.filter(function(l) { return l.right <= w + 0.05; });
-                              if (rightVisibleText.length > 0) {
-                                  var maxRForRight = 0;
-                                  for (var i = 0; i < rightVisibleText.length; i++) {
-                                      if (rightVisibleText[i].right > maxRForRight) maxRForRight = rightVisibleText[i].right;
-                                  }
-                                  if (masks.right > (w - maxRForRight)) masks.right = Math.max(0, Math.floor(w - maxRForRight));
-                              }
-                          }
+                          masks.right = 0;
 
                           // [Images Protection] Never cover images, cut or not
                           imageVisible.forEach(function(img) {
@@ -774,7 +759,7 @@ object ViewerScripts {
                     overscroll-behavior: none !important;
                     /* 터치 동작 제한 (세로쓰기면 좌우 스크롤만 허용) */
                     touch-action: ${if (isVertical) "pan-x" else "pan-y"} !important;
-                    overflow-anchor: auto !important;
+                    overflow-anchor: none !important;
                     
                     /* [중요] html에도 writing-mode 적용하여 브라우저 좌표축 동기화 */
                     writing-mode: ${if (isVertical) "vertical-rl" else "horizontal-tb"} !important;
@@ -803,7 +788,7 @@ object ViewerScripts {
                      /* 안전 영역 패딩 */
                      padding-top: env(safe-area-inset-top, 0) !important;
                      padding-bottom: env(safe-area-inset-bottom, 0) !important;
-                     overflow-anchor: auto !important;
+                     overflow-anchor: none !important;
                  }
                  
                  /* 2. 문단 설정: 여백이 터치 감지를 방해하지 않도록 조정 */
@@ -826,7 +811,7 @@ object ViewerScripts {
                       text-align: left !important;
                   }
                   .content-chunk {
-                      overflow-anchor: auto !important;
+                      overflow-anchor: none !important;
                   }
                  /* Remove padding for images to make them edge-to-edge */
                  div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
