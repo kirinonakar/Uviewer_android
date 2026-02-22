@@ -227,31 +227,44 @@ object ViewerScripts {
                           }, 400);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
+                  
+window.enforceChunkLimit = function(isAppend) {
+    var chunks = document.querySelectorAll('.content-chunk');
+    if (chunks.length > window.MAX_CHUNKS) {
+        if (isAppend) {
+            window.isSystemScrolling = true; 
+            var oldestChunk = chunks[0];
+            
+            // [핵심 수정] 단순 rect 크기를 빼는 방식 대신, 화면 변동폭을 완벽히 추적하는 Anchor 기법 도입
+            // 삭제되지 않고 살아남을 두 번째 청크에서 화면에 렌더링된 요소를 앵커로 잡음
+            var safeChunk = chunks[1];
+            var anchorElement = safeChunk.querySelector('div, p, span, img') || safeChunk;
+            
+            // 1. 오래된 청크 삭제 전, 앵커 요소의 화면상 절대 좌표 기록
+            var beforeRect = anchorElement.getBoundingClientRect();
 
-                  window.enforceChunkLimit = function(isAppend) {
-                      var chunks = document.querySelectorAll('.content-chunk');
-                      if (chunks.length > window.MAX_CHUNKS) {
-                          if (isAppend) {
-                              window.isSystemScrolling = true; var oldestChunk = chunks[0];
-                              // 제거될 청크의 높이/너비를 정확히 측정
-                              var rect = oldestChunk.getBoundingClientRect();
-                              var shiftW = isVertical ? rect.width : 0;
-                              var shiftH = isVertical ? 0 : rect.height;
+            // 2. 오래된 청크 삭제 (이 순간 브라우저 내부적으로 전체 스크롤이 확 줄어듦)
+            oldestChunk.parentNode.removeChild(oldestChunk);
 
-                              oldestChunk.parentNode.removeChild(oldestChunk);
+            // 3. 삭제 직후 밀려난 앵커 요소의 새 위치 확인
+            var afterRect = anchorElement.getBoundingClientRect();
+            
+            // 4. 좌표가 밀린 픽셀 수치를 정확히 계산
+            var diffW = afterRect.left - beforeRect.left;
+            var diffH = afterRect.top - beforeRect.top;
 
-                              // 즉각적인 보정 (RTL 수평 스크롤 혹은 LTR 수직 스크롤)
-                              if (isVertical) {
-                                  window.safeScrollBy(shiftW, 0);
-                              } else {
-                                  window.safeScrollBy(0, -shiftH);
-                              }
-                          } else {
-                              var newestChunk = chunks[chunks.length - 1];
-                              newestChunk.parentNode.removeChild(newestChunk);
-                          }
-                      }
-                  };
+            // 5. 이미지가 있든 없든 밀려난 픽셀만큼만 정확히 역산하여 스크롤 즉시 보정 (오차 0%)
+            if (isVertical) {
+                window.safeScrollBy(diffW, 0);
+            } else {
+                window.safeScrollBy(0, diffH);
+            }
+        } else {
+            var newestChunk = chunks[chunks.length - 1];
+            newestChunk.parentNode.removeChild(newestChunk);
+        }
+    }
+};
 
                  window.detectAndReportLine = function() {
                      var width = window.innerWidth;
