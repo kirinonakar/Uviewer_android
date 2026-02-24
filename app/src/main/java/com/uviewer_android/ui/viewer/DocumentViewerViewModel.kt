@@ -946,12 +946,12 @@ class DocumentViewerViewModel(
                     // 이미지가 없는 순수 텍스트라면 사용자 편의를 위해 다음 챕터를 자동으로 미리 로드하여 이어서 보여줍니다.
                     // 핵심 수정: updateType이 아닌 effectiveUpdateType == 0을 확인하여, 
                     // 이미지 챕터(1) 직후에 짧은 텍스트 챕터(2)가 떴을 때 즉시 텍스트 챕터(3)를 이어서 붙이도록 처리
-                    if (effectiveUpdateType == 0 && lineCount > 0 && lineCount <= 15 && !isImageOnly && index + 1 < _uiState.value.epubChapters.size) {
+                    /* if (effectiveUpdateType == 0 && lineCount > 0 && lineCount <= 15 && !isImageOnly && index + 1 < _uiState.value.epubChapters.size) {
                         viewModelScope.launch {
                             kotlinx.coroutines.delay(300) // 초기 렌더링 안정화 대기
                             nextChapter(isBackground = true) // [수정] 명시적으로 백그라운드 플래그 전달
                         }
-                    }
+                    } */
                 }
             } else {
                 // For Text files

@@ -41,7 +41,11 @@ object ViewerScripts {
                       }
                  } else {
                      var el = document.getElementById('line-${linePrefix}$targetLine'); 
-                     if(el) {
+                     
+                     // [핵심 수정] 문서 너비가 화면보다 짧을 경우 scrollIntoView가 위치를 비틀어버리는 버그 방지
+                     if (isVertical && document.documentElement.scrollWidth <= window.innerWidth) {
+                         window.scrollTo(1000000, 0); // 무조건 가장 오른쪽(처음)에 강제 고정
+                     } else if(el) {
                          el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                      } else if ($targetLine === 1) {
                          if (isVertical) window.scrollTo(1000000, 0); 
@@ -91,6 +95,10 @@ object ViewerScripts {
                   };
                   window.appendHtmlBase64 = function(base64Str, chunkIndex) {
                       try {
+                          // [추가] DOM 변경 전 스크롤 위치 기억
+                          var beforeScrollX = window.pageXOffset;
+                          var beforeScrollY = window.pageYOffset;
+
                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
                           var parser = new DOMParser();
                           var doc = parser.parseFromString(htmlStr, 'text/html');
@@ -113,81 +121,82 @@ object ViewerScripts {
                           if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
 
+                          // [핵심 추가] 내용이 추가되면서 브라우저가 스크롤을 튀게 만드는 현상 강제 차단
+                          if (isVertical) {
+                              window.scrollTo(beforeScrollX, beforeScrollY);
+                          }
+
                           // 이미지 로딩 등으로 인한 높이 변화 대기 후 GC 실행
                            setTimeout(function() {
                               window.enforceChunkLimit(true);
                               window.updateMask();
+                              // [추가] 렌더링 완료 후 한 번 더 스크롤 확실히 고정
+                              if (isVertical) window.scrollTo(beforeScrollX, beforeScrollY);
                               window.isScrolling = false; 
                           }, 300);
 
-                          // [추가] 
                           setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
                   window.prependHtmlBase64 = function(base64Str, chunkIndex) {
                       try {
+                          // [핵심] DOM 변경 전 스크롤 위치와 전체 길이 기억
+                          var beforeScrollX = window.pageXOffset;
+                          var beforeScrollY = window.pageYOffset;
+                          var oldScrollWidth = document.documentElement.scrollWidth;
+                          var oldScrollHeight = document.documentElement.scrollHeight;
+
                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
                           var parser = new DOMParser();
                           var doc = parser.parseFromString(htmlStr, 'text/html');
                           var container = document.body;
+                          var startMarker = document.getElementById('start-marker');
                           
                           var chunkWrapper = document.createElement('div');
                           chunkWrapper.className = 'content-chunk';
                           chunkWrapper.dataset.index = chunkIndex;
+                          
+                          var hr = document.createElement('hr');
+                          hr.style.cssText = "border: none; border-bottom: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                          chunkWrapper.appendChild(hr);
 
                           Array.from(doc.body.childNodes).forEach(function(node) {
-                              if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                              if (node.id === 'start-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
                           });
 
-                          var hr = document.createElement('hr');
-                          hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
-                          chunkWrapper.appendChild(hr);
+                          if (startMarker && startMarker.nextSibling) {
+                              container.insertBefore(chunkWrapper, startMarker.nextSibling);
+                          } else {
+                              container.insertBefore(chunkWrapper, container.firstChild);
+                          }
 
-                          container.insertBefore(chunkWrapper, container.firstChild);
+                          // [핵심] 챕터가 앞에 붙으면서 밀려난 만큼 스크롤 위치를 즉각 보정
+                          var newScrollWidth = document.documentElement.scrollWidth;
+                          var newScrollHeight = document.documentElement.scrollHeight;
+                          if (isVertical) {
+                              var widthDiff = newScrollWidth - oldScrollWidth;
+                              window.scrollTo(beforeScrollX - widthDiff, beforeScrollY);
+                          } else {
+                              var heightDiff = newScrollHeight - oldScrollHeight;
+                              window.scrollTo(beforeScrollX, beforeScrollY + heightDiff);
+                          }
 
-                          // [핵심 해결책] ResizeObserver: 이미지가 비동기 로딩되며 크기가 커질 때마다 실시간으로 스크롤 역산
-                          var lastWidth = 0;
-                          var lastHeight = 0;
-                          
-                          var ro = new ResizeObserver(function(entries) {
-                              for (var i = 0; i < entries.length; i++) {
-                                  var entry = entries[i];
-                                  var newWidth = entry.contentRect.width;
-                                  var newHeight = entry.contentRect.height;
-                                  
-                                  var diffW = newWidth - lastWidth;
-                                  var diffH = newHeight - lastHeight;
-                                  
-                                  lastWidth = newWidth;
-                                  lastHeight = newHeight;
-
-                                  // 이미지가 커지면서 밀어낸 공간만큼 스크롤을 이동시켜 시야를 꽉 잡아줌
-                                  if (isVertical) {
-                                      window.safeScrollBy(-diffW, 0); 
-                                  } else {
-                                      window.safeScrollBy(0, diffH);
-                                  }
-                              }
-                          });
-                          
-                          // 관찰 시작 (이때 초기 DOM 크기에 대한 첫 번째 보정이 자동으로 발생합니다)
-                          ro.observe(chunkWrapper);
-
-                          // 이미지가 전부 로딩될 넉넉한 시간(2초) 뒤에 관찰을 끄고 메모리 확보
+                          // 이미지 로딩 등으로 인한 높이 변화 대기 후 최종 보정 및 락 해제
                           setTimeout(function() {
-                              ro.disconnect();
-                          }, 2000);
-
-                          // 로딩 락은 짧게 해제하여 유저가 계속 스크롤 할 수 있게 허용
-                           setTimeout(function() {
-                              window.enforceChunkLimit(false); 
+                              window.enforceChunkLimit(false);
                               window.updateMask();
+                              if (isVertical) {
+                                  var finalWidthDiff = document.documentElement.scrollWidth - oldScrollWidth;
+                                  window.scrollTo(beforeScrollX - finalWidthDiff, beforeScrollY);
+                              } else {
+                                  var finalHeightDiff = document.documentElement.scrollHeight - oldScrollHeight;
+                                  window.scrollTo(beforeScrollX, beforeScrollY + finalHeightDiff);
+                              }
                               window.isScrolling = false; 
-                          }, 150);
-                          
-                          // [추가]
+                          }, 300);
+
                           setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
@@ -233,43 +242,39 @@ object ViewerScripts {
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
-window.enforceChunkLimit = function(isAppend) {
-    var chunks = document.querySelectorAll('.content-chunk');
-    if (chunks.length > window.MAX_CHUNKS) {
-        if (isAppend) {
-            window.isSystemScrolling = true; 
-            var oldestChunk = chunks[0];
-            
-            // [핵심 수정] 단순 rect 크기를 빼는 방식 대신, 화면 변동폭을 완벽히 추적하는 Anchor 기법 도입
-            // 삭제되지 않고 살아남을 두 번째 청크에서 화면에 렌더링된 요소를 앵커로 잡음
-            var safeChunk = chunks[1];
-            var anchorElement = safeChunk.querySelector('div, p, span, img') || safeChunk;
-            
-            // 1. 오래된 청크 삭제 전, 앵커 요소의 화면상 절대 좌표 기록
-            var beforeRect = anchorElement.getBoundingClientRect();
-
-            // 2. 오래된 청크 삭제 (이 순간 브라우저 내부적으로 전체 스크롤이 확 줄어듦)
-            oldestChunk.parentNode.removeChild(oldestChunk);
-
-            // 3. 삭제 직후 밀려난 앵커 요소의 새 위치 확인
-            var afterRect = anchorElement.getBoundingClientRect();
-            
-            // 4. 좌표가 밀린 픽셀 수치를 정확히 계산
-            var diffW = afterRect.left - beforeRect.left;
-            var diffH = afterRect.top - beforeRect.top;
-
-            // 5. 이미지가 있든 없든 밀려난 픽셀만큼만 정확히 역산하여 스크롤 즉시 보정 (오차 0%)
-            if (isVertical) {
-                window.safeScrollBy(diffW, 0);
-            } else {
-                window.safeScrollBy(0, diffH);
-            }
-        } else {
-            var newestChunk = chunks[chunks.length - 1];
-            newestChunk.parentNode.removeChild(newestChunk);
-        }
-    }
-};
+                  window.enforceChunkLimit = function(isNext) {
+                      var chunks = document.getElementsByClassName('content-chunk');
+                      if (chunks.length > 4) { // 한 번에 유지할 최대 챕터 개수
+                          if (isNext) {
+                              var firstChunk = chunks[0];
+                              
+                              // [핵심] 현재 화면(뷰포트)에 읽고 있는 챕터가 걸쳐 있다면 삭제 취소!
+                              // 삭제되면 갑자기 화면이 두 챕터 뒤로 날아가는 현상 방지
+                              if (isVertical && window.pageXOffset > -firstChunk.offsetWidth) return;
+                              if (!isVertical && window.pageYOffset < firstChunk.offsetHeight) return;
+                              
+                              var removeWidth = firstChunk.offsetWidth;
+                              var removeHeight = firstChunk.offsetHeight;
+                              firstChunk.parentNode.removeChild(firstChunk);
+                              
+                              // 삭제된 만큼 스크롤 부드럽게 복구
+                              if (isVertical) window.safeScrollBy(removeWidth, 0); 
+                              else window.safeScrollBy(0, -removeHeight);
+                          } else {
+                              var lastChunk = chunks[chunks.length - 1];
+                              
+                              // 마지막 챕터 삭제 시에도 화면에 보이면 삭제 취소
+                              if (isVertical) {
+                                  var maxScroll = document.documentElement.scrollWidth - window.innerWidth;
+                                  if (window.pageXOffset < -(maxScroll - lastChunk.offsetWidth)) return;
+                              } else {
+                                  var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+                                  if (window.pageYOffset > (maxScroll - lastChunk.offsetHeight)) return;
+                              }
+                              lastChunk.parentNode.removeChild(lastChunk);
+                          }
+                      }
+                  };
 
                  window.detectAndReportLine = function() {
                      var width = window.innerWidth;
