@@ -903,9 +903,13 @@ class DocumentViewerViewModel(
                     // 기존 15라인 이하 기준을 3라인 이하로 엄격하게 줄여 '짧은 텍스트 챕터'가 이미지 챕터로 오인되는 것을 방지
                     val isImageOnly = lineCount <= 3 && processedContent.contains("image-page-wrapper")
                     
-                    // [핵심 추가] 백그라운드 자동 로딩인데 대상이 이미지 챕터인 경우
+                    // [핵심 추가] 세로쓰기(RTL)에서 짧은 텍스트 챕터(20라인 이하)는 스크롤 계산 오류와 건너뜀 버그를 
+                    // 방지하기 위해 이미지 챕터처럼 '전체 리로드(Refresh)' 방식으로 처리합니다.
+                    val isShortVertical = _uiState.value.isVertical && lineCount in 1..20 && !isImageOnly
+
+                    // [핵심 수정] 백그라운드 자동 로딩인데 대상이 이미지 챕터이거나 '세로모드 짧은 챕터'인 경우
                     // 화면 리로드가 발생해 현재 글을 덮어씌우는 버그를 막기 위해 로딩을 취소하고 롤백합니다.
-                    if (isBackground && isImageOnly) {
+                    if (isBackground && (isImageOnly || isShortVertical)) {
                         if (updateType == 1) loadedEndChapter--
                         if (updateType == 2) loadedStartChapter++
                         _uiState.value = _uiState.value.copy(
@@ -918,8 +922,8 @@ class DocumentViewerViewModel(
                     // [핵심 수정] 전체 버퍼 내용이 아닌 수치화된 플래그를 사용하여 이전 챕터의 이미지 여부를 정확히 판단
                     val wasImageOnly = _uiState.value.isImageOnlyChapter
 
-                    // [수정됨] 이미지만 있는 챕터이거나, 직전이 이미지만 있는 챕터였다면 목차 점프처럼 전체 리로드(0) 수행
-                    val effectiveUpdateType = if (isImageOnly || wasImageOnly) 0 else updateType
+                    // [수정됨] 이미지만 있는 챕터, 직전이 이미지였던 경우, 또는 세로모드 짧은 챕터인 경우 전체 리로드(0) 수행
+                    val effectiveUpdateType = if (isImageOnly || wasImageOnly || isShortVertical) 0 else updateType
 
                     // 강제 새로고침이 발생하면 이어서 붙여오던 청크(Chunk) 인덱스 기록을 초기화
                     if (effectiveUpdateType == 0 && updateType != 0) {
@@ -939,14 +943,14 @@ class DocumentViewerViewModel(
                         contentUpdateType = effectiveUpdateType, 
                         appendTrigger = System.currentTimeMillis(),
                         chapterLineCounts = newCounts,
-                        isImageOnlyChapter = isImageOnly
+                        isImageOnlyChapter = isImageOnly || isShortVertical
                     )
 
-                    // [수정] 짧은 텍스트 챕터(예: 한 페이지가 채 안 되는 15라인 이하) 로드 시, 
+                    // [수정] 짧은 텍스트 챕터(예: 한 페이지가 채 안 되는 10라인 이하) 로드 시, 
                     // 이미지가 없는 순수 텍스트라면 사용자 편의를 위해 다음 챕터를 자동으로 미리 로드하여 이어서 보여줍니다.
                     // 핵심 수정: updateType이 아닌 effectiveUpdateType == 0을 확인하여, 
                     // 이미지 챕터(1) 직후에 짧은 텍스트 챕터(2)가 떴을 때 즉시 텍스트 챕터(3)를 이어서 붙이도록 처리
-                    /* if (effectiveUpdateType == 0 && lineCount > 0 && lineCount <= 15 && !isImageOnly && index + 1 < _uiState.value.epubChapters.size) {
+                    /* if (effectiveUpdateType == 0 && lineCount > 0 && lineCount <= 10 && !isImageOnly && index + 1 < _uiState.value.epubChapters.size) {
                         viewModelScope.launch {
                             kotlinx.coroutines.delay(300) // 초기 렌더링 안정화 대기
                             nextChapter(isBackground = true) // [수정] 명시적으로 백그라운드 플래그 전달

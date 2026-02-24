@@ -41,15 +41,13 @@ object ViewerScripts {
                       }
                  } else {
                      var el = document.getElementById('line-${linePrefix}$targetLine'); 
-                     
-                     // [핵심 수정] 문서 너비가 화면보다 짧을 경우 scrollIntoView가 위치를 비틀어버리는 버그 방지
                      if (isVertical && document.documentElement.scrollWidth <= window.innerWidth) {
-                         window.scrollTo(1000000, 0); // 무조건 가장 오른쪽(처음)에 강제 고정
+                         window.scrollTo(0, 0); 
+                     } else if ($targetLine === 1) {
+                         if (isVertical) window.scrollTo(0, 0); 
+                         else window.scrollTo(0, 0);
                      } else if(el) {
                          el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
-                     } else if ($targetLine === 1) {
-                         if (isVertical) window.scrollTo(1000000, 0); 
-                         else window.scrollTo(0, 0);
                      }
                  }
 
@@ -67,26 +65,36 @@ object ViewerScripts {
                       if (!enableAutoLoading) return; if (window.isScrolling) return; if ($isImageOnly) return;
                       var w = window.innerWidth;
                       var h = window.innerHeight;
-                      // 여유 마진을 넉넉하게 1.5배 이상으로 수정하여 유저가 터치하기 전에 미리 로딩되게 함
                       var preloadMarginX = w * 1.5; 
                       var preloadMarginY = h * 1.5;
 
                       if (isVertical) {
-                          var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
-                          if (window.pageXOffset <= -(maxScrollX - preloadMarginX)) {
+                          var scrollW = document.documentElement.scrollWidth;
+                          var maxScrollX = Math.max(0, scrollW - w);
+                          
+                          // RTL(세로쓰기) 환경에서 스크롤 남은 거리 계산
+                          var distToEnd = maxScrollX - Math.abs(window.pageXOffset); // 다음 챕터까지의 거리
+                          var distToStart = Math.abs(window.pageXOffset);            // 이전 챕터까지의 거리
+
+                          if (distToEnd <= preloadMarginX) {
                               window.isScrolling = true; 
                               if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
-                          } else if (window.pageXOffset >= -preloadMarginX) { 
+                          } else if (distToStart <= preloadMarginX && distToStart > 10) { 
+                              // [핵심 수정] 현재 위치가 챕터 시작점(0) 부근이면 이전 챕터 자동 로딩 방지 (무한 루프/점프 차단)
                               window.isScrolling = true; 
                               if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
                       } else {
-                          var scrollPosition = window.innerHeight + window.pageYOffset;
+                          var scrollPosition = h + window.pageYOffset;
                           var bottomPosition = document.documentElement.scrollHeight;
-                          if (scrollPosition >= bottomPosition - preloadMarginY) {
+                          var distToEnd = bottomPosition - scrollPosition;
+                          var distToStart = window.pageYOffset;
+
+                          if (distToEnd <= preloadMarginY) {
                               window.isScrolling = true; 
                               if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
-                          } else if (window.pageYOffset <= preloadMarginY) {
+                          } else if (distToStart <= preloadMarginY && distToStart > 10) {
+                              // [핵심 수정] 가로모드에서도 맨 위 시작점일 때 불필요한 이전 로딩 방지
                               window.isScrolling = true; 
                               if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
@@ -95,10 +103,6 @@ object ViewerScripts {
                   };
                   window.appendHtmlBase64 = function(base64Str, chunkIndex) {
                       try {
-                          // [추가] DOM 변경 전 스크롤 위치 기억
-                          var beforeScrollX = window.pageXOffset;
-                          var beforeScrollY = window.pageYOffset;
-
                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
                           var parser = new DOMParser();
                           var doc = parser.parseFromString(htmlStr, 'text/html');
@@ -118,23 +122,27 @@ object ViewerScripts {
                               chunkWrapper.appendChild(node);
                           });
 
+                          // 투명 상태로 먼저 삽입 (렌더링 안정화)
+                          chunkWrapper.style.display = 'none';
                           if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
 
-                          // [핵심 추가] 내용이 추가되면서 브라우저가 스크롤을 튀게 만드는 현상 강제 차단
-                          if (isVertical) {
-                              window.scrollTo(beforeScrollX, beforeScrollY);
-                          }
+                          // 브라우저 프레임에 맞춰 노출
+                          requestAnimationFrame(function() {
+                              chunkWrapper.style.display = 'block';
+                              
+                              // [핵심 해결] 세로모드(RTL)에서 뒤에 내용을 붙일 땐 좌표가 밀리지 않습니다.
+                              // 브라우저 버그를 유발하던 scrollTo, scrollIntoView 등 
+                              // 모든 스크롤 강제 조작 로직을 완전히 삭제했습니다.
+                              
+                              setTimeout(function() {
+                                  window.enforceChunkLimit(true);
+                                  window.updateMask();
+                                  window.isScrolling = false; 
+                              }, 50);
+                          });
 
-                          // 이미지 로딩 등으로 인한 높이 변화 대기 후 GC 실행
-                           setTimeout(function() {
-                              window.enforceChunkLimit(true);
-                              window.updateMask();
-                              // [추가] 렌더링 완료 후 한 번 더 스크롤 확실히 고정
-                              if (isVertical) window.scrollTo(beforeScrollX, beforeScrollY);
-                              window.isScrolling = false; 
-                          }, 300);
-
+                          // 자동 로딩 속도를 조절하여 렌더링 충돌 방지
                           setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
