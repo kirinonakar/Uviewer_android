@@ -8,7 +8,8 @@ object ViewerScripts {
         enableAutoLoading: Boolean,
         targetLine: Int,
         totalLines: Int,
-        linePrefix: String
+        linePrefix: String,
+        isImageOnly: Boolean = false
     ): String {
         return """
             (function() {
@@ -59,7 +60,7 @@ object ViewerScripts {
                   
                   // [추가됨] 앞뒤 청크를 미리(미리보기 화면의 1.5배 전부터) 불러오는 독립 함수
                   window.checkPreload = function() {
-                      if (!enableAutoLoading) return; if (window.isScrolling) return;
+                      if (!enableAutoLoading) return; if (window.isScrolling) return; if ($isImageOnly) return;
                       var w = window.innerWidth;
                       var h = window.innerHeight;
                       // 여유 마진을 넉넉하게 1.5배 이상으로 수정하여 유저가 터치하기 전에 미리 로딩되게 함
@@ -69,17 +70,21 @@ object ViewerScripts {
                       if (isVertical) {
                           var maxScrollX = document.documentElement.scrollWidth - window.innerWidth;
                           if (window.pageXOffset <= -(maxScrollX - preloadMarginX)) {
-                              window.isScrolling = true; Android.autoLoadNext();
+                              window.isScrolling = true; 
+                              if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
                           } else if (window.pageXOffset >= -preloadMarginX) { 
-                              window.isScrolling = true; Android.autoLoadPrev();
+                              window.isScrolling = true; 
+                              if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
                       } else {
                           var scrollPosition = window.innerHeight + window.pageYOffset;
                           var bottomPosition = document.documentElement.scrollHeight;
                           if (scrollPosition >= bottomPosition - preloadMarginY) {
-                              window.isScrolling = true; Android.autoLoadNext();
+                              window.isScrolling = true; 
+                              if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
                           } else if (window.pageYOffset <= preloadMarginY) {
-                              window.isScrolling = true; Android.autoLoadPrev();
+                              window.isScrolling = true; 
+                              if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
                       }
                        if (window.isScrolling) { if (window._scrollingLockTimeout) clearTimeout(window._scrollingLockTimeout); window._scrollingLockTimeout = setTimeout(function() { window.isScrolling = false; }, 5000); }

@@ -224,6 +224,15 @@ fun DocumentViewerScreen(
         }
     }
 
+    // [추가] 백그라운드 프리로드 취소 시 JS 락 해제 트리거 관찰
+    LaunchedEffect(uiState.jsUnlockTrigger) {
+        if (uiState.jsUnlockTrigger > 0L) {
+            webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+            isNavigating = false
+            isPageLoading = false
+        }
+    }
+
     ModalNavigationDrawer(
         drawerState = drawerState,
         drawerContent = {
@@ -589,7 +598,7 @@ fun DocumentViewerScreen(
                                             }
                                         }
                                     }
-                                    @android.webkit.JavascriptInterface
+                                     @android.webkit.JavascriptInterface
                                      fun autoLoadPrev() {
                                          post {
                                              if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
@@ -606,6 +615,45 @@ fun DocumentViewerScreen(
                                              }
                                          }
                                      }
+
+                                    // [추가] 백그라운드 자동 로딩 전용 브릿지 함수 (이미지 전용 챕터 무한 루프 방지용)
+                                    @android.webkit.JavascriptInterface
+                                    fun autoLoadNextBg() {
+                                        post {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                                return@post
+                                            }
+                                            isNavigating = true
+                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
+                                                viewModel.nextChunk()
+                                            } else if (type == FileEntry.FileType.EPUB) {
+                                                viewModel.nextChapter(isBackground = true)
+                                            } else {
+                                                isNavigating = false
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                            }
+                                        }
+                                    }
+
+                                    @android.webkit.JavascriptInterface
+                                    fun autoLoadPrevBg() {
+                                        post {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                                return@post
+                                            }
+                                            isNavigating = true
+                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
+                                                viewModel.prevChunk()
+                                            } else if (type == FileEntry.FileType.EPUB) {
+                                                viewModel.prevChapter(isBackground = true)
+                                            } else {
+                                                isNavigating = false
+                                                webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
+                                            }
+                                        }
+                                    }
 
                                     @android.webkit.JavascriptInterface
                                     fun updateBottomMask(height: Float) {
@@ -669,14 +717,15 @@ val jsScrollLogic = ViewerScripts.getScrollLogic(
     enableAutoLoading = enableAutoLoading,
     targetLine = targetLine,
     totalLines = totalLines,
-    linePrefix = linePrefix
+    linePrefix = linePrefix,
+    isImageOnly = uiState.isImageOnlyChapter
 )
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
                                             webViewRef?.postDelayed({
                                                 isPageLoading = false
                                                 isNavigating = false
-                                            }, 800) // 500 -> 800ms
+                                            }, if (uiState.isImageOnlyChapter) 300L else 600L) // [수정됨] 이미지 챕터는 300ms, 일반은 600ms로 단축하여 반응성 개선
                                         }
                                     }
                                 }

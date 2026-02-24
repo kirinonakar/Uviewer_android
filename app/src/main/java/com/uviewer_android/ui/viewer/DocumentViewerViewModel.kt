@@ -45,7 +45,9 @@ data class DocumentViewerUiState(
     val loadProgress: Float = 1f,
     val contentUpdateType: Int = 0, // 0: Refresh, 1: Append, 2: Prepend
     val appendTrigger: Long = 0L,
-    val chapterLineCounts: Map<Int, Int> = emptyMap()
+    val chapterLineCounts: Map<Int, Int> = emptyMap(),
+    val isImageOnlyChapter: Boolean = false,
+    val jsUnlockTrigger: Long = 0L // [추가] 프리로드 취소 시 JS 스크롤 락 강제 해제용
 )
 
 
@@ -588,13 +590,16 @@ class DocumentViewerViewModel(
                 }
             }
 
+            val isRefreshing = updateType == 0 || updateType == 3
             _uiState.value = _uiState.value.copy(
                 content = processed,
                 isLoading = false,
-                currentChunkIndex = chunkIndex,
+                currentChunkIndex = if (isRefreshing) chunkIndex else _uiState.value.currentChunkIndex,
                 hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines,
+                currentLine = if (isRefreshing) _uiState.value.currentLine else _uiState.value.currentLine, // Keep existing if not refreshing
                 contentUpdateType = updateType,
-                appendTrigger = System.currentTimeMillis()
+                appendTrigger = System.currentTimeMillis(),
+                isImageOnlyChapter = false
             )
         }
     }
@@ -735,7 +740,7 @@ class DocumentViewerViewModel(
         }
     }
 
-    fun loadChapter(index: Int, initialLine: Int = 1, updateType: Int = 0) {
+    fun loadChapter(index: Int, initialLine: Int = 1, updateType: Int = 0, isBackground: Boolean = false) {
         val chapters = _uiState.value.epubChapters
         if (index in chapters.indices) {
             val chapter = chapters[index]
@@ -894,12 +899,27 @@ class DocumentViewerViewModel(
                     val newCounts = _uiState.value.chapterLineCounts.toMutableMap()
                     newCounts[index] = lineCount
 
-                    // [추가됨] 대상 챕터, 혹은 직전 챕터가 '이미지만 있는 챕터(라인수 5 이하 + 이미지 래퍼 존재)'인지 판별
-                    val isImageOnly = lineCount <= 5 && processedContent.contains("image-page-wrapper")
-                    val wasImageOnly = _uiState.value.totalLines <= 5 && _uiState.value.content.contains("image-page-wrapper")
+                    // [수정됨] 이미지만 있는 챕터 판별: 텍스트 본문(<p>)이 거의 없고 이미지 래퍼가 존재하는 경우
+                    // 기존 15라인 이하 기준을 3라인 이하로 엄격하게 줄여 '짧은 텍스트 챕터'가 이미지 챕터로 오인되는 것을 방지
+                    val isImageOnly = lineCount <= 3 && processedContent.contains("image-page-wrapper")
+                    
+                    // [핵심 추가] 백그라운드 자동 로딩인데 대상이 이미지 챕터인 경우
+                    // 화면 리로드가 발생해 현재 글을 덮어씌우는 버그를 막기 위해 로딩을 취소하고 롤백합니다.
+                    if (isBackground && isImageOnly) {
+                        if (updateType == 1) loadedEndChapter--
+                        if (updateType == 2) loadedStartChapter++
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            jsUnlockTrigger = System.currentTimeMillis() // JS 락 해제 트리거
+                        )
+                        return@launch
+                    }
 
-                    // 강제 새로고침을 제거하여 이전 챕터도 무조건 부드럽게 이어 붙이도록(Prepend) 유지합니다.
-                    val effectiveUpdateType = updateType 
+                    // [핵심 수정] 전체 버퍼 내용이 아닌 수치화된 플래그를 사용하여 이전 챕터의 이미지 여부를 정확히 판단
+                    val wasImageOnly = _uiState.value.isImageOnlyChapter
+
+                    // [수정됨] 이미지만 있는 챕터이거나, 직전이 이미지만 있는 챕터였다면 목차 점프처럼 전체 리로드(0) 수행
+                    val effectiveUpdateType = if (isImageOnly || wasImageOnly) 0 else updateType
 
                     // 강제 새로고침이 발생하면 이어서 붙여오던 청크(Chunk) 인덱스 기록을 초기화
                     if (effectiveUpdateType == 0 && updateType != 0) {
@@ -907,18 +927,31 @@ class DocumentViewerViewModel(
                         loadedEndChapter = index
                     }
 
+                    val isRefreshing = effectiveUpdateType == 0
                     _uiState.value = _uiState.value.copy(
                         url = null, 
                         baseUrl = baseUrl,
                         content = processedContent, 
-                        currentChapterIndex = index,
+                        currentChapterIndex = if (isRefreshing) index else _uiState.value.currentChapterIndex,
                         isLoading = false,
-                        currentLine = if (initialLine == -1) lineCount else initialLine,
-                        totalLines = lineCount,
-                        contentUpdateType = effectiveUpdateType, // [수정됨] 강제 변환된 타입 적용
+                        currentLine = if (isRefreshing) (if (initialLine == -1) lineCount else initialLine) else _uiState.value.currentLine,
+                        totalLines = if (isRefreshing) lineCount else _uiState.value.totalLines,
+                        contentUpdateType = effectiveUpdateType, 
                         appendTrigger = System.currentTimeMillis(),
-                        chapterLineCounts = newCounts
+                        chapterLineCounts = newCounts,
+                        isImageOnlyChapter = isImageOnly
                     )
+
+                    // [수정] 짧은 텍스트 챕터(예: 한 페이지가 채 안 되는 15라인 이하) 로드 시, 
+                    // 이미지가 없는 순수 텍스트라면 사용자 편의를 위해 다음 챕터를 자동으로 미리 로드하여 이어서 보여줍니다.
+                    // 핵심 수정: updateType이 아닌 effectiveUpdateType == 0을 확인하여, 
+                    // 이미지 챕터(1) 직후에 짧은 텍스트 챕터(2)가 떴을 때 즉시 텍스트 챕터(3)를 이어서 붙이도록 처리
+                    if (effectiveUpdateType == 0 && lineCount > 0 && lineCount <= 15 && !isImageOnly && index + 1 < _uiState.value.epubChapters.size) {
+                        viewModelScope.launch {
+                            kotlinx.coroutines.delay(300) // 초기 렌더링 안정화 대기
+                            nextChapter(isBackground = true) // [수정] 명시적으로 백그라운드 플래그 전달
+                        }
+                    }
                 }
             } else {
                 // For Text files
@@ -941,18 +974,18 @@ class DocumentViewerViewModel(
         loadChapter(index, initialLine = 1, updateType = 0)
     }
 
-    fun nextChapter() {
+    fun nextChapter(isBackground: Boolean = false) {
         if (loadedEndChapter + 1 < _uiState.value.epubChapters.size) {
             loadedEndChapter++
-            loadChapter(loadedEndChapter, updateType = 1)
+            loadChapter(loadedEndChapter, updateType = 1, isBackground = isBackground)
         }
     }
 
-    fun prevChapter() {
+    fun prevChapter(isBackground: Boolean = false) {
         if (loadedStartChapter > 0) {
             loadedStartChapter--
             // [수정됨] 전체 리로드(0)로 강제 전환될 경우를 대비해 이전 챕터의 마지막 라인으로 이동하도록 -1 전달
-            loadChapter(loadedStartChapter, initialLine = -1, updateType = 2)
+            loadChapter(loadedStartChapter, initialLine = -1, updateType = 2, isBackground = isBackground)
         }
     }
 
