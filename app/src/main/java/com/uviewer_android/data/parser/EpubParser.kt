@@ -176,6 +176,18 @@ object EpubParser {
             doc.select("p:empty").remove()
         }
 
+        // --- [핵심 추가] 세로모드 문장부호 縦中横 (tcy) 자동 적용 ---
+        if (isVertical) {
+            // Jsoup은 본문 텍스트의 꺾쇠(<, >)를 자동으로 이스케이프(&lt;) 처리합니다.
+            // 따라서 (?![^<]*>) 부정 전방탐색을 사용하면 HTML 태그 속성 내부를 안전하게 피해 본문만 치환할 수 있습니다.
+            val puncRegex = Regex("([!\\?！？]+)(?![^<]*>)")
+            var bodyHtml = doc.body().html()
+            bodyHtml = bodyHtml.replace(puncRegex) { match ->
+                "<span class=\"tcy\">${match.value}</span>"
+            }
+            doc.body().html(bodyHtml)
+        }
+
         // 1. Inject styling and scroll script into head
         doc.head().append(resetCss)
         doc.head().append("""
@@ -198,6 +210,12 @@ object EpubParser {
                     transform: scaleX(0.6);
                     transform-origin: center bottom;
                     white-space: nowrap;
+                }
+                
+                /* --- [핵심 추가] tcy(縦中横) 스타일 정의 --- */
+                .tcy {
+                    text-combine-upright: all;
+                    -webkit-text-combine: horizontal;
                 }
             </style>
             <script>
