@@ -42,25 +42,21 @@ object ViewerScripts {
                      if ($targetLine === $totalLines && $totalLines > 1) {
                           if (typeof jumpToBottom === 'function') { jumpToBottom(); }
                           else {
+                               // 세로쓰기 맨 끝(왼쪽)은 음수 최대값
                                if (isVertical) window.scrollTo(-1000000, 0); 
                                else window.scrollTo(0, 1000000);
                           }
                      } else {
                          var el = document.getElementById('line-${linePrefix}$targetLine'); 
-                         if (isVertical) {
-                             if ($targetLine === 1) {
-                                 // 세로모드(RTL)에서 우측 끝으로 확실히 이동
-                                 window.scrollTo(1000000, 0); 
-                             } else if (el) {
-                                 el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
-                             } else {
-                                 window.scrollTo(1000000, 0);
-                             }
+                         if (el) {
+                             // [핵심 수정] 타겟 라인이 1이든 아니든, 예외 없이 무조건 브라우저 내장 scrollIntoView를 사용합니다.
+                             // 강제 scrollTo(0,0)은 브라우저의 렌더링 타이밍이나 RTL 좌표계 버그로 인해 무시될 수 있습니다.
+                             el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                          } else {
-                             if ($targetLine === 1) {
-                                 window.scrollTo(0, 0); 
-                             } else if(el) {
-                                 el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                             // 만약 엘리먼트를 찾지 못했을 때의 최후의 수단 (다양한 크로미움 RTL 호환성 대비)
+                             if (isVertical) {
+                                 window.scrollTo(document.documentElement.scrollWidth, 0);
+                                 window.scrollTo(0, 0);
                              } else {
                                  window.scrollTo(0, 0);
                              }
