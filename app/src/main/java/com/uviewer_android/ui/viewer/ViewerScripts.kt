@@ -18,7 +18,7 @@ object ViewerScripts {
                 var enableAutoLoading = $enableAutoLoading;
                 
                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
-                 window.isSystemScrolling = true; // 시작 시 락을 걸어 초기 복원 중 이벤트 무시
+                 window.isSystemScrolling = true;
                  window.sysScrollTimer = null;
                  
                  // 브라우저의 강제 스크롤 복원 기능 비활성화
@@ -42,7 +42,6 @@ object ViewerScripts {
                      if ($targetLine === $totalLines && $totalLines > 1) {
                           if (typeof jumpToBottom === 'function') { jumpToBottom(); }
                           else {
-                               // 세로쓰기 맨 끝(왼쪽)은 음수 최대값
                                if (isVertical) window.scrollTo(-1000000, 0); 
                                else window.scrollTo(0, 1000000);
                           }
@@ -51,7 +50,6 @@ object ViewerScripts {
                          if (el) {
                              el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                          } else {
-                             // 만약 엘리먼트를 찾지 못했을 때의 최후의 수단 (다양한 크로미움 RTL 호환성 대비)
                              if (isVertical) {
                                  window.scrollTo(document.documentElement.scrollWidth, 0);
                                  window.scrollTo(0, 0);
@@ -62,12 +60,10 @@ object ViewerScripts {
                      }
                  }
                  
-                 // 즉시 실행 및 레이아웃 안정화 후 재차 실행
                  doInitialScroll();
                  setTimeout(doInitialScroll, 50);
                  setTimeout(doInitialScroll, 200);
 
-                 // 초기 복원 완료 후 락 해제
                  if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);
                  window.sysScrollTimer = setTimeout(function() {
                      window.isSystemScrolling = false;
@@ -90,11 +86,17 @@ object ViewerScripts {
                           var distToStart = Math.abs(window.pageXOffset);            
 
                           if (distToEnd <= preloadMarginX) {
-                              window.isScrolling = true; 
-                              if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
+                              // [수정] 백그라운드 이어붙이기가 지원될 때만 호출. 
+                              // 일반 autoLoadNext를 호출하면 남은 내용을 무시하고 강제 페이지 전환을 해버립니다.
+                              if(Android.autoLoadNextBg) {
+                                  window.isScrolling = true; 
+                                  Android.autoLoadNextBg();
+                              }
                           } else if (distToStart <= preloadMarginX && distToStart > 10) { 
-                              window.isScrolling = true; 
-                              if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
+                              if(Android.autoLoadPrevBg) {
+                                  window.isScrolling = true; 
+                                  Android.autoLoadPrevBg();
+                              }
                           }
                       } else {
                           var scrollPosition = h + window.pageYOffset;
@@ -103,15 +105,20 @@ object ViewerScripts {
                           var distToStart = window.pageYOffset;
 
                           if (distToEnd <= preloadMarginY) {
-                              window.isScrolling = true; 
-                              if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
+                              if(Android.autoLoadNextBg) {
+                                  window.isScrolling = true; 
+                                  Android.autoLoadNextBg();
+                              }
                           } else if (distToStart <= preloadMarginY && distToStart > 10) {
-                              window.isScrolling = true; 
-                              if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
+                              if(Android.autoLoadPrevBg) {
+                                  window.isScrolling = true; 
+                                  Android.autoLoadPrevBg();
+                              }
                           }
                       }
                        if (window.isScrolling) { if (window._scrollingLockTimeout) clearTimeout(window._scrollingLockTimeout); window._scrollingLockTimeout = setTimeout(function() { window.isScrolling = false; }, 5000); }
                   };
+                  
                   window.appendHtmlBase64 = function(base64Str, chunkIndex) {
                       try {
                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
@@ -125,7 +132,11 @@ object ViewerScripts {
                           chunkWrapper.dataset.index = chunkIndex;
                           
                           var hr = document.createElement('hr');
-                          hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                          if (isVertical) {
+                              hr.style.cssText = "border: none; border-left: 1px dashed #888; margin: 10vh 3em; height: 80vh; width: 0px; opacity: 0.5; display: inline-block;";
+                          } else {
+                              hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                          }
                           chunkWrapper.appendChild(hr);
 
                           Array.from(doc.body.childNodes).forEach(function(node) {
@@ -133,19 +144,22 @@ object ViewerScripts {
                               chunkWrapper.appendChild(node);
                           });
 
-                          chunkWrapper.style.display = 'none';
+                          // [핵심 수정] display: none 제거. 즉시 화면에 그려 scrollWidth를 확보해야 
+                          // 스페이서를 지웠을 때 스크롤이 뒤로 튕기는(내용 스킵) 현상이 발생하지 않습니다.
                           if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
 
-                          requestAnimationFrame(function() {
-                              chunkWrapper.style.display = 'block';
-                              
-                              setTimeout(function() {
-                                  window.enforceChunkLimit(true);
-                                  window.updateMask();
-                                  window.isScrolling = false; 
-                              }, 50);
-                          });
+                          // 새 내용이 DOM에 완벽히 추가된 직후에 스페이서를 제거하여 스크롤 유지
+                          var spacer = document.getElementById('viewer-end-spacer');
+                          if (spacer) {
+                              spacer.parentNode.removeChild(spacer);
+                          }
+
+                          setTimeout(function() {
+                              window.enforceChunkLimit(true);
+                              window.updateMask();
+                              window.isScrolling = false; 
+                          }, 50);
 
                           setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
@@ -169,7 +183,11 @@ object ViewerScripts {
                           chunkWrapper.dataset.index = chunkIndex;
                           
                           var hr = document.createElement('hr');
-                          hr.style.cssText = "border: none; border-bottom: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                          if (isVertical) {
+                              hr.style.cssText = "border: none; border-right: 1px dashed #888; margin: 10vh 3em; height: 80vh; width: 0px; opacity: 0.5; display: inline-block;";
+                          } else {
+                              hr.style.cssText = "border: none; border-bottom: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
+                          }
                           chunkWrapper.appendChild(hr);
 
                           Array.from(doc.body.childNodes).forEach(function(node) {
@@ -606,7 +624,6 @@ object ViewerScripts {
                      var isAtBottom = false;
 
                      if (!isVertical) {
-                         // 가로모드: 기존 로직 100% 유지
                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
                          if (pagingMode === 1) {
                              var lines = window.getVisualLines();
@@ -616,43 +633,36 @@ object ViewerScripts {
                              }
                          }
                      } else {
-                         // 세로모드: 챕터 끝까지 자투리 다 보여주는 엄격한 로직 적용
                          var maxScrollX = Math.max(0, document.documentElement.scrollWidth - w);
                          var reachedScrollEnd = (window.pageXOffset <= -(maxScrollX - 5));
 
                          if (pagingMode === 1) {
                              var lines = window.getVisualLines();
                              if (lines.length > 0) {
-                                 // [수정됨] 여유폭(-5) 때문에 다음 페이지의 자투리가 현재 화면에 포함되는 RTL 버그 방지
-                                 // 확실히 화면에 1px이라도 들어온 요소만 잡도록 엄격하게 0과 w 기준 적용
                                  var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
                                  
                                  if (visibleLines.length > 0) {
                                      var lastVisible = visibleLines[visibleLines.length - 1]; 
                                      
                                      if (lines.indexOf(lastVisible) === lines.length - 1) {
-                                         // 화면에 완전히 들어왔는지 검사 (RTL이므로 right가 w보다 작고 left가 0보다 커야 함)
-                                         var isLastFullyVisible = (lastVisible.left >= 0) && (lastVisible.right <= w);
+                                         var isLastFullyVisible = (lastVisible.left >= -5);
+                                         isAtBottom = isLastFullyVisible;
                                          
-                                         if ((lastVisible.right - lastVisible.left) >= w - 10) {
-                                             isLastFullyVisible = (lastVisible.left >= 0);
+                                         if (!isAtBottom && reachedScrollEnd && window._lastScrollX === window.pageXOffset) {
+                                             if (lastVisible.left >= -10) {
+                                                 isAtBottom = true;
+                                             }
                                          }
-                                         
-                                         // [수정됨] 물리적 스크롤 끝 도달(reachedScrollEnd)과 시각적 끝(isLastFullyVisible)을 종합 판단
-                                         // 아직 스크롤이 안 끝났다면 조기 점프 방지
-                                         isAtBottom = reachedScrollEnd || isLastFullyVisible;
                                      } else {
                                          isAtBottom = false;
                                      }
                                  } else {
-                                     // 화면에 요소가 안 잡혔다면 일단 물리적 스크롤 여부 따름
                                      isAtBottom = reachedScrollEnd;
                                  }
                              } else {
                                  isAtBottom = reachedScrollEnd;
                              }
                          } else {
-                             // 페이징 모드가 아닐 때
                              isAtBottom = reachedScrollEnd;
                          }
                      }
@@ -665,7 +675,6 @@ object ViewerScripts {
                          var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
                          
                          if (!isVertical) {
-                             // 가로모드 스크롤 (원본 유지)
                              var visible = lines.filter(function(l) { return l.bottom > 0 && l.top < h; });
                              var scrollDelta = h;
                              if (visible.length > 0) {
@@ -682,13 +691,15 @@ object ViewerScripts {
                              }
                              window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
                          } else {
-                             // 세로모드 스크롤 
                              var visible = lines.filter(function(l) { return l.left < w && l.right > 0; });
                              var scrollDelta = -w;
                              if (visible.length > 0) {
                                  var last = visible[visible.length - 1]; 
                                  if (last.left < 0) {
                                      scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
+                                     if (scrollDelta > -10) {
+                                         scrollDelta = -w + 40; 
+                                     }
                                  } else {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
@@ -697,7 +708,26 @@ object ViewerScripts {
                                      }
                                  }
                              }
-                             window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
+                             
+                             var targetX = window.pageXOffset + scrollDelta;
+                             var currentMaxScrollX = -(Math.max(0, document.documentElement.scrollWidth - w));
+                             
+                             if (targetX < currentMaxScrollX + 5) {
+                                 var spacer = document.getElementById('viewer-end-spacer');
+                                 if (!spacer) {
+                                     spacer = document.createElement('div');
+                                     spacer.id = 'viewer-end-spacer';
+                                     spacer.className = 'content-chunk'; 
+                                     spacer.style.cssText = "display:inline-block; width:" + w + "px; height:1px; flex-shrink:0;";
+                                     document.body.appendChild(spacer);
+                                 } else {
+                                     var currentW = parseInt(spacer.style.width) || w;
+                                     spacer.style.width = (currentW + w) + "px";
+                                 }
+                                 var _forceLayout = document.documentElement.scrollWidth;
+                             }
+
+                             window.scrollBy({ left: Math.max(scrollDelta, -w * 1.5), behavior: 'instant' });
                          }
                      } else {
                          var moveSize = (isVertical ? w : h) - 40;
@@ -705,6 +735,8 @@ object ViewerScripts {
                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
                      }
                      window.detectAndReportLine(); window.updateMask();
+                     
+                     window._lastScrollX = window.pageXOffset;
                  };
 
                  window.pageUp = function() {
@@ -714,7 +746,6 @@ object ViewerScripts {
                      var isAtTop = false;
                      
                      if (!isVertical) { 
-                         // 가로모드: 기존 로직 유지
                          if (window.pageYOffset <= 20) isAtTop = true;
                          if (pagingMode === 1) {
                              var lines = window.getVisualLines();
@@ -724,7 +755,6 @@ object ViewerScripts {
                              }
                          }
                      } else { 
-                         // 세로모드: 챕터 시작부분 자투리 다 보여주는 로직 적용
                          if (window.pageXOffset >= -5) isAtTop = true; 
                          if (pagingMode === 1) {
                              var lines = window.getVisualLines();
@@ -744,7 +774,6 @@ object ViewerScripts {
                          var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
                          
                          if (!isVertical) {
-                             // 가로모드 스크롤 (원본 유지)
                              var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
                              var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
                              if (prevIdx >= 0) {
@@ -755,7 +784,6 @@ object ViewerScripts {
                                  window.scrollBy({ top: Math.max(targetLine.top - (targetLine.isImageWrapper ? 0 : gap), -h), behavior: 'instant' });
                              } else window.scrollBy({ top: -h, behavior: 'instant' });
                          } else {
-                             // 세로모드 스크롤
                              var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
                              var scrollDelta = w;
                              if (firstVisible) {
@@ -807,6 +835,7 @@ object ViewerScripts {
         """.trimIndent()
     }
 
+    // getStyleSheet() 부분은 이전과 완전히 동일하게 유지하시면 됩니다. (생략 없이 기존 코드 그대로 사용)
     fun getStyleSheet(
         isVertical: Boolean,
         bgColor: String,
