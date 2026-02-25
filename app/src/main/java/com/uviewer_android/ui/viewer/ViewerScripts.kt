@@ -20,6 +20,11 @@ object ViewerScripts {
                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
                  window.isSystemScrolling = true; // 시작 시 락을 걸어 초기 복원 중 이벤트 무시
                  window.sysScrollTimer = null;
+                 
+                 // 브라우저의 강제 스크롤 복원 기능 비활성화
+                 if ('scrollRestoration' in history) {
+                     history.scrollRestoration = 'manual';
+                 }
 
                  // 2. JS가 강제로 스크롤을 조작할 때 사용할 안전한 래퍼 함수
                  window.safeScrollBy = function(x, y) {
@@ -33,23 +38,40 @@ object ViewerScripts {
                  };
                 
                  // 1. Restore scroll position
-                 if ($targetLine === $totalLines && $totalLines > 1) {
-                      if (typeof jumpToBottom === 'function') { jumpToBottom(); }
-                      else {
-                           if (isVertical) window.scrollTo(-1000000, 0); 
-                           else window.scrollTo(0, 1000000);
-                      }
-                 } else {
-                     var el = document.getElementById('line-${linePrefix}$targetLine'); 
-                     if (isVertical && document.documentElement.scrollWidth <= window.innerWidth) {
-                         window.scrollTo(0, 0); 
-                     } else if ($targetLine === 1) {
-                         if (isVertical) window.scrollTo(0, 0); 
-                         else window.scrollTo(0, 0);
-                     } else if(el) {
-                         el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                 function doInitialScroll() {
+                     if ($targetLine === $totalLines && $totalLines > 1) {
+                          if (typeof jumpToBottom === 'function') { jumpToBottom(); }
+                          else {
+                               if (isVertical) window.scrollTo(-1000000, 0); 
+                               else window.scrollTo(0, 1000000);
+                          }
+                     } else {
+                         var el = document.getElementById('line-${linePrefix}$targetLine'); 
+                         if (isVertical) {
+                             if ($targetLine === 1) {
+                                 // 세로모드(RTL)에서 우측 끝으로 확실히 이동
+                                 window.scrollTo(1000000, 0); 
+                             } else if (el) {
+                                 el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                             } else {
+                                 window.scrollTo(1000000, 0);
+                             }
+                         } else {
+                             if ($targetLine === 1) {
+                                 window.scrollTo(0, 0); 
+                             } else if(el) {
+                                 el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                             } else {
+                                 window.scrollTo(0, 0);
+                             }
+                         }
                      }
                  }
+                 
+                 // 즉시 실행 및 레이아웃 안정화 후 재차 실행
+                 doInitialScroll();
+                 setTimeout(doInitialScroll, 50);
+                 setTimeout(doInitialScroll, 200);
 
                  // 초기 복원 완료 후 락 해제
                  if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);

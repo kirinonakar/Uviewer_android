@@ -781,6 +781,8 @@ class DocumentViewerViewModel(
                                 overflow-x: ${if (_uiState.value.isVertical) "auto" else "hidden"} !important;
                                 overflow-y: ${if (_uiState.value.isVertical) "hidden" else "auto"} !important;
                                 overflow-anchor: none !important;
+                                writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
+                                -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
                             }
                             body { 
                                 width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
@@ -903,13 +905,13 @@ class DocumentViewerViewModel(
                     // 기존 15라인 이하 기준을 3라인 이하로 엄격하게 줄여 '짧은 텍스트 챕터'가 이미지 챕터로 오인되는 것을 방지
                     val isImageOnly = lineCount <= 3 && processedContent.contains("image-page-wrapper")
                     
-                    // [핵심 추가] 세로쓰기(RTL)에서 짧은 텍스트 챕터(20라인 이하)는 스크롤 계산 오류와 건너뜀 버그를 
-                    // 방지하기 위해 이미지 챕터처럼 '전체 리로드(Refresh)' 방식으로 처리합니다.
-                    val isShortVertical = _uiState.value.isVertical && lineCount in 1..20 && !isImageOnly
+                    // [핵심 추가] 세로쓰기(RTL) 모드에서는 챕터 전환 시 항상 '전체 리로드(Refresh)'를 수행하도록 변경 (사용자 요청)
+                    // 복잡한 세로 레이아웃 병합 시 발생하는 스크롤 계산 오류 및 건너뜀 버그를 근본적으로 방지합니다.
+                    val isVerticalMode = _uiState.value.isVertical
 
-                    // [핵심 수정] 백그라운드 자동 로딩인데 대상이 이미지 챕터이거나 '세로모드 짧은 챕터'인 경우
+                    // [핵심 수정] 백그라운드 자동 로딩인데 대상이 이미지 챕터이거나 '세로모드'인 경우
                     // 화면 리로드가 발생해 현재 글을 덮어씌우는 버그를 막기 위해 로딩을 취소하고 롤백합니다.
-                    if (isBackground && (isImageOnly || isShortVertical)) {
+                    if (isBackground && (isImageOnly || isVerticalMode)) {
                         if (updateType == 1) loadedEndChapter--
                         if (updateType == 2) loadedStartChapter++
                         _uiState.value = _uiState.value.copy(
@@ -922,8 +924,8 @@ class DocumentViewerViewModel(
                     // [핵심 수정] 전체 버퍼 내용이 아닌 수치화된 플래그를 사용하여 이전 챕터의 이미지 여부를 정확히 판단
                     val wasImageOnly = _uiState.value.isImageOnlyChapter
 
-                    // [수정됨] 이미지만 있는 챕터, 직전이 이미지였던 경우, 또는 세로모드 짧은 챕터인 경우 전체 리로드(0) 수행
-                    val effectiveUpdateType = if (isImageOnly || wasImageOnly || isShortVertical) 0 else updateType
+                    // [수정됨] 이미지만 있는 챕터, 직전이 이미지였던 경우, 또는 세로모드인 경우 전체 리로드(0) 수행
+                    val effectiveUpdateType = if (isImageOnly || wasImageOnly || isVerticalMode) 0 else updateType
 
                     // 강제 새로고침이 발생하면 이어서 붙여오던 청크(Chunk) 인덱스 기록을 초기화
                     if (effectiveUpdateType == 0 && updateType != 0) {
@@ -943,7 +945,7 @@ class DocumentViewerViewModel(
                         contentUpdateType = effectiveUpdateType, 
                         appendTrigger = System.currentTimeMillis(),
                         chapterLineCounts = newCounts,
-                        isImageOnlyChapter = isImageOnly || isShortVertical
+                        isImageOnlyChapter = isImageOnly || isVerticalMode
                     )
 
                     // [수정] 짧은 텍스트 챕터(예: 한 페이지가 채 안 되는 10라인 이하) 로드 시, 
