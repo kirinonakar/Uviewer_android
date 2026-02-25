@@ -164,12 +164,48 @@ fun MainScreen(
                                         }
                                     }
                                 } else if (screen is Screen.Library) {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
+                                    val currentEntry = navBackStackEntry
+                                    val isViewer = currentEntry?.destination?.route?.startsWith("viewer") == true
+                                    
+                                    if (isViewer) {
+                                        val filePath = currentEntry?.arguments?.getString("path")
+                                        val isWebDav = currentEntry?.arguments?.getBoolean("isWebDav") ?: false
+                                        val serverId = currentEntry?.arguments?.getInt("serverId") ?: -1
+                                        
+                                        if (filePath != null) {
+                                            val parentPath = if (isWebDav) {
+                                                val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
+                                                val lastSlash = p.lastIndexOf('/')
+                                                if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
+                                            } else {
+                                                java.io.File(filePath).parent ?: "/"
+                                            }
+                                            val encodedPath = android.net.Uri.encode(parentPath, null)
+                                            val route = "library?path=$encodedPath&serverId=$serverId"
+                                            navController.navigate(route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = false
+                                            }
+                                        } else {
+                                            navController.navigate(screen.route) {
+                                                popUpTo(navController.graph.findStartDestination().id) {
+                                                    saveState = true
+                                                }
+                                                launchSingleTop = true
+                                                restoreState = true
+                                            }
                                         }
-                                        launchSingleTop = true
-                                        restoreState = true
+                                    } else {
+                                        navController.navigate(screen.route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
                                     }
                                 } else {
                                     navController.navigate(screen.route) {
@@ -287,9 +323,14 @@ fun MainScreen(
                     serverId = serverId,
                     initialPosition = position,
                     onBack = { 
-                        // Use java.io.File to get parent safely, handling different path separators
-                        val file = java.io.File(filePath)
-                        val parent = file.parent ?: "/"
+                        // Modified to handle WebDAV parent path safely
+                        val parent = if (isWebDav) {
+                            val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
+                            val lastSlash = p.lastIndexOf('/')
+                            if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
+                        } else {
+                            java.io.File(filePath).parent ?: "/"
+                        }
                         val encodedParentPath = android.net.Uri.encode(parent, null)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
                         navController.navigate(route) {

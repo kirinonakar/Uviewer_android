@@ -49,8 +49,6 @@ object ViewerScripts {
                      } else {
                          var el = document.getElementById('line-${linePrefix}$targetLine'); 
                          if (el) {
-                             // [핵심 수정] 타겟 라인이 1이든 아니든, 예외 없이 무조건 브라우저 내장 scrollIntoView를 사용합니다.
-                             // 강제 scrollTo(0,0)은 브라우저의 렌더링 타이밍이나 RTL 좌표계 버그로 인해 무시될 수 있습니다.
                              el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                          } else {
                              // 만약 엘리먼트를 찾지 못했을 때의 최후의 수단 (다양한 크로미움 RTL 호환성 대비)
@@ -75,10 +73,8 @@ object ViewerScripts {
                      window.isSystemScrolling = false;
                  }, 500);
 
-                   // [수정됨] 청크 개수 제한을 5로 늘려 이전2 + 현재 + 이후2 구조가 가능하게 함
                   window.MAX_CHUNKS = 12; 
                   
-                  // [추가됨] 앞뒤 청크를 미리(미리보기 화면의 1.5배 전부터) 불러오는 독립 함수
                   window.checkPreload = function() {
                       if (!enableAutoLoading) return; if (window.isScrolling) return; if ($isImageOnly) return;
                       var w = window.innerWidth;
@@ -90,15 +86,13 @@ object ViewerScripts {
                           var scrollW = document.documentElement.scrollWidth;
                           var maxScrollX = Math.max(0, scrollW - w);
                           
-                          // RTL(세로쓰기) 환경에서 스크롤 남은 거리 계산
-                          var distToEnd = maxScrollX - Math.abs(window.pageXOffset); // 다음 챕터까지의 거리
-                          var distToStart = Math.abs(window.pageXOffset);            // 이전 챕터까지의 거리
+                          var distToEnd = maxScrollX - Math.abs(window.pageXOffset); 
+                          var distToStart = Math.abs(window.pageXOffset);            
 
                           if (distToEnd <= preloadMarginX) {
                               window.isScrolling = true; 
                               if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
                           } else if (distToStart <= preloadMarginX && distToStart > 10) { 
-                              // [핵심 수정] 현재 위치가 챕터 시작점(0) 부근이면 이전 챕터 자동 로딩 방지 (무한 루프/점프 차단)
                               window.isScrolling = true; 
                               if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
@@ -112,7 +106,6 @@ object ViewerScripts {
                               window.isScrolling = true; 
                               if(Android.autoLoadNextBg) Android.autoLoadNextBg(); else Android.autoLoadNext();
                           } else if (distToStart <= preloadMarginY && distToStart > 10) {
-                              // [핵심 수정] 가로모드에서도 맨 위 시작점일 때 불필요한 이전 로딩 방지
                               window.isScrolling = true; 
                               if(Android.autoLoadPrevBg) Android.autoLoadPrevBg(); else Android.autoLoadPrev();
                           }
@@ -140,18 +133,12 @@ object ViewerScripts {
                               chunkWrapper.appendChild(node);
                           });
 
-                          // 투명 상태로 먼저 삽입 (렌더링 안정화)
                           chunkWrapper.style.display = 'none';
                           if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
 
-                          // 브라우저 프레임에 맞춰 노출
                           requestAnimationFrame(function() {
                               chunkWrapper.style.display = 'block';
-                              
-                              // [핵심 해결] 세로모드(RTL)에서 뒤에 내용을 붙일 땐 좌표가 밀리지 않습니다.
-                              // 브라우저 버그를 유발하던 scrollTo, scrollIntoView 등 
-                              // 모든 스크롤 강제 조작 로직을 완전히 삭제했습니다.
                               
                               setTimeout(function() {
                                   window.enforceChunkLimit(true);
@@ -160,14 +147,12 @@ object ViewerScripts {
                               }, 50);
                           });
 
-                          // 자동 로딩 속도를 조절하여 렌더링 충돌 방지
                           setTimeout(function() { window.checkPreload(); }, 600);
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
                   window.prependHtmlBase64 = function(base64Str, chunkIndex) {
                       try {
-                          // [핵심] DOM 변경 전 스크롤 위치와 전체 길이 기억
                           var beforeScrollX = window.pageXOffset;
                           var beforeScrollY = window.pageYOffset;
                           var oldScrollWidth = document.documentElement.scrollWidth;
@@ -198,7 +183,6 @@ object ViewerScripts {
                               container.insertBefore(chunkWrapper, container.firstChild);
                           }
 
-                          // [핵심] 챕터가 앞에 붙으면서 밀려난 만큼 스크롤 위치를 즉각 보정
                           var newScrollWidth = document.documentElement.scrollWidth;
                           var newScrollHeight = document.documentElement.scrollHeight;
                           if (isVertical) {
@@ -209,7 +193,6 @@ object ViewerScripts {
                               window.scrollTo(beforeScrollX, beforeScrollY + heightDiff);
                           }
 
-                          // 이미지 로딩 등으로 인한 높이 변화 대기 후 최종 보정 및 락 해제
                           setTimeout(function() {
                               window.enforceChunkLimit(false);
                               window.updateMask();
@@ -227,7 +210,6 @@ object ViewerScripts {
                       } catch(e) { console.error(e); window.isScrolling = false; }
                   };
 
-                  // [추가됨] 깜빡임 없는 슬라이더 점프를 위한 함수
                   window.replaceHtmlBase64 = function(base64Str, chunkIndex, targetLine) {
                       try {
                           var htmlStr = decodeURIComponent(escape(window.atob(base64Str)));
@@ -235,7 +217,6 @@ object ViewerScripts {
                           var doc = parser.parseFromString(htmlStr, 'text/html');
                           var container = document.body;
 
-                          // 화면을 비우지 않고 기존 청크만 즉시 삭제 및 교체 (깜빡임 최소화)
                           var chunks = document.querySelectorAll('.content-chunk');
                           chunks.forEach(function(c) { c.parentNode.removeChild(c); });
 
@@ -250,7 +231,6 @@ object ViewerScripts {
 
                           container.insertBefore(chunkWrapper, container.firstChild);
 
-                          // 내용 렌더링 후 목표 라인으로 즉각 스크롤 이동
                           setTimeout(function() {
                               var el = document.getElementById('line-' + targetLine);
                               if(el) {
@@ -261,7 +241,6 @@ object ViewerScripts {
                               window.detectAndReportLine();
                           }, 50);
 
-                          // [수정] 안드로이드 점프 잠금(300ms) 해제 후 실행되도록 400ms 타이머로 분리
                           setTimeout(function() {
                               window.checkPreload();
                           }, 400);
@@ -270,12 +249,9 @@ object ViewerScripts {
 
                   window.enforceChunkLimit = function(isNext) {
                       var chunks = document.getElementsByClassName('content-chunk');
-                      if (chunks.length > 4) { // 한 번에 유지할 최대 챕터 개수
+                      if (chunks.length > 4) { 
                           if (isNext) {
                               var firstChunk = chunks[0];
-                              
-                              // [핵심] 현재 화면(뷰포트)에 읽고 있는 챕터가 걸쳐 있다면 삭제 취소!
-                              // 삭제되면 갑자기 화면이 두 챕터 뒤로 날아가는 현상 방지
                               if (isVertical && window.pageXOffset > -firstChunk.offsetWidth) return;
                               if (!isVertical && window.pageYOffset < firstChunk.offsetHeight) return;
                               
@@ -283,13 +259,11 @@ object ViewerScripts {
                               var removeHeight = firstChunk.offsetHeight;
                               firstChunk.parentNode.removeChild(firstChunk);
                               
-                              // 삭제된 만큼 스크롤 부드럽게 복구
                               if (isVertical) window.safeScrollBy(removeWidth, 0); 
                               else window.safeScrollBy(0, -removeHeight);
                           } else {
                               var lastChunk = chunks[chunks.length - 1];
                               
-                              // 마지막 챕터 삭제 시에도 화면에 보이면 삭제 취소
                               if (isVertical) {
                                   var maxScroll = document.documentElement.scrollWidth - window.innerWidth;
                                   if (window.pageXOffset < -(maxScroll - lastChunk.offsetWidth)) return;
@@ -351,7 +325,6 @@ object ViewerScripts {
                          {
                              acceptNode: function(node) {
                                  if (node.nodeType === 1) {
-                                      // [수정] 스크롤 엔진이 이미지 영역의 경계를 알 수 있도록 ACCEPT로 변경
                                       if (node.classList && node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_ACCEPT;
                                       if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') return NodeFilter.FILTER_ACCEPT;
                                       var tag = node.tagName;
@@ -373,7 +346,6 @@ object ViewerScripts {
                      
                      var node;
                      while ((node = walker.nextNode())) {
-                         // [추가] 이미지 래퍼 자체를 거대한 텍스트 라인처럼 배열에 추가
                          if (node.nodeType === 1 && node.classList && node.classList.contains('image-page-wrapper')) {
                              var r = node.getBoundingClientRect();
                              textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: true });
@@ -382,7 +354,6 @@ object ViewerScripts {
 
                          var el = node.parentElement;
                          if (!el) continue;
-                         // 이미 래퍼를 통해 영역을 잡았으므로 내부 이미지는 무시
                          if (node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') && el.classList.contains('image-page-wrapper')) continue;
                          
                          var rubyParent = el.closest('ruby');
@@ -521,13 +492,11 @@ object ViewerScripts {
                               masks.bottom = Math.ceil(h - minT + 1);
                           }
 
-                          // Adjust for images: don't cover them
                           imageVisible.forEach(function(img) {
                               if (img.top < masks.top) masks.top = Math.max(0, Math.floor(img.top));
                               if (img.bottom > h - masks.bottom) masks.bottom = Math.max(0, Math.floor(h - img.bottom));
                           });
 
-                          // Protect fully visible text from being covered by adjacent masks
                           var fullText = textVisible.filter(function(l) { return l.top >= -0.05 && l.bottom <= h + 0.05; });
                           if (fullText.length > 0) {
                               var minTVal = h, maxBVal = 0;
@@ -538,60 +507,50 @@ object ViewerScripts {
                               if (masks.top > minTVal) masks.top = Math.max(0, Math.floor(minTVal));
                               if (masks.bottom > (h - maxBVal)) masks.bottom = Math.max(0, Math.floor(h - maxBVal));
                           }
-} else {
-    var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
-    if (visible.length === 0) return masks;
-    
-    var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
-    var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
-    
-    // [Vertical Next Mode Masking]
-    // 왼쪽으로 잘려나간 줄 탐색
-    var cutLeft = textVisible.filter(function(l) { return l.left < -0.05; });
-    if (cutLeft.length > 0) {
-        var maxR = 0;
-        for (var i = 0; i < cutLeft.length; i++) { 
-            if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
-        }
-        // [수정] 기존 +4였던 패딩을 +1로 줄여 인접 줄 침범을 최소화
-        masks.left = Math.ceil(maxR + 1);
-    }
-    
-    // [Protection] 온전한 줄 보호 로직 완화
-    var leftVisibleText = textVisible.filter(function(l) { return l.left >= -0.05; });
-    if (leftVisibleText.length > 0) {
-        var minL = w;
-        for (var i = 0; i < leftVisibleText.length; i++) {
-            if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
-        }
-        // [핵심 수정] 기존에는 영역이 1px만 겹쳐도 마스크를 확 줄여버려 잘린 줄을 노출시켰음.
-        // 루비 글자 등으로 박스가 약간 겹치는 경우는 masks.left를 유지하여 잘린 텍스트를 확실히 덮고,
-        // 비정상적으로 마스크가 커지는 경우(예: 3px 이상 침범)에만 온전한 줄의 시작점(minL)으로 마스크를 제한.
-        if (masks.left > minL + 3) { 
-            masks.left = Math.max(0, Math.floor(minL));
-        }
-    }
+                      } else {
+                          var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
+                          if (visible.length === 0) return masks;
+                          
+                          var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
+                          var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
+                          
+                          var cutLeft = textVisible.filter(function(l) { return l.left < -0.05; });
+                          if (cutLeft.length > 0) {
+                              var maxR = 0;
+                              for (var i = 0; i < cutLeft.length; i++) { 
+                                  if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
+                              }
+                              masks.left = Math.ceil(maxR + 1);
+                          }
+                          
+                          var leftVisibleText = textVisible.filter(function(l) { return l.left >= -0.05; });
+                          if (leftVisibleText.length > 0) {
+                              var minL = w;
+                              for (var i = 0; i < leftVisibleText.length; i++) {
+                                  if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
+                              }
+                              if (masks.left > minL + 3) { 
+                                  masks.left = Math.max(0, Math.floor(minL));
+                              }
+                          }
 
-    // [Vertical Mode Right Mask] 
-    masks.right = 0;
+                          masks.right = 0;
 
-    // [Images Protection] Never cover images, cut or not
-    imageVisible.forEach(function(img) {
-        if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
-        if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
-    });
-}
-                       // Navigation direction filter: hide masks on the side we're coming from
+                          imageVisible.forEach(function(img) {
+                              if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
+                              if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
+                          });
+                      }
                        if (!isVertical) {
                            if (window._scrollDir === 1) { masks.top = 0; }
                            if (window._scrollDir === -1) { masks.bottom = 0; }
                        } else {
                            if (window._scrollDir === 1) {
-                               masks.right = 0; // Hides previous page content on the right, keep left for next
+                               masks.right = 0; 
                            }
                            if (window._scrollDir === -1) { 
                                masks.left = 0;
-                               masks.right = 0; // Show everything on previous
+                               masks.right = 0; 
                            }
                        }
                        return masks;
@@ -645,71 +604,102 @@ object ViewerScripts {
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtBottom = false;
-                     if (!isVertical) {
-                         if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
-                     } else {
-                         var maxScrollX = document.documentElement.scrollWidth - w;
-                         if (window.pageXOffset <= -(maxScrollX - 20)) isAtBottom = true;
-                     }
-                     if (pagingMode === 1) {
-                          var lines = window.getVisualLines();
-                          if (lines.length > 0) {
-                              var lastVisible = lines.filter(function(l) { return isVertical ? (l.left < w + 2 && l.right > -2) : (l.bottom > -2 && l.top < h + 2); }).pop();
-                              if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
-                           }
-                       }
 
-                      if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
-if (pagingMode === 1) {
-    var lines = window.getVisualLines();
-    var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-    var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
-    
-    if (!isVertical) {
-        // [수정] 오차 마진(+2)을 없애고 정확히 화면(0~h) 내에 있는 요소만 필터링
-        var visible = lines.filter(function(l) { return l.bottom > 0 && l.top < h; });
-        var scrollDelta = h;
-        if (visible.length > 0) {
-            var last = visible[visible.length - 1];
-            // 마지막 줄이 화면 하단으로 잘렸다면 해당 줄부터 다음 페이지 시작
-            if (last.bottom > h) {
-                scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
-            } else {
-                // 완전히 다 보였다면 그 다음 줄부터 시작
-                var idx = lines.indexOf(last);
-                if (idx >= 0 && idx < lines.length - 1) {
-                    var nextLine = lines[idx + 1];
-                    scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
-                }
-            }
-        }
-        window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
-    } else {
-        // [수정] 세로쓰기 역시 화면(0~w) 내 요소만 엄격하게 필터링
-        var visible = lines.filter(function(l) { return l.left < w && l.right > 0; });
-        var scrollDelta = -w;
-        if (visible.length > 0) {
-            var last = visible[visible.length - 1]; // 가시 영역의 가장 왼쪽(마지막) 줄
-            
-            // 해당 줄이 화면 왼쪽으로 잘려 나갔다면 해당 줄부터 다음 페이지 시작
-            if (last.left < 0) {
-                scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
-            } else {
-                // 완전히 다 보였다면 다음 줄부터 시작
-                var idx = lines.indexOf(last);
-                if (idx >= 0 && idx < lines.length - 1) {
-                    var nextLine = lines[idx + 1];
-                    scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap * 1.25) - w;
-                    // [핵심] 줄넘김을 강제 유발하던 skipDelta 관련 악성 로직 완전 삭제
-                }
-            }
-        }
-        // [핵심] -w * 1.5로 인해 한 화면 이상 넘어가던 버그 방지 (최대 -w(1화면)까지만 이동 허용)
-        window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
-    }
-}
+                     if (!isVertical) {
+                         // 가로모드: 기존 로직 100% 유지
+                         if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
+                         if (pagingMode === 1) {
+                             var lines = window.getVisualLines();
+                             if (lines.length > 0) {
+                                 var lastVisible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; }).pop();
+                                 if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
+                             }
+                         }
+                     } else {
+                         // 세로모드: 챕터 끝까지 자투리 다 보여주는 엄격한 로직 적용
+                         var maxScrollX = Math.max(0, document.documentElement.scrollWidth - w);
+                         var reachedScrollEnd = (window.pageXOffset <= -(maxScrollX - 5));
+
+                         if (pagingMode === 1) {
+                             var lines = window.getVisualLines();
+                             if (lines.length > 0) {
+                                 // [수정됨] 여유폭(-5) 때문에 다음 페이지의 자투리가 현재 화면에 포함되는 RTL 버그 방지
+                                 // 확실히 화면에 1px이라도 들어온 요소만 잡도록 엄격하게 0과 w 기준 적용
+                                 var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
+                                 
+                                 if (visibleLines.length > 0) {
+                                     var lastVisible = visibleLines[visibleLines.length - 1]; 
+                                     
+                                     if (lines.indexOf(lastVisible) === lines.length - 1) {
+                                         // 화면에 완전히 들어왔는지 검사 (RTL이므로 right가 w보다 작고 left가 0보다 커야 함)
+                                         var isLastFullyVisible = (lastVisible.left >= 0) && (lastVisible.right <= w);
+                                         
+                                         if ((lastVisible.right - lastVisible.left) >= w - 10) {
+                                             isLastFullyVisible = (lastVisible.left >= 0);
+                                         }
+                                         
+                                         // [수정됨] 물리적 스크롤 끝 도달(reachedScrollEnd)과 시각적 끝(isLastFullyVisible)을 종합 판단
+                                         // 아직 스크롤이 안 끝났다면 조기 점프 방지
+                                         isAtBottom = reachedScrollEnd || isLastFullyVisible;
+                                     } else {
+                                         isAtBottom = false;
+                                     }
+                                 } else {
+                                     // 화면에 요소가 안 잡혔다면 일단 물리적 스크롤 여부 따름
+                                     isAtBottom = reachedScrollEnd;
+                                 }
+                             } else {
+                                 isAtBottom = reachedScrollEnd;
+                             }
+                         } else {
+                             // 페이징 모드가 아닐 때
+                             isAtBottom = reachedScrollEnd;
+                         }
+                     }
+
+                     if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
                      
-                     else {
+                     if (pagingMode === 1) {
+                         var lines = window.getVisualLines();
+                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
+                         var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
+                         
+                         if (!isVertical) {
+                             // 가로모드 스크롤 (원본 유지)
+                             var visible = lines.filter(function(l) { return l.bottom > 0 && l.top < h; });
+                             var scrollDelta = h;
+                             if (visible.length > 0) {
+                                 var last = visible[visible.length - 1];
+                                 if (last.bottom > h) {
+                                     scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
+                                 } else {
+                                     var idx = lines.indexOf(last);
+                                     if (idx >= 0 && idx < lines.length - 1) {
+                                         var nextLine = lines[idx + 1];
+                                         scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
+                                     }
+                                 }
+                             }
+                             window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
+                         } else {
+                             // 세로모드 스크롤 
+                             var visible = lines.filter(function(l) { return l.left < w && l.right > 0; });
+                             var scrollDelta = -w;
+                             if (visible.length > 0) {
+                                 var last = visible[visible.length - 1]; 
+                                 if (last.left < 0) {
+                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
+                                 } else {
+                                     var idx = lines.indexOf(last);
+                                     if (idx >= 0 && idx < lines.length - 1) {
+                                         var nextLine = lines[idx + 1];
+                                         scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap * 1.25) - w;
+                                     }
+                                 }
+                             }
+                             window.scrollBy({ left: Math.max(scrollDelta, -w), behavior: 'instant' });
+                         }
+                     } else {
                          var moveSize = (isVertical ? w : h) - 40;
                          if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
@@ -722,22 +712,39 @@ if (pagingMode === 1) {
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtTop = false;
-                     if (!isVertical) { if (window.pageYOffset <= 20) isAtTop = true; }
-                     else { if (window.pageXOffset >= -20) isAtTop = true; }
-                     if (pagingMode === 1) {
-                          var lines = window.getVisualLines();
-                          if (lines.length > 0) {
-                              var firstVisible = lines.find(function(l) { return isVertical ? (l.left < w + 2 && l.right > -2) : (l.bottom > -2 && l.top < h + 2); });
-                              if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
-                          }
-                      }
+                     
+                     if (!isVertical) { 
+                         // 가로모드: 기존 로직 유지
+                         if (window.pageYOffset <= 20) isAtTop = true;
+                         if (pagingMode === 1) {
+                             var lines = window.getVisualLines();
+                             if (lines.length > 0) {
+                                 var firstVisible = lines.find(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                                 if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
+                             }
+                         }
+                     } else { 
+                         // 세로모드: 챕터 시작부분 자투리 다 보여주는 로직 적용
+                         if (window.pageXOffset >= -5) isAtTop = true; 
+                         if (pagingMode === 1) {
+                             var lines = window.getVisualLines();
+                             if (lines.length > 0) {
+                                 var firstLine = lines[0];
+                                 var isFirstFullyVisible = (firstLine.right <= w + 5) || ((firstLine.right - firstLine.left) >= w - 10);
+                                 isAtTop = isAtTop && isFirstFullyVisible;
+                             }
+                         }
+                     }
 
-                      if (isAtTop) { window.isScrolling = true; Android.autoLoadPrev(); return; }
+                     if (isAtTop) { window.isScrolling = true; Android.autoLoadPrev(); return; }
+
                      if (pagingMode === 1) {
                          var lines = window.getVisualLines();
                          var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
                          var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
+                         
                          if (!isVertical) {
+                             // 가로모드 스크롤 (원본 유지)
                              var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
                              var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
                              if (prevIdx >= 0) {
@@ -745,44 +752,35 @@ if (pagingMode === 1) {
                                  var topIdx = prevIdx;
                                  for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
                                  var targetLine = lines[topIdx];
-                                 // [수정] 대상이 이미지인 경우 gap을 0으로 처리
                                  window.scrollBy({ top: Math.max(targetLine.top - (targetLine.isImageWrapper ? 0 : gap), -h), behavior: 'instant' });
                              } else window.scrollBy({ top: -h, behavior: 'instant' });
-                           } else {
-                                var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
-                                var scrollDelta = w;
-                                if (firstVisible) {
-                                    var firstIdx = lines.indexOf(firstVisible);
-                                    if (firstIdx > 0) {
-                                        var prevIdx = firstIdx - 1; // 화면 오른쪽 바깥의 첫 번째 줄 (이전 페이지의 왼쪽 끝)
-                                        var targetLeft = lines[prevIdx].left; // 이전 페이지 블록의 왼쪽 기준 좌표
-                                        var topIdx = prevIdx;
-                                        
-                                        // 오른쪽(과거 방향)으로 탐색하며 한 화면 너비(w)에 들어오는 가장 첫 줄(오른쪽 끝)을 찾음
-                                        for (var i = prevIdx; i >= 0; i--) {
-                                            // 현재 탐색 중인 줄의 오른쪽 끝 - 기준점의 왼쪽 끝 = 누적된 너비
-                                            if (lines[i].right - targetLeft <= w - gap) {
-                                                topIdx = i;
-                                            } else {
-                                                break;
-                                            }
-                                        }
-                                        var targetLine = lines[topIdx];
-                                        // 찾아낸 첫 줄을 화면 오른쪽 끝(w)에 맞추기 위한 스크롤 이동량 계산
-                                        scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap * 1.25) - w;
-                                    }
-                                }
-                                window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
-                           }
+                         } else {
+                             // 세로모드 스크롤
+                             var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
+                             var scrollDelta = w;
+                             if (firstVisible) {
+                                 var firstIdx = lines.indexOf(firstVisible);
+                                 if (firstIdx > 0) {
+                                     var prevIdx = firstIdx - 1; 
+                                     var targetLeft = lines[prevIdx].left; 
+                                     var topIdx = prevIdx;
+                                     for (var i = prevIdx; i >= 0; i--) {
+                                         if (lines[i].right - targetLeft <= w - gap) { topIdx = i; } else { break; }
+                                     }
+                                     var targetLine = lines[topIdx];
+                                     scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap * 1.25) - w;
+                                 }
+                             }
+                             window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
+                         }
                      } else {
                          var moveSize = (isVertical ? w : h) - 40;
                          if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
-                     else window.scrollBy({ top: -moveSize, behavior: 'instant' });
+                         else window.scrollBy({ top: -moveSize, behavior: 'instant' });
                      }
                      window.detectAndReportLine(); window.updateMask();
                  };
 
-                   // [수정됨] 기존 window.onscroll 전체를 아래 코드로 교체
                   var scrollTimer = null;
                   window.onscroll = function() {
                        if (window.isSystemScrolling) return; 
@@ -796,14 +794,12 @@ if (pagingMode === 1) {
                           
                           if (window.isScrolling) return; 
                           
-                          // 복잡한 여백 계산은 checkPreload가 담당
                           window.checkPreload();
                       }, 150); 
                   };
 
                  setTimeout(window.updateMask, 100);
 
-                 // [핵심 추가] 안드로이드 로딩 잠금(500ms)이 풀린 직후, 현재 위치를 파악해 이전/다음 챕터를 즉시 미리 로드합니다.
                  setTimeout(function() {
                      window.checkPreload();
                  }, 600);
