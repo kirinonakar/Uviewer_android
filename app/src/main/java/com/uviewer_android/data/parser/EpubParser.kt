@@ -127,6 +127,265 @@ object EpubParser {
         )
     }
 
+    /**
+     * EPUB의 모든 챕터를 Aozora처럼 단순한 텍스트 라인으로 변환합니다.
+     * 복잡한 HTML 레이아웃을 무시하고 텍스트, 이미지, 루비만 유지합니다.
+     * @return Triple(전체 텍스트, 챕터별 시작라인 맵, 챕터별 라인수 맵)
+     */
+    fun extractFlatContent(
+        spine: List<EpubSpineItem>,
+        isVertical: Boolean = false
+    ): Triple<String, Map<Int, Int>, Map<Int, Int>> {
+        val allLines = mutableListOf<String>()
+        val chapterStartLines = mutableMapOf<Int, Int>() // chapterIndex -> startLine (1-based)
+        val chapterLineCounts = mutableMapOf<Int, Int>() // chapterIndex -> lineCount
+
+        for ((chapterIndex, chapter) in spine.withIndex()) {
+            val cleanHref = chapter.href.substringBefore("#")
+            val chapterFile = File(cleanHref)
+            if (!chapterFile.exists()) continue
+
+            try {
+                val rawHtml = chapterFile.readText()
+                val doc = Jsoup.parse(rawHtml)
+                val baseDir = chapterFile.parentFile
+
+                // 이미지 경로를 절대경로로 변환
+                if (baseDir != null) {
+                    val images = doc.select("img")
+                    for (img in images) {
+                        val src = img.attr("src")
+                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
+                            val imgFile = File(baseDir, src)
+                            val separator = File.separator
+                            val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
+                                java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                            }
+                            img.attr("src", "file:///$encodedPath")
+                        }
+                    }
+                    // SVG 내부 image 태그의 xlink:href도 처리
+                    val svgImages = doc.select("image[xlink:href], image[href]")
+                    for (img in svgImages) {
+                        val src = img.attr("xlink:href").ifEmpty { img.attr("href") }
+                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
+                            val imgFile = File(baseDir, src)
+                            val separator = File.separator
+                            val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
+                                java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                            }
+                            val absoluteSrc = "file:///$encodedPath"
+                            if (img.hasAttr("xlink:href")) img.attr("xlink:href", absoluteSrc)
+                            if (img.hasAttr("href")) img.attr("href", absoluteSrc)
+                        }
+                    }
+                }
+
+                val body = doc.body() ?: continue
+                val chapterLines = mutableListOf<String>()
+
+                // body를 순회하면서 텍스트, 이미지, 루비만 추출
+                flattenNode(body, chapterLines, isVertical)
+
+                // 챕터 사이에 빈 줄 추가 (시각적 구분) - 시작 라인 기록 전에 추가
+                if (allLines.isNotEmpty() && chapterLines.isNotEmpty()) {
+                    allLines.add("") // 빈 줄로 챕터 구분
+                }
+
+                // 빈 줄 추가 후 시작 라인 기록 (정확한 위치)
+                chapterStartLines[chapterIndex] = allLines.size + 1
+
+                // 빈 줄 연속 제거 (앞뒤 트림)
+                val trimmedLines = chapterLines.dropWhile { it.isBlank() }.dropLastWhile { it.isBlank() }
+                chapterLineCounts[chapterIndex] = trimmedLines.size
+                allLines.addAll(trimmedLines)
+            } catch (e: Exception) {
+                chapterStartLines[chapterIndex] = allLines.size + 1
+                allLines.add("Error reading chapter: ${e.message}")
+                chapterLineCounts[chapterIndex] = 1
+            }
+        }
+
+        return Triple(allLines.joinToString("\n"), chapterStartLines, chapterLineCounts)
+    }
+
+    /**
+     * HTML 노드를 재귀적으로 순회하며 텍스트, 이미지, 루비를 플랫 라인으로 추출합니다.
+     */
+    private fun flattenNode(
+        node: org.jsoup.nodes.Element,
+        lines: MutableList<String>,
+        isVertical: Boolean
+    ) {
+        for (child in node.childNodes()) {
+            when (child) {
+                is org.jsoup.nodes.TextNode -> {
+                    val text = child.wholeText.trim()
+                    if (text.isNotEmpty()) {
+                        // 현재 줄에 텍스트 추가 (마지막 줄이 비어있지 않으면 이어 붙이기)
+                        if (lines.isNotEmpty() && lines.last().isNotEmpty() && !isBlockBoundary(child)) {
+                            lines[lines.size - 1] = lines.last() + text
+                        } else if (lines.isEmpty() || lines.last().isNotEmpty()) {
+                            lines.add(text)
+                        } else {
+                            lines[lines.size - 1] = text
+                        }
+                    }
+                }
+                is org.jsoup.nodes.Element -> {
+                    val tag = child.tagName().lowercase()
+                    when {
+                        // 이미지: Aozora 스타일로 img 태그 보존
+                        tag == "img" -> {
+                            val src = child.attr("src")
+                            if (src.isNotEmpty()) {
+                                lines.add("<img src=\"$src\" alt=\"\" loading=\"lazy\" onerror=\"this.style.display='none';\" />")
+                            }
+                        }
+                        // SVG: 전체 보존 (커버 이미지 등)
+                        tag == "svg" -> {
+                            lines.add(child.outerHtml())
+                        }
+                        // 루비: HTML 태그 보존
+                        tag == "ruby" -> {
+                            val rubyHtml = extractRubyHtml(child)
+                            if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                lines[lines.size - 1] = lines.last() + rubyHtml
+                            } else if (lines.isEmpty() || lines.last().isNotEmpty()) {
+                                lines.add(rubyHtml)
+                            } else {
+                                lines[lines.size - 1] = rubyHtml
+                            }
+                        }
+                        // 블록 요소: 새 줄 시작
+                        tag in setOf("p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+                            "li", "blockquote", "pre", "article", "section", "br", "hr",
+                            "tr", "figure", "figcaption", "dt", "dd") -> {
+                            if (tag == "br") {
+                                lines.add("")
+                            } else if (tag == "hr") {
+                                lines.add("") // hr을 빈 줄로
+                            } else {
+                                // 현재 줄이 비어있지 않으면 새 줄 시작
+                                if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                    lines.add("")
+                                }
+                                flattenNode(child, lines, isVertical)
+                                // 블록 끝나면 줄바꿈
+                                if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                    lines.add("")
+                                }
+                            }
+                        }
+                        // 인라인 요소: 재귀적으로 내용 추출
+                        tag in setOf("span", "em", "strong", "b", "i", "u", "a",
+                            "small", "sub", "sup", "abbr", "cite", "code", "mark") -> {
+                            // strong/b는 볼드 태그 보존
+                            if (tag == "strong" || tag == "b") {
+                                val innerText = extractInlineText(child, isVertical)
+                                val boldHtml = "<b>$innerText</b>"
+                                if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                    lines[lines.size - 1] = lines.last() + boldHtml
+                                } else if (lines.isEmpty()) {
+                                    lines.add(boldHtml)
+                                } else {
+                                    lines[lines.size - 1] = boldHtml
+                                }
+                            } else if (tag == "em" || tag == "i") {
+                                val innerText = extractInlineText(child, isVertical)
+                                val italicHtml = "<i>$innerText</i>"
+                                if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                    lines[lines.size - 1] = lines.last() + italicHtml
+                                } else if (lines.isEmpty()) {
+                                    lines.add(italicHtml)
+                                } else {
+                                    lines[lines.size - 1] = italicHtml
+                                }
+                            } else {
+                                flattenNode(child, lines, isVertical)
+                            }
+                        }
+                        // 스크립트, 스타일 무시
+                        tag in setOf("script", "style", "noscript", "link", "meta") -> {
+                            // 무시
+                        }
+                        // 기타: 재귀 처리
+                        else -> {
+                            flattenNode(child, lines, isVertical)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * ruby 요소에서 HTML을 추출합니다.
+     */
+    private fun extractRubyHtml(ruby: org.jsoup.nodes.Element): String {
+        val baseText = StringBuilder()
+        val rtText = StringBuilder()
+        
+        for (child in ruby.childNodes()) {
+            when {
+                child is org.jsoup.nodes.TextNode -> baseText.append(child.wholeText)
+                child is org.jsoup.nodes.Element && child.tagName().lowercase() == "rt" -> {
+                    rtText.append(child.text())
+                }
+                child is org.jsoup.nodes.Element && child.tagName().lowercase() == "rp" -> {
+                    // rp 무시
+                }
+                child is org.jsoup.nodes.Element && child.tagName().lowercase() == "rb" -> {
+                    baseText.append(child.text())
+                }
+                child is org.jsoup.nodes.Element -> {
+                    baseText.append(child.text())
+                }
+            }
+        }
+
+        return if (rtText.isNotEmpty()) {
+            "<ruby>${baseText.toString().trim()}<rt>${rtText.toString().trim()}</rt></ruby>"
+        } else {
+            baseText.toString().trim()
+        }
+    }
+
+    /**
+     * 인라인 요소에서 텍스트와 루비를 추출합니다.
+     */
+    private fun extractInlineText(element: org.jsoup.nodes.Element, isVertical: Boolean): String {
+        val sb = StringBuilder()
+        for (child in element.childNodes()) {
+            when {
+                child is org.jsoup.nodes.TextNode -> sb.append(child.wholeText)
+                child is org.jsoup.nodes.Element && child.tagName().lowercase() == "ruby" -> {
+                    sb.append(extractRubyHtml(child))
+                }
+                child is org.jsoup.nodes.Element && child.tagName().lowercase() == "img" -> {
+                    // 인라인 이미지는 무시하거나 별도 처리
+                }
+                child is org.jsoup.nodes.Element -> {
+                    sb.append(extractInlineText(child, isVertical))
+                }
+            }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * 텍스트 노드가 블록 경계에 있는지 확인합니다.
+     */
+    private fun isBlockBoundary(node: org.jsoup.nodes.Node): Boolean {
+        val prev = node.previousSibling()
+        if (prev is org.jsoup.nodes.Element) {
+            val tag = prev.tagName().lowercase()
+            return tag in setOf("p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
+                "li", "blockquote", "pre", "br", "hr", "figure")
+        }
+        return false
+    }
+
     fun prepareHtmlForViewer(html: String, resetCss: String, baseDir: File? = null, idPrefix: String = "", isVertical: Boolean = false): Pair<String, Int> {
         val doc = Jsoup.parse(html)
         

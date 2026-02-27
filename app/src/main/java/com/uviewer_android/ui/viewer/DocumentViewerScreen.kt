@@ -211,7 +211,8 @@ fun DocumentViewerScreen(
                 3 -> "replaceHtmlBase64"
                 else -> ""
             }
-            val chunkIdx = if (type == FileEntry.FileType.EPUB) uiState.currentChapterIndex else uiState.currentChunkIndex
+            val isEpubFlat = type == FileEntry.FileType.EPUB && uiState.isVertical
+            val chunkIdx = if (type == FileEntry.FileType.EPUB && !isEpubFlat) uiState.currentChapterIndex else uiState.currentChunkIndex
             val targetLine = uiState.currentLine
             // JS로 함수 호출 시 targetLine 전달
             // [수정됨] evaluateJavascript에 콜백 블록을 추가하여 실행 후 잠금을 해제합니다.
@@ -296,9 +297,10 @@ fun DocumentViewerScreen(
                                     }
                                 }
                             } else {
+                                // EPUB 가로모드: 챕터 기반 로딩
                                 isNavigating = true
                                 isPageLoading = true
-                                viewModel.loadChapter(index)
+                                viewModel.jumpToChapter(index)
                             }
                             scope.launch { drawerState.close() }
                         },
@@ -429,10 +431,11 @@ fun DocumentViewerScreen(
                                 Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
                             }
                             val isEpub = type == FileEntry.FileType.EPUB
+                            val isEpubFlat = isEpub && uiState.isVertical
                             val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
 
                             // [핵심 1] 글로벌 진행도 계산
-                            val sliderValue = if (isEpub) {
+                            val sliderValue = if (isEpub && !isEpubFlat) {
                                 val chIdx = uiState.currentChapterIndex
                                 val chLines = uiState.totalLines.coerceAtLeast(1)
                                 chIdx.toFloat() + (currentLine.toFloat() / chLines).coerceIn(0f, 1f)
@@ -440,14 +443,14 @@ fun DocumentViewerScreen(
                                 currentLine.toFloat()
                             }
 
-                            val sliderRange = if (isEpub) {
+                            val sliderRange = if (isEpub && !isEpubFlat) {
                                 0f..totalCh.toFloat() // EPUB 범위: 0 ~ 총 챕터 수
                             } else {
-                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f) // 일반 텍스트 범위
+                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f) // 라인 기반 범위
                             }
 
                             // 퍼센트 표시도 글로벌 스케일에 맞게 수정
-                            val progressPercent = if (isEpub) {
+                            val progressPercent = if (isEpub && !isEpubFlat) {
                                 ((sliderValue / totalCh) * 100).toInt().coerceIn(0, 100)
                             } else {
                                 if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines).coerceIn(0, 100) else 0
@@ -479,8 +482,8 @@ fun DocumentViewerScreen(
                                     val finalVal = tempSliderValue
                                     tempSliderValue = -1f // 임시값 초기화
                                     
-                                    if (isEpub) {
-                                        // [EPUB 점프] 슬라이더 위치에 해당하는 챕터로 이동
+                                    if (isEpub && !isEpubFlat) {
+                                        // [EPUB 가로모드 점프] 슬라이더 위치에 해당하는 챕터로 이동
                                         val targetCh = finalVal.toInt().coerceIn(0, totalCh - 1)
                                         
                                         // 돔(DOM) 찌꺼기가 남지 않게 화면을 비우고 점프
@@ -490,7 +493,7 @@ fun DocumentViewerScreen(
                                         viewModel.jumpToChapter(targetCh)
                                         
                                     } else {
-                                        // [일반 텍스트 점프]
+                                        // [일반 텍스트 / EPUB 세로모드(플랫) 점프]
                                         val targetLine = finalVal.toInt()
                                         currentLine = targetLine
                                         val targetChunk = (targetLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
@@ -498,8 +501,6 @@ fun DocumentViewerScreen(
                                         if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
                                             isNavigating = true
                                             isPageLoading = true
-                                            // [수정됨] 아래 줄(document.body.innerHTML = '')을 삭제하거나 주석 처리하세요.
-                                            // webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
                                         }
                                         viewModel.jumpToLine(targetLine)
                                         
@@ -560,7 +561,9 @@ fun DocumentViewerScreen(
                                         post {
                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
                                             
-                                            if (type == FileEntry.FileType.EPUB) {
+                                            // EPUB 세로모드(플랫): 일반 텍스트와 동일하게 단순 라인 번호 처리
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            if (type == FileEntry.FileType.EPUB && !isEpubFlat) {
                                                 val parts = lineStr.split("-")
                                                 if (parts.size == 2) {
                                                     val ch = parts[0].toIntOrNull() ?: return@post
@@ -587,8 +590,12 @@ fun DocumentViewerScreen(
                                                 return@post
                                             }
                                             
-                                            isNavigating = true // 즉각 락 설정
-                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
+                                            isNavigating = true
+                                            // EPUB 세로모드(플랫): 청크 기반 이동
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            if (isEpubFlat) {
+                                                viewModel.nextChunk()
+                                            } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
                                                 viewModel.nextChunk()
                                             } else if (type == FileEntry.FileType.EPUB) {
                                                 viewModel.nextChapter()
@@ -606,7 +613,11 @@ fun DocumentViewerScreen(
                                                   return@post
                                              }
                                              
-                                             if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
+                                             // EPUB 세로모드(플랫): 청크 기반 이동
+                                             val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                             if (isEpubFlat) {
+                                                 viewModel.prevChunk()
+                                             } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
                                                  viewModel.prevChunk()
                                              } else if (type == FileEntry.FileType.EPUB) {
                                                  viewModel.prevChapter()
@@ -625,7 +636,10 @@ fun DocumentViewerScreen(
                                                 return@post
                                             }
                                             isNavigating = true
-                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            if (isEpubFlat) {
+                                                viewModel.nextChunk()
+                                            } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
                                                 viewModel.nextChunk()
                                             } else if (type == FileEntry.FileType.EPUB) {
                                                 viewModel.nextChapter(isBackground = true)
@@ -644,7 +658,10 @@ fun DocumentViewerScreen(
                                                 return@post
                                             }
                                             isNavigating = true
-                                            if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            if (isEpubFlat) {
+                                                viewModel.prevChunk()
+                                            } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
                                                 viewModel.prevChunk()
                                             } else if (type == FileEntry.FileType.EPUB) {
                                                 viewModel.prevChapter(isBackground = true)
@@ -710,7 +727,8 @@ fun DocumentViewerScreen(
 
                                          val pagingMode = uiState.pagingMode
                                        
-val linePrefix = if (type == FileEntry.FileType.EPUB) "${uiState.currentChapterIndex}-" else ""
+val isEpubFlat = type == FileEntry.FileType.EPUB && uiState.isVertical
+val linePrefix = if (type == FileEntry.FileType.EPUB && !isEpubFlat) "${uiState.currentChapterIndex}-" else ""
 val jsScrollLogic = ViewerScripts.getScrollLogic(
     isVertical = isVertical,
     pagingMode = pagingMode,

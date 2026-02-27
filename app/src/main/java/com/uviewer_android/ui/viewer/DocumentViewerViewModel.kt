@@ -86,6 +86,12 @@ class DocumentViewerViewModel(
     private var isWebDavContext: Boolean = false
     private var serverIdContext: Int? = null
 
+    // EPUB 세로모드용: Aozora처럼 플랫 텍스트로 변환한 캐시
+    private var epubFlatTextLines: List<String>? = null
+    private var epubChapterStartLines: Map<Int, Int> = emptyMap() // chapterIndex -> startLine (1-based)
+    private var epubUnzipDir: File? = null
+    private var epubBook: com.uviewer_android.data.model.EpubBook? = null
+
     init {
         viewModelScope.launch {
             combine(
@@ -122,7 +128,29 @@ class DocumentViewerViewModel(
                 if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
                 } else if (currentFileType == FileEntry.FileType.EPUB && _uiState.value.epubChapters.isNotEmpty()) {
-                    loadChapter(_uiState.value.currentChapterIndex, initialLine = _uiState.value.currentLine)
+                    // EPUB 세로모드: 플랫 텍스트 파이프라인 재생성
+                    if (_uiState.value.isVertical && epubBook != null) {
+                        val book = epubBook!!
+                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                            val (flatText, chapterStarts, _) = EpubParser.extractFlatContent(book.spine, true)
+                            val flatLines = flatText.split("\n")
+                            epubFlatTextLines = flatLines
+                            epubChapterStartLines = chapterStarts
+                            val savedLine = _uiState.value.currentLine
+                            val chunkIdx = (savedLine - 1) / LINES_PER_CHUNK
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(
+                                    totalLines = flatLines.size,
+                                    currentChunkIndex = chunkIdx
+                                )
+                                loadedStartChunk = chunkIdx
+                                loadedEndChunk = chunkIdx
+                                loadEpubFlatChunk(chunkIdx, updateType = 0)
+                            }
+                        }
+                    } else {
+                        loadChapter(_uiState.value.currentChapterIndex, initialLine = _uiState.value.currentLine)
+                    }
                 }
             }.collect {}
 
@@ -201,6 +229,8 @@ class DocumentViewerViewModel(
                         EpubParser.unzip(epubFile, unzipDir)
                     }
                     val book = EpubParser.parse(unzipDir)
+                    epubUnzipDir = unzipDir
+                    epubBook = book
 
                     _uiState.value = _uiState.value.copy(
                         epubChapters = book.spine,
@@ -208,17 +238,57 @@ class DocumentViewerViewModel(
                         isLoading = false,
                         currentLine = 1
                     )
-                    
-                    val chapterIdx = savedLine / 1000000
-                    val lineInChapter = savedLine % 1000000
-                    
-                    loadedStartChapter = chapterIdx
-                    loadedEndChapter = chapterIdx
-                    
-                    if (chapterIdx in book.spine.indices) {
-                        loadChapter(chapterIdx, lineInChapter, updateType = 0)
+
+                    // [핵심 변경] 세로모드면 Aozora처럼 플랫 텍스트 파이프라인 사용
+                    val isVerticalMode = _uiState.value.isVertical
+                    if (isVerticalMode) {
+                        viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                            val (flatText, chapterStarts, _) = EpubParser.extractFlatContent(book.spine, true)
+                            val flatLines = flatText.split("\n")
+                            epubFlatTextLines = flatLines
+                            epubChapterStartLines = chapterStarts
+
+                            // savedLine 변환: 기존 챕터*1000000+라인 -> 플랫 라인 번호
+                            val chapterIdx = savedLine / 1000000
+                            val lineInChapter = savedLine % 1000000
+                            val flatStartLine = if (chapterIdx in chapterStarts) {
+                                (chapterStarts[chapterIdx]!! + lineInChapter - 1).coerceIn(1, flatLines.size)
+                            } else {
+                                1
+                            }
+
+                            val chunkIdx = (flatStartLine - 1) / LINES_PER_CHUNK
+                            
+                            // 챕터 경계를 이용한 TOC 매핑 (epubChapters의 href를 line-N 형식으로 변경)
+                            val tocChapters = book.spine.mapIndexed { idx, item ->
+                                val startLine = chapterStarts[idx] ?: 1
+                                item.copy(href = "line-$startLine")
+                            }
+
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(
+                                    totalLines = flatLines.size,
+                                    currentLine = flatStartLine,
+                                    currentChunkIndex = chunkIdx,
+                                    epubChapters = tocChapters
+                                )
+                                loadedStartChunk = chunkIdx
+                                loadedEndChunk = chunkIdx
+                                loadEpubFlatChunk(chunkIdx, updateType = 0)
+                            }
+                        }
                     } else {
-                        loadChapter(0, updateType = 0)
+                        val chapterIdx = savedLine / 1000000
+                        val lineInChapter = savedLine % 1000000
+                    
+                        loadedStartChapter = chapterIdx
+                        loadedEndChapter = chapterIdx
+                    
+                        if (chapterIdx in book.spine.indices) {
+                            loadChapter(chapterIdx, lineInChapter, updateType = 0)
+                        } else {
+                            loadChapter(0, updateType = 0)
+                        }
                     }
                 } else {
                     // Text / HTML / CSV
@@ -333,8 +403,18 @@ class DocumentViewerViewModel(
              viewModelScope.launch {
                  try {
                      val fileName = File(currentFilePath).name
+                     // EPUB 세로모드(플랫): 플랫 라인에서 챕터 인덱스를 역산하여 저장
                      val savePosition = if (currentFileType == FileEntry.FileType.EPUB) {
-                         _uiState.value.currentChapterIndex * 1000000 + line
+                         if (_uiState.value.isVertical && epubFlatTextLines != null) {
+                             // 플랫 라인에서 챕터를 역산
+                             val chIdx = epubChapterStartLines.entries
+                                 .filter { it.value <= line }
+                                 .maxByOrNull { it.value }?.key ?: 0
+                             val lineInChapter = line - (epubChapterStartLines[chIdx] ?: 1) + 1
+                             chIdx * 1000000 + lineInChapter
+                         } else {
+                             _uiState.value.currentChapterIndex * 1000000 + line
+                         }
                      } else {
                          line
                      }
@@ -350,8 +430,12 @@ class DocumentViewerViewModel(
                      
                      val totalLines = _uiState.value.totalLines
                      val progress = if (currentFileType == FileEntry.FileType.EPUB) {
-                         val totalChapters = _uiState.value.epubChapters.size
-                         if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
+                         if (_uiState.value.isVertical && epubFlatTextLines != null) {
+                             if (totalLines > 0) (line.toFloat() / totalLines) else 0f
+                         } else {
+                             val totalChapters = _uiState.value.epubChapters.size
+                             if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
+                         }
                      } else {
                          if (totalLines > 0) (line.toFloat() / totalLines) else 0f
                      }
@@ -375,7 +459,9 @@ class DocumentViewerViewModel(
 
     fun setCurrentLine(line: Int) {
         val chapters = _uiState.value.epubChapters
-        if (currentFileType != FileEntry.FileType.EPUB && chapters.isNotEmpty()) {
+        // EPUB 세로모드(플랫) 또는 일반 텍스트: 챕터 인덱스를 라인 번호에서 추적
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if ((currentFileType != FileEntry.FileType.EPUB || isEpubFlat) && chapters.isNotEmpty()) {
             val index = chapters.indexOfLast { 
                 it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
             }.coerceAtLeast(0)
@@ -604,21 +690,121 @@ class DocumentViewerViewModel(
         }
     }
 
+    /**
+     * EPUB 세로모드 전용: 플랫 텍스트를 Aozora 파서로 처리하여 HTML 청크를 생성합니다.
+     * loadTextChunk()과 동일한 구조이지만, LargeTextReader 대신 epubFlatTextLines를 사용합니다.
+     */
+    private fun loadEpubFlatChunk(chunkIndex: Int, updateType: Int = 0) {
+        val flatLines = epubFlatTextLines ?: return
+        val startLine = chunkIndex * LINES_PER_CHUNK + 1
+        val totalLines = flatLines.size
+        if (startLine > totalLines) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            if (updateType == 0) {
+                loadedStartChunk = chunkIndex
+                loadedEndChunk = chunkIndex
+            }
+            val endLine = (startLine + LINES_PER_CHUNK - 1).coerceAtMost(totalLines)
+            val globalLineOffset = startLine - 1
+
+            val processed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                // AozoraParser.parse()는 <를 &lt;로 이스케이프하므로 사용하면 안 됨
+                // extractFlatContent()가 이미 HTML 태그(ruby, img 등)를 생성했으므로
+                // 직접 <div id="line-N">으로 감싸기만 하면 됨
+                val lines = flatLines.subList(startLine - 1, endLine)
+                val htmlBody = lines.mapIndexed { index, line ->
+                    val lineNum = globalLineOffset + index + 1
+                    if (line.isBlank()) {
+                        "<div id=\"line-$lineNum\" class=\"blank-line\"></div>"
+                    } else if (line.trimStart().startsWith("<img ") || line.trimStart().startsWith("<svg")) {
+                        // 이미지/SVG는 image-page-wrapper로 감싸서 전체 화면 표시
+                        "<div id=\"line-$lineNum\" class=\"image-page-wrapper\">$line</div>"
+                    } else {
+                        "<div id=\"line-$lineNum\">$line</div>"
+                    }
+                }.joinToString("\n")
+
+                val colors = getColors()
+                AozoraParser.wrapInHtml(
+                    htmlBody,
+                    _uiState.value.isVertical,
+                    _uiState.value.fontFamily,
+                    _uiState.value.fontSize,
+                    colors.first,
+                    colors.second,
+                    _uiState.value.sideMargin,
+                    chunkIndex
+                )
+            }
+
+            val isRefreshing = updateType == 0 || updateType == 3
+            _uiState.value = _uiState.value.copy(
+                content = processed,
+                isLoading = false,
+                currentChunkIndex = if (isRefreshing) chunkIndex else _uiState.value.currentChunkIndex,
+                hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines,
+                totalLines = totalLines,
+                currentLine = if (isRefreshing) _uiState.value.currentLine else _uiState.value.currentLine,
+                contentUpdateType = updateType,
+                appendTrigger = System.currentTimeMillis(),
+                isImageOnlyChapter = false
+            )
+        }
+    }
+
     fun nextChunk() {
-        if (_uiState.value.hasMoreContent) {
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            val totalLines = epubFlatTextLines!!.size
+            if ((loadedEndChunk + 1) * LINES_PER_CHUNK < totalLines) {
+                loadedEndChunk++
+                loadEpubFlatChunk(loadedEndChunk, updateType = 1)
+            }
+        } else if (_uiState.value.hasMoreContent) {
             loadedEndChunk++
             loadTextChunk(loadedEndChunk, updateType = 1) // Append
         }
     }
     
     fun prevChunk() {
-        if (loadedStartChunk > 0) {
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            if (loadedStartChunk > 0) {
+                loadedStartChunk--
+                loadEpubFlatChunk(loadedStartChunk, updateType = 2)
+            }
+        } else if (loadedStartChunk > 0) {
             loadedStartChunk--
             loadTextChunk(loadedStartChunk, updateType = 2) // Prepend
         }
     }
 
     fun jumpToLine(line: Int) {
+        // EPUB 세로모드(플랫): 일반 텍스트와 동일하게 라인 기반 점프
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            val flatLines = epubFlatTextLines!!
+            if (line < 1 || line > flatLines.size) return
+            
+            val targetChunk = (line - 1) / LINES_PER_CHUNK
+            val chapterIdx = _uiState.value.epubChapters.indexOfLast { 
+                it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= line 
+            }.coerceAtLeast(0)
+
+            loadedStartChunk = targetChunk
+            loadedEndChunk = targetChunk
+            
+            _uiState.value = _uiState.value.copy(
+                currentLine = line, 
+                currentChapterIndex = chapterIdx,
+                isLoading = true 
+            )
+            loadEpubFlatChunk(targetChunk, updateType = 3)
+            return
+        }
+
         if (currentFileType == FileEntry.FileType.EPUB) {
             if (line < 1 || line > _uiState.value.totalLines) return
             _uiState.value = _uiState.value.copy(currentLine = line)
@@ -970,6 +1156,13 @@ class DocumentViewerViewModel(
     }
 
     fun jumpToChapter(index: Int) {
+        // EPUB 세로모드(플랫): 라인 기반 점프로 리다이렉트
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            val targetLine = epubChapterStartLines[index] ?: 1
+            jumpToLine(targetLine)
+            return
+        }
         loadedStartChapter = index
         loadedEndChapter = index
         _uiState.value = _uiState.value.copy(
@@ -981,6 +1174,12 @@ class DocumentViewerViewModel(
     }
 
     fun nextChapter(isBackground: Boolean = false) {
+        // EPUB 세로모드(플랫): 청크 기반 이동으로 리다이렉트
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            nextChunk()
+            return
+        }
         if (loadedEndChapter + 1 < _uiState.value.epubChapters.size) {
             loadedEndChapter++
             loadChapter(loadedEndChapter, updateType = 1, isBackground = isBackground)
@@ -988,6 +1187,12 @@ class DocumentViewerViewModel(
     }
 
     fun prevChapter(isBackground: Boolean = false) {
+        // EPUB 세로모드(플랫): 청크 기반 이동으로 리다이렉트
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        if (isEpubFlat) {
+            prevChunk()
+            return
+        }
         if (loadedStartChapter > 0) {
             loadedStartChapter--
             // [수정됨] 전체 리로드(0)로 강제 전환될 경우를 대비해 이전 챕터의 마지막 라인으로 이동하도록 -1 전달
