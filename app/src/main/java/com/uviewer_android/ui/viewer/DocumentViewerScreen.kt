@@ -92,7 +92,7 @@ fun DocumentViewerScreen(
     val isInteractingWithSlider = isSliderDragged || isSliderPressed
     var tempSliderValue by remember { mutableFloatStateOf(-1f) }
 
-    LaunchedEffect(filePath) {
+    LaunchedEffect(filePath, initialLine) {
         viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
     }
 
@@ -233,6 +233,7 @@ fun DocumentViewerScreen(
             isPageLoading = false
         }
     }
+
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -431,7 +432,7 @@ fun DocumentViewerScreen(
                                 Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
                             }
                             val isEpub = type == FileEntry.FileType.EPUB
-                            val isEpubFlat = isEpub && uiState.isVertical
+                            val isEpubFlat = isEpub
                             val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
 
                             // [핵심 1] 글로벌 진행도 계산
@@ -559,26 +560,12 @@ fun DocumentViewerScreen(
                                     @android.webkit.JavascriptInterface
                                     fun onLineChangedStr(lineStr: String) {
                                         post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) return@post
+                                            if (isPageLoading || isInteractingWithSlider) return@post
                                             
-                                            // EPUB 세로모드(플랫): 일반 텍스트와 동일하게 단순 라인 번호 처리
-                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
-                                            if (type == FileEntry.FileType.EPUB && !isEpubFlat) {
-                                                val parts = lineStr.split("-")
-                                                if (parts.size == 2) {
-                                                    val ch = parts[0].toIntOrNull() ?: return@post
-                                                    val ln = parts[1].toIntOrNull() ?: return@post
-                                                    if (ln != currentLine) {
-                                                        currentLine = ln
-                                                        viewModel.setEpubPosition(ch, ln)
-                                                    }
-                                                }
-                                            } else {
-                                                val ln = lineStr.toIntOrNull() ?: return@post
-                                                if (ln != currentLine) {
-                                                    currentLine = ln
-                                                    viewModel.setCurrentLine(ln)
-                                                }
+                                            val ln = lineStr.toIntOrNull() ?: return@post
+                                            if (ln != currentLine) {
+                                                currentLine = ln
+                                                viewModel.setCurrentLine(ln)
                                             }
                                         }
                                     }
@@ -591,8 +578,8 @@ fun DocumentViewerScreen(
                                             }
                                             
                                             isNavigating = true
-                                            // EPUB 세로모드(플랫): 청크 기반 이동
-                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            // EPUB: 청크 기반 이동 (통합됨)
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB
                                             if (isEpubFlat) {
                                                 viewModel.nextChunk()
                                             } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
@@ -613,8 +600,8 @@ fun DocumentViewerScreen(
                                                   return@post
                                              }
                                              
-                                             // EPUB 세로모드(플랫): 청크 기반 이동
-                                             val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                             // EPUB: 청크 기반 이동 (통합됨)
+                                             val isEpubFlat = type == FileEntry.FileType.EPUB
                                              if (isEpubFlat) {
                                                  viewModel.prevChunk()
                                              } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
@@ -636,7 +623,7 @@ fun DocumentViewerScreen(
                                                 return@post
                                             }
                                             isNavigating = true
-                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB
                                             if (isEpubFlat) {
                                                 viewModel.nextChunk()
                                             } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.hasMoreContent) {
@@ -658,7 +645,7 @@ fun DocumentViewerScreen(
                                                 return@post
                                             }
                                             isNavigating = true
-                                            val isEpubFlat = type == FileEntry.FileType.EPUB && viewModel.uiState.value.isVertical
+                                            val isEpubFlat = type == FileEntry.FileType.EPUB
                                             if (isEpubFlat) {
                                                 viewModel.prevChunk()
                                             } else if (type == FileEntry.FileType.TEXT && viewModel.uiState.value.currentChunkIndex > 0) {
@@ -727,17 +714,17 @@ fun DocumentViewerScreen(
 
                                          val pagingMode = uiState.pagingMode
                                        
-val isEpubFlat = type == FileEntry.FileType.EPUB && uiState.isVertical
-val linePrefix = if (type == FileEntry.FileType.EPUB && !isEpubFlat) "${uiState.currentChapterIndex}-" else ""
-val jsScrollLogic = ViewerScripts.getScrollLogic(
-    isVertical = isVertical,
-    pagingMode = pagingMode,
-    enableAutoLoading = enableAutoLoading,
-    targetLine = targetLine,
-    totalLines = totalLines,
-    linePrefix = linePrefix,
-    isImageOnly = uiState.isImageOnlyChapter
-)
+                                        val isEpubFlat = type == FileEntry.FileType.EPUB
+                                        val linePrefix = ""
+                                        val jsScrollLogic = ViewerScripts.getScrollLogic(
+                                            isVertical = isVertical,
+                                            pagingMode = pagingMode,
+                                            enableAutoLoading = enableAutoLoading,
+                                            targetLine = targetLine,
+                                            totalLines = totalLines,
+                                            linePrefix = linePrefix,
+                                            isImageOnly = uiState.isImageOnlyChapter
+                                        )
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
                                             webViewRef?.postDelayed({

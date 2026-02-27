@@ -298,21 +298,30 @@ object ViewerScripts {
                      var width = window.innerWidth;
                      var height = window.innerHeight;
                      var points = [];
+                     
                      if (isVertical) {
-                         var offsetsX = [5, 15, 30, 50, 80];
+                         // 세로모드: 오른쪽에서 왼쪽으로 검색 범위를 넓힘 (패딩/마진 등으로 인한 미검출 방지)
+                         var offsetsX = [10, 30, 60, 100, 150, 200]; 
                          var offsetsY = [0.1, 0.25, 0.5, 0.75, 0.9];
                          for (var i = 0; i < offsetsX.length; i++) {
+                             var x = width - offsetsX[i];
+                             if (x < 0) break;
                              for (var j = 0; j < offsetsY.length; j++) {
-                                 if (width - offsetsX[i] > 0) {
-                                     points.push({x: width - offsetsX[i], y: height * offsetsY[j]});
-                                 }
+                                 points.push({x: x, y: height * offsetsY[j]});
                              }
                          }
                      } else {
-                         var cx = width / 2;
-                         var ty = 20;
-                         points = [{x: cx, y: ty}, {x: cx - 50, y: ty}, {x: cx + 50, y: ty}, {x: cx, y: ty + 40}];
+                         // 가로모드: 상단에서 하단으로 검색
+                         var offsetsY = [10, 30, 60, 100];
+                         var offsetsX = [0.1, 0.25, 0.5, 0.75, 0.9];
+                         for (var i = 0; i < offsetsY.length; i++) {
+                             var y = offsetsY[i];
+                             for (var j = 0; j < offsetsX.length; j++) {
+                                 points.push({x: width * offsetsX[j], y: y});
+                             }
+                         }
                      }
+                     
                      var foundLineStr = null;
                      for (var i = 0; i < points.length; i++) {
                          var el = document.elementFromPoint(points[i].x, points[i].y);
@@ -679,7 +688,7 @@ object ViewerScripts {
                              var scrollDelta = h;
                              if (visible.length > 0) {
                                  var last = visible[visible.length - 1];
-                                 if (last.bottom > h) {
+                                 if (last.bottom > h + 5) {
                                      scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
                                  } else {
                                      var idx = lines.indexOf(last);
@@ -696,7 +705,7 @@ object ViewerScripts {
                              if (visible.length > 0) {
                                  var last = visible[visible.length - 1]; 
                                  if (last.left < 0) {
-                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w;
+                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
                                      if (scrollDelta > -10) {
                                          scrollDelta = -w + 40; 
                                      }
@@ -704,7 +713,7 @@ object ViewerScripts {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
                                          var nextLine = lines[idx + 1];
-                                         scrollDelta = nextLine.right + (nextLine.isImageWrapper ? 0 : gap * 1.25) - w;
+                                         scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
                                      }
                                  }
                              }
@@ -730,7 +739,7 @@ object ViewerScripts {
                              window.scrollBy({ left: Math.max(scrollDelta, -w * 1.5), behavior: 'instant' });
                          }
                      } else {
-                         var moveSize = (isVertical ? w : h) - 40;
+                         var moveSize = (isVertical ? w : h);
                          if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
                          else window.scrollBy({ top: moveSize, behavior: 'instant' });
                      }
@@ -802,7 +811,7 @@ object ViewerScripts {
                              window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
                          }
                      } else {
-                         var moveSize = (isVertical ? w : h) - 40;
+                         var moveSize = (isVertical ? w : h);
                          if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
                          else window.scrollBy({ top: -moveSize, behavior: 'instant' });
                      }
@@ -978,7 +987,8 @@ object ViewerScripts {
                      min-height: ${if (isVertical) "auto" else "0.2em"} !important;
                      display: block !important;
                  }
-               </style>
+               .tcy { text-combine-upright: all !important; -webkit-text-combine: horizontal !important; }
+</style>
         """.trimIndent()
     }
 }

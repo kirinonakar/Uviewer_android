@@ -451,6 +451,7 @@ function fixRubySpacing() {
                     }
                     .content-chunk {
                         overflow-anchor: auto !important;
+                        margin-left: ${if (isVertical) "2em" else "0"} !important;
                     }
 
                     div:has(img), p:has(img) {

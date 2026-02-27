@@ -112,10 +112,11 @@ object EpubParser {
         }
 
         // Apply titles to spine items
-        val finalSpine = spine.map { item ->
+        val finalSpine = spine.mapIndexed { idx, item ->
             // Try to match href (absolute) back to manifest relative href for TOC lookup
             val relativeHref = File(item.href).relativeTo(opfDir).path.replace("\\", "/")
-            item.copy(title = tocMap[relativeHref])
+            val title = tocMap[relativeHref] ?: item.title ?: "Chapter ${idx + 1}"
+            item.copy(title = title)
         }
 
         return EpubBook(
@@ -222,29 +223,44 @@ object EpubParser {
                 is org.jsoup.nodes.TextNode -> {
                     val text = child.wholeText.trim()
                     if (text.isNotEmpty()) {
+                        val processedText = if (isVertical) {
+                            val puncRegex = Regex("([!\\?！？]+)")
+                            text.replace(puncRegex) { match ->
+                                "<span class=\"tcy\">${match.value}</span>"
+                            }
+                        } else text
+                        
                         // 현재 줄에 텍스트 추가 (마지막 줄이 비어있지 않으면 이어 붙이기)
                         if (lines.isNotEmpty() && lines.last().isNotEmpty() && !isBlockBoundary(child)) {
-                            lines[lines.size - 1] = lines.last() + text
+                            lines[lines.size - 1] = lines.last() + processedText
                         } else if (lines.isEmpty() || lines.last().isNotEmpty()) {
-                            lines.add(text)
+                            lines.add(processedText)
                         } else {
-                            lines[lines.size - 1] = text
+                            lines[lines.size - 1] = processedText
                         }
                     }
                 }
                 is org.jsoup.nodes.Element -> {
                     val tag = child.tagName().lowercase()
                     when {
-                        // 이미지: Aozora 스타일로 img 태그 보존
+                        // 이미지: Aozora 스타일로 img 태그 보존. 앞뒤 줄바꿈으로 단독 라인 확보
                         tag == "img" -> {
                             val src = child.attr("src")
                             if (src.isNotEmpty()) {
+                                if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                    lines.add("")
+                                }
                                 lines.add("<img src=\"$src\" alt=\"\" loading=\"lazy\" onerror=\"this.style.display='none';\" />")
+                                lines.add("")
                             }
                         }
                         // SVG: 전체 보존 (커버 이미지 등)
                         tag == "svg" -> {
+                            if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
+                                lines.add("")
+                            }
                             lines.add(child.outerHtml())
+                            lines.add("")
                         }
                         // 루비: HTML 태그 보존
                         tag == "ruby" -> {
@@ -358,7 +374,17 @@ object EpubParser {
         val sb = StringBuilder()
         for (child in element.childNodes()) {
             when {
-                child is org.jsoup.nodes.TextNode -> sb.append(child.wholeText)
+                child is org.jsoup.nodes.TextNode -> {
+                    val text = child.wholeText
+                    if (isVertical) {
+                        val puncRegex = Regex("([!\\?！？]+)")
+                        sb.append(text.replace(puncRegex) { match ->
+                            "<span class=\"tcy\">${match.value}</span>"
+                        })
+                    } else {
+                        sb.append(text)
+                    }
+                }
                 child is org.jsoup.nodes.Element && child.tagName().lowercase() == "ruby" -> {
                     sb.append(extractRubyHtml(child))
                 }
