@@ -693,8 +693,12 @@ object ViewerScripts {
                                  } else {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
-                                         var nextLine = lines[idx + 1];
-                                         scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
+                                         var nextIdx = idx + 1;
+                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].bottom - lines[nextIdx].top < 24)) {
+                                              nextIdx++;
+                                          }
+                                          var nextLine = lines[nextIdx];
+                                          scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
                                      }
                                  }
                              }
@@ -712,8 +716,12 @@ object ViewerScripts {
                                  } else {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
-                                         var nextLine = lines[idx + 1];
-                                         scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
+                                         var nextIdx = idx + 1;
+                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].right - lines[nextIdx].left < 24)) {
+                                              nextIdx++;
+                                          }
+                                          var nextLine = lines[nextIdx];
+                                          scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
                                      }
                                  }
                              }
@@ -786,7 +794,10 @@ object ViewerScripts {
                              var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
                              var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
                              if (prevIdx >= 0) {
-                                 var targetBottom = lines[prevIdx].bottom;
+                                 while (prevIdx > 0 && !lines[prevIdx].isImageWrapper && (lines[prevIdx].bottom - lines[prevIdx].top < 24)) {
+                                      prevIdx--;
+                                  }
+                                  var targetBottom = lines[prevIdx].bottom;
                                  var topIdx = prevIdx;
                                  for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
                                  var targetLine = lines[topIdx];
