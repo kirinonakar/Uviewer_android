@@ -218,11 +218,13 @@ class DocumentViewerViewModel(
                     val context = getApplication<Application>()
                     val cacheDir = context.cacheDir
                     val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
+                    val successFile = File(unzipDir, ".unzip_success")
                     
-                    if (unzipDir.exists()) {
+                    if (unzipDir.exists() && successFile.exists()) {
                         cacheManager.touch(unzipDir)
                     } else {
                         cacheManager.ensureCapacity(epubFile.length() * 3) // EPUB usually 2-3x unzipped
+                        if (unzipDir.exists()) unzipDir.deleteRecursively()
                         unzipDir.mkdirs()
                         EpubParser.unzip(epubFile, unzipDir)
                     }
@@ -707,9 +709,10 @@ class DocumentViewerViewModel(
                 val lines = flatLines.subList(startLine - 1, endLine)
                 val htmlBody = lines.mapIndexed { index, line ->
                     val lineNum = globalLineOffset + index + 1
+                    val trimmed = line.trimStart()
                     if (line.isBlank()) {
                         "<div id=\"line-$lineNum\" class=\"blank-line\"></div>"
-                    } else if (line.trimStart().startsWith("<img ") || line.trimStart().startsWith("<svg")) {
+                    } else if (trimmed.startsWith("<img", ignoreCase = true) || trimmed.startsWith("<svg", ignoreCase = true)) {
                         // 이미지/SVG는 image-page-wrapper로 감싸서 전체 화면 표시
                         "<div id=\"line-$lineNum\" class=\"image-page-wrapper\">$line</div>"
                     } else {

@@ -32,7 +32,7 @@ object EpubParser {
                 } else {
                     file.parentFile?.mkdirs()
                     FileOutputStream(file).use { fos ->
-                        val buffer = ByteArray(1024)
+                        val buffer = ByteArray(8192) // Increased buffer for many images
                         var count: Int
                         while (zis.read(buffer).also { count = it } != -1) {
                             fos.write(buffer, 0, count)
@@ -41,6 +41,8 @@ object EpubParser {
                 }
             }
         }
+        // Create a success signal for atomicity
+        File(targetDir, ".unzip_success").createNewFile()
     }
 
     fun parse(epubRoot: File): EpubBook {
@@ -74,7 +76,9 @@ object EpubParser {
         val manifestItems = opfDoc.select("manifest > item")
         for (item in manifestItems) {
             val id = item.attr("id")
-            val href = item.attr("href")
+            val rawHref = item.attr("href")
+            // URL decode href as they are often encoded in OPF
+            val href = try { java.net.URLDecoder.decode(rawHref, "UTF-8") } catch (e: Exception) { rawHref }
             manifest[id] = href
         }
 
@@ -148,37 +152,48 @@ object EpubParser {
 
             try {
                 val rawHtml = chapterFile.readText()
-                val doc = Jsoup.parse(rawHtml)
+                // Use XML parser for XHTML to preserve SVG <image> tags (HTML parser turns them into <img>)
+                val doc = Jsoup.parse(rawHtml, "", Parser.xmlParser())
                 val baseDir = chapterFile.parentFile
 
-                // 이미지 경로를 절대경로로 변환
+                // 이미지 및 SVG 경로 전환
                 if (baseDir != null) {
-                    val images = doc.select("img")
-                    for (img in images) {
-                        val src = img.attr("src")
-                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
-                            val imgFile = File(baseDir, src)
-                            val separator = File.separator
-                            val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
-                                java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                    // img 태그
+                    doc.select("img").forEach { img ->
+                        var src = img.attr("src")
+                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
+                            // Strip query/fragment
+                            val cleanSrc = src.substringBefore("?").substringBefore("#")
+                            val decodedSrc = try { java.net.URLDecoder.decode(cleanSrc, "UTF-8") } catch (e: Exception) { cleanSrc }
+                            val imgFile = File(baseDir, decodedSrc)
+                            
+                            val encodedPath = imgFile.absolutePath.split(File.separator).joinToString("/") { segment ->
+                                if (segment.isEmpty()) "" 
+                                else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                             }
                             img.attr("src", "file:///$encodedPath")
                         }
+                        // Remove hindering attributes
+                        img.removeAttr("loading")
+                        img.removeAttr("onerror")
+                        img.removeAttr("style")
                     }
-                    // SVG 내부 image 태그의 xlink:href도 처리
-                    val svgImages = doc.select("image[xlink:href], image[href]")
-                    for (img in svgImages) {
-                        val src = img.attr("xlink:href").ifEmpty { img.attr("href") }
-                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
-                            val imgFile = File(baseDir, src)
-                            val separator = File.separator
-                            val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
-                                java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+                    // SVG image 태그 (xlink:href 및 href 공용)
+                    doc.select("image").forEach { img ->
+                        var src = img.attr("xlink:href").ifEmpty { img.attr("href") }
+                        if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
+                            val cleanSrc = src.substringBefore("?").substringBefore("#")
+                            val decodedSrc = try { java.net.URLDecoder.decode(cleanSrc, "UTF-8") } catch (e: Exception) { cleanSrc }
+                            val imgFile = File(baseDir, decodedSrc)
+                            val encodedPath = imgFile.absolutePath.split(File.separator).joinToString("/") { segment ->
+                                if (segment.isEmpty()) ""
+                                else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                             }
-                            val absoluteSrc = "file:///$encodedPath"
-                            if (img.hasAttr("xlink:href")) img.attr("xlink:href", absoluteSrc)
-                            if (img.hasAttr("href")) img.attr("href", absoluteSrc)
+                            val absSrc = "file:///$encodedPath"
+                            if (img.hasAttr("xlink:href")) img.attr("xlink:href", absSrc)
+                            if (img.hasAttr("href")) img.attr("href", absSrc)
                         }
+                        img.removeAttr("style")
                     }
                 }
 
@@ -244,13 +259,15 @@ object EpubParser {
                     val tag = child.tagName().lowercase()
                     when {
                         // 이미지: Aozora 스타일로 img 태그 보존. 앞뒤 줄바꿈으로 단독 라인 확보
-                        tag == "img" -> {
-                            val src = child.attr("src")
+                        tag == "img" || tag == "image" -> {
+                            val src = if (tag == "img") child.attr("src") else child.attr("xlink:href").ifEmpty { child.attr("href") }
                             if (src.isNotEmpty()) {
                                 if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
                                     lines.add("")
                                 }
-                                lines.add("<img src=\"$src\" alt=\"\" loading=\"lazy\" onerror=\"this.style.display='none';\" />")
+                                val tagHtml = if (tag == "img") "<img src=\"$src\" alt=\"\" />" 
+                                              else child.outerHtml() // image는 SVG context가 아닐 수 있으므로 전체 보존
+                                lines.add(tagHtml)
                                 lines.add("")
                             }
                         }
@@ -259,6 +276,7 @@ object EpubParser {
                             if (lines.isNotEmpty() && lines.last().isNotEmpty()) {
                                 lines.add("")
                             }
+                            // SVG 내부의 image 태그들도 이미 위에서 절대경로로 바뀌었으므로 그대로 사용
                             lines.add(child.outerHtml())
                             lines.add("")
                         }
@@ -407,7 +425,7 @@ object EpubParser {
         if (prev is org.jsoup.nodes.Element) {
             val tag = prev.tagName().lowercase()
             return tag in setOf("p", "div", "h1", "h2", "h3", "h4", "h5", "h6",
-                "li", "blockquote", "pre", "br", "hr", "figure")
+                "li", "blockquote", "pre", "br", "hr", "figure", "img", "image", "svg")
         }
         return false
     }
@@ -509,13 +527,21 @@ object EpubParser {
                     flex-direction: column !important;
                     justify-content: center !important;
                     align-items: center !important;
-                    width: 100% !important;
+                    width: 100vw !important;
+                    min-width: 100vw !important;
+                    max-width: 100vw !important;
                     height: 100vh !important;
+                    min-height: 100vh !important;
+                    max-height: 100vh !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     page-break-after: always !important;
                     break-after: page !important;
+                    page-break-before: always !important;
+                    break-before: page !important;
                     overflow: hidden !important;
+                    flex-shrink: 0 !important;
+                    clear: both !important;
                 }
                 .image-page-wrapper img {
                     margin: 0 !important;
@@ -524,8 +550,15 @@ object EpubParser {
                     object-fit: contain !important;
                 }
                 .image-page-wrapper svg {
-                    max-width: 100% !important;
-                    max-height: 100% !important;
+                    width: 100vw !important;
+                    height: 100vh !important;
+                    max-width: 100vw !important;
+                    max-height: 100vh !important;
+                    object-fit: contain !important; /* Preserve aspect ratio within viewport */
+                }
+                .image-page-wrapper svg image {
+                    width: 100% !important;
+                    height: 100% !important;
                 }
             </style>
             <script>

@@ -193,7 +193,7 @@ object AozoraParser {
                 }
                 
                 val encodedPath = encodeFileName(fullPath)
-                return "<img src=\"$encodedPath\" alt=\"$fileName\" loading=\"lazy\" onerror=\"this.style.display='none';\" />"
+                return "<img src=\"$encodedPath\" alt=\"$fileName\" />"
             }
 
             l = l.replace(Regex("［＃挿絵（(.+?)）入る］")) { m -> makeImgTag(m.groupValues[1]) }
@@ -478,13 +478,21 @@ function fixRubySpacing() {
                         flex-direction: column !important;
                         justify-content: center !important;
                         align-items: center !important;
-                        width: 100% !important;
+                        width: 100vw !important;
+                        min-width: 100vw !important;
+                        max-width: 100vw !important;
                         height: 100vh !important;
+                        min-height: 100vh !important;
+                        max-height: 100vh !important;
                         margin: 0 !important;
                         padding: 0 !important;
                         page-break-after: always !important;
                         break-after: page !important;
+                        page-break-before: always !important;
+                        break-before: page !important;
                         overflow: hidden !important;
+                        flex-shrink: 0 !important;
+                        clear: both !important;
                     }
                     .image-page-wrapper img {
                         margin: 0 !important;
@@ -493,6 +501,8 @@ function fixRubySpacing() {
                         object-fit: contain !important;
                     }
                     .image-page-wrapper svg {
+                        width: 100% !important;
+                        height: 100% !important;
                         max-width: 100% !important;
                         max-height: 100% !important;
                     }
