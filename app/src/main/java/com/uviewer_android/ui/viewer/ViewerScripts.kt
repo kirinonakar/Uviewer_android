@@ -438,7 +438,7 @@ object ViewerScripts {
                               var isImg = node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE');
                              for (var i = 0; i < rects.length; i++) {
                                  var r = rects[i];
-                                 if (r.width > 0 && r.height > 0) textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg });
+                                 if (r.width > 0 && r.height > 0) { var isBlank = node.nodeType === 1 && node.classList && node.classList.contains("blank-line"); textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg, isBlankLine: isBlank }); }
                              }
                          }
                      }
@@ -689,16 +689,16 @@ object ViewerScripts {
                              if (visible.length > 0) {
                                  var last = visible[visible.length - 1];
                                  if (last.bottom > h + 5) {
-                                     scrollDelta = last.top - (last.isImageWrapper ? 0 : gap);
+                                     scrollDelta = last.top - (last.isImageWrapper ? 0 : gap); if (scrollDelta < h * 0.2 || scrollDelta > h * 0.8) scrollDelta = h;
                                  } else {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
                                          var nextIdx = idx + 1;
-                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].bottom - lines[nextIdx].top < 24)) {
+                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].bottom - lines[nextIdx].top < 24 || lines[nextIdx].isBlankLine)) {
                                               nextIdx++;
                                           }
                                           var nextLine = lines[nextIdx];
-                                          scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap);
+                                          scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap); if (scrollDelta < h * 0.2 || scrollDelta > h * 0.8) scrollDelta = h;
                                      }
                                  }
                              }
@@ -709,7 +709,7 @@ object ViewerScripts {
                              if (visible.length > 0) {
                                  var last = visible[visible.length - 1]; 
                                  if (last.left < 0) {
-                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
+                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w; if (Math.abs(scrollDelta) < w * 0.2 || Math.abs(scrollDelta) > w * 0.8) scrollDelta = -w;
                                      if (scrollDelta > -10) {
                                          scrollDelta = -w + 40; 
                                      }
@@ -717,11 +717,11 @@ object ViewerScripts {
                                      var idx = lines.indexOf(last);
                                      if (idx >= 0 && idx < lines.length - 1) {
                                          var nextIdx = idx + 1;
-                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].right - lines[nextIdx].left < 24)) {
+                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].right - lines[nextIdx].left < 24 || lines[nextIdx].isBlankLine)) {
                                               nextIdx++;
                                           }
                                           var nextLine = lines[nextIdx];
-                                          scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < 10) scrollDelta = -w;
+                                          scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < w * 0.2 || Math.abs(scrollDelta) > w * 0.8) scrollDelta = -w;
                                      }
                                  }
                              }
@@ -801,7 +801,9 @@ object ViewerScripts {
                                  var topIdx = prevIdx;
                                  for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
                                  var targetLine = lines[topIdx];
-                                 window.scrollBy({ top: Math.max(targetLine.top - (targetLine.isImageWrapper ? 0 : gap), -h), behavior: 'instant' });
+                                 var delta = targetLine.top - (targetLine.isImageWrapper ? 0 : gap);
+                                 if (delta > -h * 0.2 || delta < -h * 0.8) delta = -h;
+                                 window.scrollBy({ top: Math.max(delta, -h), behavior: 'instant' });
                              } else window.scrollBy({ top: -h, behavior: 'instant' });
                          } else {
                              var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });

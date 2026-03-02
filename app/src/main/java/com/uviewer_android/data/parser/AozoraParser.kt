@@ -472,6 +472,30 @@ function fixRubySpacing() {
                         text-combine-upright: all;
                         -webkit-text-combine: horizontal;
                     }
+                    /* --- [핵심 추가] 이미지 페이지 래퍼 스타일 --- */
+                    .image-page-wrapper {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        justify-content: center !important;
+                        align-items: center !important;
+                        width: 100% !important;
+                        height: 100vh !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        page-break-after: always !important;
+                        break-after: page !important;
+                        overflow: hidden !important;
+                    }
+                    .image-page-wrapper img {
+                        margin: 0 !important;
+                        max-width: 100% !important;
+                        max-height: 100% !important;
+                        object-fit: contain !important;
+                    }
+                    .image-page-wrapper svg {
+                        max-width: 100% !important;
+                        max-height: 100% !important;
+                    }
                     img {
                         max-width: 100% !important;
                         max-height: 100% !important;
