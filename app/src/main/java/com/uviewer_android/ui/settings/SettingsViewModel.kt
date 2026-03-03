@@ -59,8 +59,6 @@ class SettingsViewModel(
     val docTextColor: StateFlow<String> = userPreferencesRepository.docTextColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "black")
 
-    val pagingMode: StateFlow<Int> = userPreferencesRepository.pagingMode
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     val customDocBackgroundColor: StateFlow<String> = userPreferencesRepository.customDocBackgroundColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "#FFFFFF")
@@ -116,9 +114,6 @@ class SettingsViewModel(
         userPreferencesRepository.setDocTextColor(color)
     }
 
-    fun setPagingMode(mode: Int) {
-        userPreferencesRepository.setPagingMode(mode)
-    }
 
     fun setInvertImageControl(invert: Boolean) {
         userPreferencesRepository.setInvertImageControl(invert)

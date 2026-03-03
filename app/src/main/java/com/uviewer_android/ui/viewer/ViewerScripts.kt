@@ -4,7 +4,6 @@ object ViewerScripts {
 
     fun getScrollLogic(
         isVertical: Boolean,
-        pagingMode: Int,
         enableAutoLoading: Boolean,
         targetLine: Int,
         totalLines: Int,
@@ -14,7 +13,6 @@ object ViewerScripts {
         return """
             (function() {
                 var isVertical = $isVertical;
-                var pagingMode = $pagingMode;
                 var enableAutoLoading = $enableAutoLoading;
                 
                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
@@ -492,7 +490,6 @@ object ViewerScripts {
 
                   window.calculateMasks = function() {
                       var masks = { top: 0, bottom: 0, left: 0, right: 0 };
-                      if (pagingMode !== 1) return masks;
                       var lines = window.getVisualLines();
                       if (lines.length === 0) return masks;
                       var w = window.innerWidth;
@@ -584,10 +581,6 @@ object ViewerScripts {
                   };
 
                  window.updateMask = function() {
-                     if (pagingMode !== 1) {
-                         Android.updateBottomMask(0); Android.updateTopMask(0); Android.updateLeftMask(0); Android.updateRightMask(0);
-                         return;
-                     }
                      var masks = window.calculateMasks();
                      Android.updateTopMask(masks.top > 0 ? masks.top : 0);
                      Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
@@ -596,31 +589,25 @@ object ViewerScripts {
                  };
 
                  window.jumpToBottom = function() {
-                     var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                     var gap = FS * 0.8;
                      if (isVertical) {
                          window.scrollTo(-1000000, 0);
-                         if (pagingMode === 1) {
-                             var w = document.documentElement.clientWidth;
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var farRightLine = lines[0];
-                                 if (farRightLine.right > w) {
-                                     var scrollDelta = farRightLine.right - (w - gap);
-                                     window.scrollBy({ left: scrollDelta, behavior: 'instant' });
-                                 }
+                         var w = document.documentElement.clientWidth;
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var farRightLine = lines[0];
+                             if (farRightLine.right > w) {
+                                 var scrollDelta = farRightLine.right - w;
+                                 window.scrollBy({ left: scrollDelta, behavior: 'instant' });
                              }
                          }
                      } else {
                          window.scrollTo(0, 1000000);
-                         if (pagingMode === 1) {
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var topCutLine = lines[0];
-                                 if (topCutLine.top < 0) {
-                                     var scrollDelta = topCutLine.top - gap;
-                                     window.scrollBy({ top: scrollDelta, behavior: 'instant' });
-                                 }
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var topCutLine = lines[0];
+                             if (topCutLine.top < 0) {
+                                 var scrollDelta = topCutLine.top;
+                                 window.scrollBy({ top: scrollDelta, behavior: 'instant' });
                              }
                          }
                      }
@@ -634,39 +621,26 @@ object ViewerScripts {
 
                      if (!isVertical) {
                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
-                         if (pagingMode === 1) {
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var lastVisible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; }).pop();
-                                 if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
-                             }
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var lastVisible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; }).pop();
+                             if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
                          }
                      } else {
                          var maxScrollX = Math.max(0, document.documentElement.scrollWidth - w);
                          var reachedScrollEnd = (window.pageXOffset <= -(maxScrollX - 5));
 
-                         if (pagingMode === 1) {
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
-                                 
-                                 if (visibleLines.length > 0) {
-                                     var lastVisible = visibleLines[visibleLines.length - 1]; 
-                                     
-                                     if (lines.indexOf(lastVisible) === lines.length - 1) {
-                                         var isLastFullyVisible = (lastVisible.left >= -5);
-                                         isAtBottom = isLastFullyVisible;
-                                         
-                                         if (!isAtBottom && reachedScrollEnd && window._lastScrollX === window.pageXOffset) {
-                                             if (lastVisible.left >= -10) {
-                                                 isAtBottom = true;
-                                             }
-                                         }
-                                     } else {
-                                         isAtBottom = false;
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
+                             if (visibleLines.length > 0) {
+                                 var lastVisible = visibleLines[visibleLines.length - 1]; 
+                                 if (lines.indexOf(lastVisible) === lines.length - 1) {
+                                     var isLastFullyVisible = (lastVisible.left >= -5);
+                                     isAtBottom = isLastFullyVisible;
+                                     if (!isAtBottom && reachedScrollEnd && window._lastScrollX === window.pageXOffset) {
+                                         if (lastVisible.left >= -10) isAtBottom = true;
                                      }
-                                 } else {
-                                     isAtBottom = reachedScrollEnd;
                                  }
                              } else {
                                  isAtBottom = reachedScrollEnd;
@@ -678,81 +652,47 @@ object ViewerScripts {
 
                      if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
                      
-                     if (pagingMode === 1) {
-                         var lines = window.getVisualLines();
-                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                         var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
-                         
-                         if (!isVertical) {
-                             var visible = lines.filter(function(l) { return l.bottom > 0 && l.top < h; });
-                             var scrollDelta = h;
-                             if (visible.length > 0) {
-                                 var last = visible[visible.length - 1];
-                                 if (last.bottom > h + 5) {
-                                     scrollDelta = last.top - (last.isImageWrapper ? 0 : gap); if (scrollDelta < h * 0.2 || scrollDelta > h * 0.8) scrollDelta = h;
-                                 } else {
-                                     var idx = lines.indexOf(last);
-                                     if (idx >= 0 && idx < lines.length - 1) {
-                                         var nextIdx = idx + 1;
-                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].bottom - lines[nextIdx].top < 24 || lines[nextIdx].isBlankLine)) {
-                                              nextIdx++;
-                                          }
-                                          var nextLine = lines[nextIdx];
-                                          scrollDelta = nextLine.top - (nextLine.isImageWrapper ? 0 : gap); if (scrollDelta < h * 0.2 || scrollDelta > h * 0.8) scrollDelta = h;
-                                     }
-                                 }
-                             }
-                             window.scrollBy({ top: Math.min(scrollDelta, h), behavior: 'instant' });
-                         } else {
-                             var visible = lines.filter(function(l) { return l.left < w && l.right > 0; });
-                             var scrollDelta = -w;
-                             if (visible.length > 0) {
-                                 var last = visible[visible.length - 1]; 
-                                 if (last.left < 0) {
-                                     scrollDelta = last.right + (last.isImageWrapper ? 0 : gap * 1.25) - w; if (Math.abs(scrollDelta) < w * 0.2 || Math.abs(scrollDelta) > w * 0.8) scrollDelta = -w;
-                                     if (scrollDelta > -10) {
-                                         scrollDelta = -w + 40; 
-                                     }
-                                 } else {
-                                     var idx = lines.indexOf(last);
-                                     if (idx >= 0 && idx < lines.length - 1) {
-                                         var nextIdx = idx + 1;
-                                          while (nextIdx < lines.length - 1 && !lines[nextIdx].isImageWrapper && (lines[nextIdx].right - lines[nextIdx].left < 24 || lines[nextIdx].isBlankLine)) {
-                                              nextIdx++;
-                                          }
-                                          var nextLine = lines[nextIdx];
-                                          scrollDelta = nextLine.right - w; if (Math.abs(scrollDelta) < w * 0.2 || Math.abs(scrollDelta) > w * 0.8) scrollDelta = -w;
-                                     }
-                                 }
-                             }
-                             
-                             var targetX = window.pageXOffset + scrollDelta;
-                             var currentMaxScrollX = -(Math.max(0, document.documentElement.scrollWidth - w));
-                             
-                             if (targetX < currentMaxScrollX + 5) {
-                                 var spacer = document.getElementById('viewer-end-spacer');
-                                 if (!spacer) {
-                                     spacer = document.createElement('div');
-                                     spacer.id = 'viewer-end-spacer';
-                                     spacer.className = 'content-chunk'; 
-                                     spacer.style.cssText = "display:inline-block; width:" + w + "px; height:1px; flex-shrink:0;";
-                                     document.body.appendChild(spacer);
-                                 } else {
-                                     var currentW = parseInt(spacer.style.width) || w;
-                                     spacer.style.width = (currentW + w) + "px";
-                                 }
-                                 var _forceLayout = document.documentElement.scrollWidth;
-                             }
-
-                             window.scrollBy({ left: Math.max(scrollDelta, -w * 1.5), behavior: 'instant' });
-                         }
-                     } else {
-                         var moveSize = (isVertical ? w : h);
-                         if (isVertical) window.scrollBy({ left: -moveSize, behavior: 'instant' });
-                         else window.scrollBy({ top: moveSize, behavior: 'instant' });
-                     }
+                      var lines = window.getVisualLines();
+                      if (!isVertical) {
+                          var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                          var scrollDelta = h;
+                          if (visible.length > 0) {
+                              var last = visible[visible.length - 1];
+                              if (last.bottom > h + 2) {
+                                  if (last.top > 10) {
+                                      scrollDelta = last.top;
+                                  } else {
+                                      scrollDelta = h - 40;
+                                  }
+                              } else {
+                                  var idx = lines.indexOf(last);
+                                  if (idx >= 0 && idx < lines.length - 1) {
+                                      scrollDelta = lines[idx + 1].top;
+                                  }
+                              }
+                          }
+                          window.scrollBy({ top: Math.max(20, Math.min(scrollDelta, h)), behavior: 'instant' });
+                      } else {
+                          var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
+                          var scrollDelta = -w;
+                          if (visible.length > 0) {
+                              var last = visible[visible.length - 1]; 
+                              if (last.left < 2) {
+                                  if (last.right < w - 10) {
+                                      scrollDelta = last.right - w;
+                                  } else {
+                                      scrollDelta = -(w - 40);
+                                  }
+                              } else {
+                                  var idx = lines.indexOf(last);
+                                  if (idx >= 0 && idx < lines.length - 1) {
+                                      scrollDelta = lines[idx + 1].right - w;
+                                  }
+                              }
+                          }
+                          window.scrollBy({ left: Math.min(-20, Math.max(scrollDelta, -w)), behavior: 'instant' });
+                      }
                      window.detectAndReportLine(); window.updateMask();
-                     
                      window._lastScrollX = window.pageXOffset;
                  };
 
@@ -764,70 +704,61 @@ object ViewerScripts {
                      
                      if (!isVertical) { 
                          if (window.pageYOffset <= 20) isAtTop = true;
-                         if (pagingMode === 1) {
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var firstVisible = lines.find(function(l) { return l.bottom > -2 && l.top < h + 2; });
-                                 if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
-                             }
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var firstVisible = lines.find(function(l) { return l.bottom > -2 && l.top < h + 2; });
+                             if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
                          }
                      } else { 
                          if (window.pageXOffset >= -5) isAtTop = true; 
-                         if (pagingMode === 1) {
-                             var lines = window.getVisualLines();
-                             if (lines.length > 0) {
-                                 var firstLine = lines[0];
-                                 var isFirstFullyVisible = (firstLine.right <= w + 5) || ((firstLine.right - firstLine.left) >= w - 10);
-                                 isAtTop = isAtTop && isFirstFullyVisible;
-                             }
+                         var lines = window.getVisualLines();
+                         if (lines.length > 0) {
+                             var firstLine = lines[0];
+                             var isFirstFullyVisible = (firstLine.right <= w + 5) || ((firstLine.right - firstLine.left) >= w - 10);
+                             isAtTop = isAtTop && isFirstFullyVisible;
                          }
                      }
 
                      if (isAtTop) { window.isScrolling = true; Android.autoLoadPrev(); return; }
 
-                     if (pagingMode === 1) {
-                         var lines = window.getVisualLines();
-                         var FS = parseFloat(window.getComputedStyle(document.body).fontSize) || 16;
-                         var gap = (lines.some(function(l) { return (l.bottom - l.top > h * 0.8) || (l.right - l.left > w * 0.8); })) ? 0 : FS * 0.8;
-                         
-                         if (!isVertical) {
-                             var firstIdx = lines.findIndex(function(l) { return l.top >= -2; });
-                             var prevIdx = firstIdx > 0 ? firstIdx - 1 : -1;
-                             if (prevIdx >= 0) {
-                                 while (prevIdx > 0 && !lines[prevIdx].isImageWrapper && (lines[prevIdx].bottom - lines[prevIdx].top < 24)) {
-                                      prevIdx--;
+                      var lines = window.getVisualLines();
+                      if (!isVertical) {
+                          var first = lines.find(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                          var scrollDelta = -h;
+                          if (first) {
+                              if (first.top < -2) {
+                                  if (first.bottom < h - 10) {
+                                      scrollDelta = first.bottom - h;
+                                  } else {
+                                      scrollDelta = -(h - 40);
                                   }
-                                  var targetBottom = lines[prevIdx].bottom;
-                                 var topIdx = prevIdx;
-                                 for (var i = prevIdx; i >= 0; i--) { if (targetBottom - lines[i].top <= h - gap) topIdx = i; else break; }
-                                 var targetLine = lines[topIdx];
-                                 var delta = targetLine.top - (targetLine.isImageWrapper ? 0 : gap);
-                                 if (delta > -h * 0.2 || delta < -h * 0.8) delta = -h;
-                                 window.scrollBy({ top: Math.max(delta, -h), behavior: 'instant' });
-                             } else window.scrollBy({ top: -h, behavior: 'instant' });
-                         } else {
-                             var firstVisible = lines.find(function(l) { return l.right < w + 2 && l.left > -2; });
-                             var scrollDelta = w;
-                             if (firstVisible) {
-                                 var firstIdx = lines.indexOf(firstVisible);
-                                 if (firstIdx > 0) {
-                                     var prevIdx = firstIdx - 1; 
-                                     var targetLeft = lines[prevIdx].left; 
-                                     var topIdx = prevIdx;
-                                     for (var i = prevIdx; i >= 0; i--) {
-                                         if (lines[i].right - targetLeft <= w - gap) { topIdx = i; } else { break; }
-                                     }
-                                     var targetLine = lines[topIdx];
-                                     scrollDelta = targetLine.right + (targetLine.isImageWrapper ? 0 : gap * 1.25) - w;
-                                 }
-                             }
-                             window.scrollBy({ left: Math.min(scrollDelta, w * 1.5), behavior: 'instant' });
-                         }
-                     } else {
-                         var moveSize = (isVertical ? w : h);
-                         if (isVertical) window.scrollBy({ left: moveSize, behavior: 'instant' });
-                         else window.scrollBy({ top: -moveSize, behavior: 'instant' });
-                     }
+                              } else {
+                                  var idx = lines.indexOf(first);
+                                  if (idx > 0) {
+                                      scrollDelta = lines[idx - 1].bottom - h;
+                                  }
+                              }
+                          }
+                          window.scrollBy({ top: Math.max(-h, Math.min(scrollDelta, -20)), behavior: 'instant' });
+                      } else {
+                          var first = lines.find(function(l) { return l.left < w - 2 && l.right > 2; });
+                          var scrollDelta = w;
+                          if (first) {
+                              if (first.right > w + 2) {
+                                  if (first.left > 10) {
+                                      scrollDelta = first.left;
+                                  } else {
+                                      scrollDelta = w - 40;
+                                  }
+                              } else {
+                                  var idx = lines.indexOf(first);
+                                  if (idx > 0) {
+                                      scrollDelta = lines[idx - 1].left;
+                                  }
+                              }
+                          }
+                          window.scrollBy({ left: Math.min(w, Math.max(scrollDelta, 20)), behavior: 'instant' });
+                      }
                      window.detectAndReportLine(); window.updateMask();
                  };
 

@@ -712,19 +712,15 @@ fun DocumentViewerScreen(
                                          val enableAutoLoading = type == FileEntry.FileType.TEXT || type == FileEntry.FileType.EPUB
                                         val isVertical = uiState.isVertical
 
-                                         val pagingMode = uiState.pagingMode
-                                       
-                                        val isEpubFlat = type == FileEntry.FileType.EPUB
-                                        val linePrefix = ""
-                                        val jsScrollLogic = ViewerScripts.getScrollLogic(
-                                            isVertical = isVertical,
-                                            pagingMode = pagingMode,
-                                            enableAutoLoading = enableAutoLoading,
-                                            targetLine = targetLine,
-                                            totalLines = totalLines,
-                                            linePrefix = linePrefix,
-                                            isImageOnly = uiState.isImageOnlyChapter
-                                        )
+                                         val linePrefix = ""
+                                         val jsScrollLogic = ViewerScripts.getScrollLogic(
+                                             isVertical = isVertical,
+                                             enableAutoLoading = enableAutoLoading,
+                                             targetLine = targetLine,
+                                             totalLines = totalLines,
+                                             linePrefix = linePrefix,
+                                             isImageOnly = uiState.isImageOnlyChapter
+                                         )
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
                                             webViewRef?.postDelayed({
@@ -844,7 +840,7 @@ val style = ViewerScripts.getStyleSheet(
                                    }
                              }
                           )
-                          if (uiState.pagingMode == 1 && bottomMaskHeight > 0f && !uiState.isVertical) {
+                          if (bottomMaskHeight > 0f && !uiState.isVertical) {
                                                                Box(
                                                                    modifier = Modifier
                                                                        .align(Alignment.BottomStart)
@@ -853,7 +849,7 @@ val style = ViewerScripts.getStyleSheet(
                                                                        .background(targetDocColor)
                                                                )
                                                           }
-                                                          if (uiState.pagingMode == 1 && topMaskHeight > 0f && !uiState.isVertical) {
+                                                           if (topMaskHeight > 0f && !uiState.isVertical) {
                                                                Box(
                                                                    modifier = Modifier
                                                                        .align(Alignment.TopStart) // Top Mask
@@ -862,7 +858,7 @@ val style = ViewerScripts.getStyleSheet(
                                                                        .background(targetDocColor)
                                                                )
                                                           }
-                                                          if (uiState.pagingMode == 1 && leftMaskWidth > 0f && uiState.isVertical) {
+                                                           if (leftMaskWidth > 0f && uiState.isVertical) {
                                                                Box(
                                                                    modifier = Modifier
                                                                        .align(Alignment.TopStart)
@@ -871,7 +867,7 @@ val style = ViewerScripts.getStyleSheet(
                                                                        .background(targetDocColor)
                                                                )
                                                           }
-                                                          if (uiState.pagingMode == 1 && rightMaskWidth > 0f && uiState.isVertical) {
+                                                           if (rightMaskWidth > 0f && uiState.isVertical) {
                                                                Box(
                                                                    modifier = Modifier
                                                                        .align(Alignment.TopEnd)

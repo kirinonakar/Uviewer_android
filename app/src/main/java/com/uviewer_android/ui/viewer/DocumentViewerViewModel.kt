@@ -41,7 +41,6 @@ data class DocumentViewerUiState(
     val customDocBackgroundColor: String = "#FFFFFF",
     val customDocTextColor: String = "#000000",
     val sideMargin: Int = 8,
-    val pagingMode: Int = 0,
     val loadProgress: Float = 1f,
     val contentUpdateType: Int = 0, // 0: Refresh, 1: Append, 2: Prepend
     val appendTrigger: Long = 0L,
@@ -102,8 +101,7 @@ class DocumentViewerViewModel(
                     userPreferencesRepository.customDocBackgroundColor,
                     userPreferencesRepository.customDocTextColor,
                     userPreferencesRepository.sideMargin,
-                    userPreferencesRepository.isVerticalReading,
-                    userPreferencesRepository.pagingMode
+                    userPreferencesRepository.isVerticalReading
                 )
             ) { args: Array<Any> ->
                 val size = args[0] as Int
@@ -113,7 +111,6 @@ class DocumentViewerViewModel(
                 val customText = args[4] as String
                 val margin = args[5] as Int
                 val vertical = args[6] as Boolean
-                val pMode = args[7] as Int
                 
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
@@ -122,8 +119,7 @@ class DocumentViewerViewModel(
                     customDocBackgroundColor = customBg,
                     customDocTextColor = customText,
                     sideMargin = margin,
-                    isVertical = vertical,
-                    pagingMode = pMode
+                    isVertical = vertical
                 )
                 if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)

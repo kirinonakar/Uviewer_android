@@ -47,7 +47,6 @@ fun SettingsScreen(
     val sharpeningAmount by viewModel.sharpeningAmount.collectAsState()
     val imageViewMode by viewModel.imageViewMode.collectAsState()
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsState()
-    val pagingMode by viewModel.pagingMode.collectAsState()
     val cacheSize by viewModel.cacheSize.collectAsState()
     val maxCacheSize by viewModel.maxCacheSize.collectAsState()
 
@@ -59,7 +58,6 @@ fun SettingsScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showDualPageOrderDialog by remember { mutableStateOf(false) }
     var showImageViewModeDialog by remember { mutableStateOf(false) }
-    var showPagingModeDialog by remember { mutableStateOf(false) }
     var showCacheLimitDialog by remember { mutableStateOf(false) }
 
 
@@ -130,12 +128,6 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showDocBgDialog = true }
                 )
 
-                val pagingModeLabel = if (pagingMode == 0) stringResource(R.string.paging_mode_overlap) else stringResource(R.string.paging_mode_complete)
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.paging_mode)) },
-                    supportingContent = { Text(pagingModeLabel) },
-                    modifier = Modifier.clickable { showPagingModeDialog = true }
-                )
 
                 var showCustomColorDialog by remember { mutableStateOf(false) }
                 ListItem(
@@ -426,41 +418,9 @@ fun SettingsScreen(
             )
         }
 
-        if (showPagingModeDialog) {
-            PagingModeSelectionDialog(
-                currentMode = pagingMode,
-                onDismiss = { showPagingModeDialog = false },
-                onSelect = { mode ->
-                    viewModel.setPagingMode(mode)
-                    showPagingModeDialog = false
-                }
-            )
-        }
     }
 }
 
-@Composable
-fun PagingModeSelectionDialog(
-    currentMode: Int,
-    onDismiss: () -> Unit,
-    onSelect: (Int) -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_paging_mode)) },
-        text = {
-            Column {
-                ThemeOptionRow(stringResource(R.string.paging_mode_overlap), "0", currentMode.toString(), { onSelect(0) })
-                ThemeOptionRow(stringResource(R.string.paging_mode_complete), "1", currentMode.toString(), { onSelect(1) })
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.cancel))
-            }
-        }
-    )
-}
 
 @Composable
 fun CacheLimitSelectionDialog(
