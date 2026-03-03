@@ -531,40 +531,41 @@ object ViewerScripts {
                               if (masks.top > minTVal) masks.top = Math.max(0, Math.floor(minTVal));
                               if (masks.bottom > (h - maxBVal)) masks.bottom = Math.max(0, Math.floor(h - maxBVal));
                           }
-                      } else {
-                          var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
-                          if (visible.length === 0) return masks;
-                          
-                          var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
-                          var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
-                          
-                          var cutLeft = textVisible.filter(function(l) { return l.left < -0.05; });
-                          if (cutLeft.length > 0) {
-                              var maxR = 0;
-                              for (var i = 0; i < cutLeft.length; i++) { 
-                                  if (cutLeft[i].right > maxR) maxR = cutLeft[i].right; 
-                              }
-                              masks.left = Math.ceil(maxR + 1);
-                          }
-                          
-                          var leftVisibleText = textVisible.filter(function(l) { return l.left >= -0.05; });
-                          if (leftVisibleText.length > 0) {
-                              var minL = w;
-                              for (var i = 0; i < leftVisibleText.length; i++) {
-                                  if (leftVisibleText[i].left < minL) minL = leftVisibleText[i].left;
-                              }
-                              if (masks.left > minL + 3) { 
-                                  masks.left = Math.max(0, Math.floor(minL));
-                              }
-                          }
+                       } else {
+                           var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
+                           if (visible.length === 0) return masks;
+                           
+                           var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
+                           var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
+                           
+                           // [수정] "완전하게 보이는 맨 마지막 줄(맨 왼쪽)" 기준 마스킹
+                           var fullyVisibleText = textVisible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
+                           if (fullyVisibleText.length > 0) {
+                               var lastFull = fullyVisibleText[fullyVisibleText.length - 1];
+                               // 이 줄보다 왼쪽에 걸쳐있는 줄이 있는지 확인
+                               var cutLeft = textVisible.filter(function(l) { return l.left < lastFull.left - 2; });
+                               if (cutLeft.length > 0) {
+                                   masks.left = Math.ceil(lastFull.left);
+                               }
+                               
+                               // [추가] 오른쪽(시작부분)도 마찬가지로 잘린게 있으면 가려줌 (pageUp 대응)
+                               var firstFull = fullyVisibleText[0];
+                               var cutRight = textVisible.filter(function(l) { return l.right > firstFull.right + 2; });
+                               if (cutRight.length > 0) {
+                                   masks.right = Math.ceil(w - firstFull.right);
+                               }
+                           } else if (textVisible.length > 0) {
+                               // 화면에 꽉 차는 긴 한 줄만 있는 경우
+                               var theLine = textVisible[0];
+                               if (theLine.left < 0) masks.left = 0;
+                               if (theLine.right > w) masks.right = 0;
+                           }
 
-                          masks.right = 0;
-
-                          imageVisible.forEach(function(img) {
-                              if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
-                              if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
-                          });
-                      }
+                           imageVisible.forEach(function(img) {
+                               if (img.left < masks.left) masks.left = Math.max(0, Math.floor(img.left));
+                               if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
+                           });
+                       }
                        if (!isVertical) {
                            if (window._scrollDir === 1) { masks.top = 0; }
                            if (window._scrollDir === -1) { masks.bottom = 0; }
@@ -676,17 +677,19 @@ object ViewerScripts {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = -w;
                           if (visible.length > 0) {
-                              var last = visible[visible.length - 1]; 
-                              if (last.left < 2) {
-                                  if (last.right < w - 10) {
-                                      scrollDelta = last.right - w;
-                                  } else {
-                                      scrollDelta = -(w - 40);
-                                  }
+                              var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
+                              if (fullyVisible.length > 0) {
+                                  var lastFull = fullyVisible[fullyVisible.length - 1];
+                                  scrollDelta = lastFull.left - w;
                               } else {
-                                  var idx = lines.indexOf(last);
-                                  if (idx >= 0 && idx < lines.length - 1) {
-                                      scrollDelta = lines[idx + 1].right - w;
+                                  // 화면에 꽉 찬 긴 한 줄인 경우
+                                  var last = visible[visible.length - 1]; 
+                                  if (last.left < 2) {
+                                      if (last.right < w - 10) {
+                                          scrollDelta = last.right - w;
+                                      } else {
+                                          scrollDelta = -(w - 40);
+                                      }
                                   }
                               }
                           }
@@ -741,19 +744,25 @@ object ViewerScripts {
                           }
                           window.scrollBy({ top: Math.max(-h, Math.min(scrollDelta, -20)), behavior: 'instant' });
                       } else {
-                          var first = lines.find(function(l) { return l.left < w - 2 && l.right > 2; });
+                          var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = w;
-                          if (first) {
-                              if (first.right > w + 2) {
-                                  if (first.left > 10) {
-                                      scrollDelta = first.left;
-                                  } else {
-                                      scrollDelta = w - 40;
-                                  }
+                          if (visible.length > 0) {
+                              var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
+                              if (fullyVisible.length > 0) {
+                                  var firstFull = fullyVisible[0];
+                                  scrollDelta = firstFull.right; // 첫 줄의 오른쪽 끝을 화면 왼쪽 끝(w)으로 보내야 하는데... 
+                                  // 아, RL 모드에서는 w가 오른쪽 끝입니다. 
+                                  // pageUp은 오른쪽(과거)으로 이동하는 것입니다. 
+                                  // 현재 화면의 첫 줄(맨 오른쪽 줄)인 firstFull.right를 화면 왼쪽 끝(0)에 맞추면 한 페이지 이동임.
+                                  scrollDelta = firstFull.right; 
                               } else {
-                                  var idx = lines.indexOf(first);
-                                  if (idx > 0) {
-                                      scrollDelta = lines[idx - 1].left;
+                                  var first = visible[0];
+                                  if (first.right > w + 2) {
+                                      if (first.left > 10) {
+                                          scrollDelta = first.left;
+                                      } else {
+                                          scrollDelta = w - 40;
+                                      }
                                   }
                               }
                           }
