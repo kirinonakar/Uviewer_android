@@ -653,26 +653,34 @@ object ViewerScripts {
 
                      if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
                      
-                      var lines = window.getVisualLines();
-                      if (!isVertical) {
-                          var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
-                          var scrollDelta = h;
-                          if (visible.length > 0) {
-                              var last = visible[visible.length - 1];
-                              if (last.bottom > h + 2) {
-                                  if (last.top > 10) {
-                                      scrollDelta = last.top;
-                                  } else {
-                                      scrollDelta = h - 40;
-                                  }
-                              } else {
-                                  var idx = lines.indexOf(last);
-                                  if (idx >= 0 && idx < lines.length - 1) {
-                                      scrollDelta = lines[idx + 1].top;
-                                  }
-                              }
-                          }
-                          window.scrollBy({ top: Math.max(20, Math.min(scrollDelta, h)), behavior: 'instant' });
+                       var lines = window.getVisualLines();
+                       if (!isVertical) {
+                           var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                           var scrollDelta = h;
+                           if (visible.length > 0) {
+                               // 완전히 보이는 줄만 별도로 필터 (상하 모두 화면 안에 있는 줄)
+                               var fullyVisible = visible.filter(function(l) { return l.top >= -0.5 && l.bottom <= h + 0.5; });
+                               if (fullyVisible.length > 0) {
+                                   var lastFull = fullyVisible[fullyVisible.length - 1];
+                                   var idx = lines.indexOf(lastFull);
+                                   if (idx >= 0 && idx < lines.length - 1) {
+                                       // 다음 줄의 top을 기준으로 스크롤
+                                       scrollDelta = lines[idx + 1].top;
+                                   } else {
+                                       // 마지막 줄이 완전히 보인다 = 끝에 도달 (autoLoadNext에서 이미 처리)
+                                       scrollDelta = h;
+                                   }
+                               } else {
+                                   // 화면에 완전히 보이는 줄이 하나도 없는 경우 (큰 요소가 화면을 덮고 있는 경우)
+                                   var last = visible[visible.length - 1];
+                                   if (last.top > 10) {
+                                       scrollDelta = last.top;
+                                   } else {
+                                       scrollDelta = h - 40;
+                                   }
+                               }
+                           }
+                           window.scrollBy({ top: Math.max(20, Math.min(scrollDelta, h)), behavior: 'instant' });
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = -w;
@@ -726,22 +734,31 @@ object ViewerScripts {
 
                       var lines = window.getVisualLines();
                       if (!isVertical) {
-                          var first = lines.find(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                          var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
                           var scrollDelta = -h;
-                          if (first) {
-                              if (first.top < -2) {
-                                  if (first.bottom < h - 10) {
-                                      scrollDelta = first.bottom - h;
-                                  } else {
-                                      scrollDelta = -(h - 40);
-                                  }
-                              } else {
-                                  var idx = lines.indexOf(first);
-                                  if (idx > 0) {
-                                      scrollDelta = lines[idx - 1].bottom - h;
-                                  }
-                              }
-                          }
+                          if (visible.length > 0) {
+                               // 완전히 보이는 줄만 별도로 필터
+                               var fullyVisible = visible.filter(function(l) { return l.top >= -0.5 && l.bottom <= h + 0.5; });
+                               if (fullyVisible.length > 0) {
+                                   var firstFull = fullyVisible[0];
+                                   var idx = lines.indexOf(firstFull);
+                                   if (idx > 0) {
+                                       // 이전 줄의 bottom을 화면 하단에 맞추도록 스크롤
+                                       scrollDelta = lines[idx - 1].bottom - h;
+                                   } else {
+                                       // 첫 줄이 완전히 보인다 = 맨 위에 도달 (autoLoadPrev에서 이미 처리)
+                                       scrollDelta = -h;
+                                   }
+                               } else {
+                                   // 화면에 완전히 보이는 줄이 하나도 없는 경우 (큰 요소가 화면을 덮고 있는 경우)
+                                   var first = visible[0];
+                                   if (first.bottom < h - 10) {
+                                       scrollDelta = first.bottom - h;
+                                   } else {
+                                       scrollDelta = -(h - 40);
+                                   }
+                               }
+                           }
                           window.scrollBy({ top: Math.max(-h, Math.min(scrollDelta, -20)), behavior: 'instant' });
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
