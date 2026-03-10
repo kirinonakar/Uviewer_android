@@ -5,8 +5,7 @@ import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -21,7 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -243,14 +242,82 @@ fun PdfList(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(1f, 3f)
-                    if (scale > 1f) {
-                        val maxOffsetX = (size.width * (scale - 1)) / 2
-                        val maxOffsetY = (size.height * (scale - 1)) / 2
-                        offsetX = (offsetX + pan.x).coerceIn(-maxOffsetX, maxOffsetX)
-                        offsetY = (offsetY + pan.y).coerceIn(-maxOffsetY, maxOffsetY)
-                    } else {
+                awaitEachGesture {
+                    var zoom = 1f
+                    var panX = 0f
+                    var panY = 0f
+                    var pastTouchSlop = false
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    awaitFirstDown(requireUnconsumed = false)
+                    
+                    do {
+                        val event = awaitPointerEvent()
+                        val canceled = event.changes.any { change -> change.isConsumed }
+                        if (!canceled) {
+                            val zoomChange = event.calculateZoom()
+                            val panChange = event.calculatePan()
+
+                            if (!pastTouchSlop) {
+                                zoom *= zoomChange
+                                panX += panChange.x
+                                panY += panChange.y
+
+                                val centroidSize = event.calculateCentroidSize(useCurrent = false)
+                                val zoomMotion = kotlin.math.abs(1f - zoom) * centroidSize
+                                val panMotion = panChange.getDistance() // Use panChange distance instead of accumulating panX/panY for slop
+
+                                if (zoomMotion > touchSlop || panMotion > touchSlop) {
+                                    pastTouchSlop = true
+                                }
+                            }
+
+                            if (pastTouchSlop) {
+                                val centroid = event.calculateCentroid(useCurrent = false)
+                                if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
+                                    val oldScale = scale
+                                    val newScale = (oldScale * zoomChange).coerceIn(1f, 5f)
+                                    val scaleChange = newScale / oldScale
+                                    
+                                    val width = size.width.toFloat()
+                                    val height = size.height.toFloat()
+                                    
+                                    // Adjust offsets to keep centroid stable during zoom
+                                    val targetOffsetX = (panChange.x + (offsetX - (centroid.x - width / 2f)) * scaleChange + (centroid.x - width / 2f))
+                                    val targetOffsetY = (panChange.y + (offsetY - (centroid.y - height / 2f)) * scaleChange + (centroid.y - height / 2f))
+                                    
+                                    val maxOffsetX = (width * (newScale - 1f)) / 2f
+                                    val maxOffsetY = (height * (newScale - 1f)) / 2f
+                                    
+                                    offsetX = targetOffsetX.coerceIn(-maxOffsetX, maxOffsetX)
+                                    
+                                    // Edge scrolling: scroll the list if pan exceeds the zoomed boundaries
+                                    if (targetOffsetY > maxOffsetY) {
+                                        val overflow = targetOffsetY - maxOffsetY
+                                        listState.dispatchRawDelta(-overflow / newScale)
+                                        offsetY = maxOffsetY
+                                    } else if (targetOffsetY < -maxOffsetY) {
+                                        val overflow = targetOffsetY + maxOffsetY
+                                        listState.dispatchRawDelta(-overflow / newScale)
+                                        offsetY = -maxOffsetY
+                                    } else {
+                                        offsetY = targetOffsetY
+                                    }
+                                    
+                                    scale = newScale
+
+                                    // Consume events only if we are actually zoomed or zooming
+                                    if (scale > 1.01f || zoomChange != 1f) {
+                                        event.changes.forEach { change -> change.consume() }
+                                    }
+                                }
+                            }
+                        }
+                    } while (!canceled && event.changes.any { change -> change.pressed })
+                    
+                    // Reset or snap if needed when fingers are lifted
+                    if (scale <= 1.01f) {
+                        scale = 1f
                         offsetX = 0f
                         offsetY = 0f
                     }
@@ -283,7 +350,7 @@ fun PdfList(
     ) {
         LazyColumn(
             state = listState,
-            userScrollEnabled = scale == 1f,
+            userScrollEnabled = scale < 1.01f,
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer(
@@ -324,7 +391,8 @@ fun PdfPage(
                     val ratio = width.toFloat() / height.toFloat()
                     
                     // Render to screen width, maintain aspect ratio
-                    val renderWidth = screenWidth
+                    // Render to 2x screen width for better zoom quality
+                    val renderWidth = (screenWidth * 2f).toInt()
                     val renderHeight = (renderWidth / ratio).toInt()
                     
                     val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
@@ -340,7 +408,8 @@ fun PdfPage(
 
     Box(
         modifier = Modifier
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
