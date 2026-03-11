@@ -483,7 +483,9 @@ class DocumentViewerViewModel(
         if (startLine > totalLines) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            if (updateType == 0 || updateType == 3) {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+            }
             if (updateType == 0) {
                 loadedStartChunk = chunkIndex
                 loadedEndChunk = chunkIndex
@@ -690,7 +692,9 @@ class DocumentViewerViewModel(
         if (startLine > totalLines) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            if (updateType == 0 || updateType == 3) {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+            }
             if (updateType == 0) {
                 loadedStartChunk = chunkIndex
                 loadedEndChunk = chunkIndex

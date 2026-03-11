@@ -129,14 +129,6 @@ object ViewerScripts {
                           chunkWrapper.className = 'content-chunk';
                           chunkWrapper.dataset.index = chunkIndex;
                           
-                          var hr = document.createElement('hr');
-                          if (isVertical) {
-                              hr.style.cssText = "border: none; border-left: 1px dashed #888; margin: 10vh 3em; height: 80vh; width: 0px; opacity: 0.5; display: inline-block;";
-                          } else {
-                              hr.style.cssText = "border: none; border-top: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
-                          }
-                          chunkWrapper.appendChild(hr);
-
                           Array.from(doc.body.childNodes).forEach(function(node) {
                               if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
@@ -180,14 +172,6 @@ object ViewerScripts {
                           chunkWrapper.className = 'content-chunk';
                           chunkWrapper.dataset.index = chunkIndex;
                           
-                          var hr = document.createElement('hr');
-                          if (isVertical) {
-                              hr.style.cssText = "border: none; border-right: 1px dashed #888; margin: 10vh 3em; height: 80vh; width: 0px; opacity: 0.5; display: inline-block;";
-                          } else {
-                              hr.style.cssText = "border: none; border-bottom: 1px dashed #888; margin: 3em 1em; width: 80%; opacity: 0.5;";
-                          }
-                          chunkWrapper.appendChild(hr);
-
                           Array.from(doc.body.childNodes).forEach(function(node) {
                               if (node.id === 'start-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
