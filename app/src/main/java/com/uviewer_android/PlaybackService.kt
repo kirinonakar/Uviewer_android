@@ -22,6 +22,8 @@ import androidx.media3.extractor.text.SubtitleParser
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private val authHeaders = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val serverIds = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val isWebDavFlags = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     override fun onCreate() {
         super.onCreate()
@@ -139,13 +141,12 @@ class PlaybackService : MediaSessionService() {
                     mediaItems: MutableList<MediaItem>
                 ): com.google.common.util.concurrent.ListenableFuture<MutableList<MediaItem>> {
                     mediaItems.forEach { item ->
-                        val auth = item.requestMetadata.extras?.getString("Authorization")
-                        if (auth != null) {
-                            val uri = item.localConfiguration?.uri?.toString()
-                            if (uri != null) {
-                                authHeaders[uri] = auth
-                            }
-                        }
+                        val uri = item.localConfiguration?.uri?.toString() ?: item.mediaId
+                        val extras = item.requestMetadata.extras
+                        
+                        extras?.getString("Authorization")?.let { authHeaders[uri] = it }
+                        extras?.getInt("serverId", -1)?.let { if (it != -1) serverIds[uri] = it }
+                        extras?.getBoolean("isWebDav", false)?.let { isWebDavFlags[uri] = it }
                     }
                     return com.google.common.util.concurrent.Futures.immediateFuture(mediaItems)
                 }
@@ -156,14 +157,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     private fun updateSessionIntent(mediaItem: MediaItem?) {
-        val path = mediaItem?.localConfiguration?.uri?.toString() ?: return
+        val uri = mediaItem?.localConfiguration?.uri?.toString() ?: return
+        val path = mediaItem.mediaId // mediaId is the relative/full path
         
-        // Remove file:// prefix if present
+        val serverId = serverIds[uri] ?: -1
+        val isWebDav = isWebDavFlags[uri] ?: false
+        
+        // Use path (mediaId) for the intent as it's the clean path (not URI)
         val cleanPath = if (path.startsWith("file://")) path.substring(7) else path
 
         val intent = Intent(this, MainActivity::class.java).apply {
             putExtra("action", "resume")
             putExtra("playing_path", cleanPath)
+            putExtra("serverId", serverId)
+            putExtra("isWebDav", isWebDav)
         }
         
         val pendingIntent = android.app.PendingIntent.getActivity(

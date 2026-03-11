@@ -42,6 +42,8 @@ fun MainScreen(
     initialIntentPath: String? = null,
     shouldResume: Boolean = false,
     resumeSpecificPath: String? = null,
+    resumeServerId: Int = -1,
+    resumeIsWebDav: Boolean = false,
     onHandledResume: () -> Unit = {}
 ) {
     val navController = rememberNavController()
@@ -86,12 +88,12 @@ fun MainScreen(
                     val type = when {
                         fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav") || fileName.endsWith(".flac") -> "AUDIO"
                         fileName.endsWith(".mp4") || fileName.endsWith(".mkv") || fileName.endsWith(".avi") -> "VIDEO"
-                        else -> "file"
+                        else -> "VIDEO" // Default to VIDEO for resume from notification usually
                     }
                     
                     val encodedPath = android.net.Uri.encode(resumeSpecificPath, null)
                     // Position -1 to trigger auto-resume in viewer
-                    val route = "viewer?path=$encodedPath&type=$type&isWebDav=false&serverId=-1&position=-1"
+                    val route = "viewer?path=$encodedPath&type=$type&isWebDav=$resumeIsWebDav&serverId=$resumeServerId&position=-1"
                     navController.navigate(route) {
                         popUpTo(navController.graph.findStartDestination().id) {
                             saveState = false
@@ -324,7 +326,9 @@ fun MainScreen(
                     initialPosition = position,
                     onBack = { 
                         // Modified to handle WebDAV parent path safely
-                        val parent = if (isWebDav) {
+                        // Use serverId or path prefix to detect WebDAV
+                        val actualIsWebDav = isWebDav || (serverId != null && serverId != -1) || filePath.startsWith("http://") || filePath.startsWith("https://")
+                        val parent = if (actualIsWebDav) {
                             val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
                             val lastSlash = p.lastIndexOf('/')
                             if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
@@ -334,8 +338,11 @@ fun MainScreen(
                         val encodedParentPath = android.net.Uri.encode(parent, null)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"
                         navController.navigate(route) {
-                            popUpTo(navController.graph.findStartDestination().id)
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = false
+                            }
                             launchSingleTop = true
+                            restoreState = false
                         }
                     },
                     onNavigateToNext = {

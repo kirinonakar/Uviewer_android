@@ -235,6 +235,8 @@ fun MediaPlayerScreen(
                         androidx.media3.common.MediaItem.RequestMetadata.Builder()
                             .setExtras(android.os.Bundle().apply {
                                 uiState.authHeader.forEach { (k, v) -> putString(k, v) }
+                                putInt("serverId", serverId ?: -1)
+                                putBoolean("isWebDav", isWebDav)
                             })
                             .build()
                     )

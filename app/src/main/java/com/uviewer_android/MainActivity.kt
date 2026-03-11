@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity() {
 
     private var shouldResumeState by androidx.compose.runtime.mutableStateOf(false)
     private var resumePathState by androidx.compose.runtime.mutableStateOf<String?>(null)
+    private var resumeServerIdState by androidx.compose.runtime.mutableIntStateOf(-1)
+    private var resumeIsWebDavState by androidx.compose.runtime.mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -57,6 +59,8 @@ class MainActivity : AppCompatActivity() {
         if (intent.getStringExtra("action") == "resume") {
             shouldResumeState = true
             resumePathState = intent.getStringExtra("playing_path")
+            resumeServerIdState = intent.getIntExtra("serverId", -1)
+            resumeIsWebDavState = intent.getBooleanExtra("isWebDav", false)
         }
     }
 
@@ -81,6 +85,8 @@ class MainActivity : AppCompatActivity() {
         if (savedInstanceState == null && intent?.getStringExtra("action") == "resume") {
             shouldResumeState = true
             resumePathState = intent.getStringExtra("playing_path")
+            resumeServerIdState = intent.getIntExtra("serverId", -1)
+            resumeIsWebDavState = intent.getBooleanExtra("isWebDav", false)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -133,9 +139,13 @@ class MainActivity : AppCompatActivity() {
                     initialIntentPath = intentPath, 
                     shouldResume = shouldResumeState,
                     resumeSpecificPath = resumePathState,
+                    resumeServerId = resumeServerIdState,
+                    resumeIsWebDav = resumeIsWebDavState,
                     onHandledResume = { 
                         shouldResumeState = false 
                         resumePathState = null
+                        resumeServerIdState = -1
+                        resumeIsWebDavState = false
                     }
                 )
             }
