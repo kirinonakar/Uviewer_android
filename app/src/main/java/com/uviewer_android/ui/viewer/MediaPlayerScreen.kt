@@ -109,14 +109,26 @@ fun MediaPlayerScreen(
     }
 
     // Keep Screen On (Only for Video)
-    DisposableEffect(currentActivity, fileType) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(currentActivity, fileType, lifecycleOwner) {
         val window = currentActivity?.window
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                if (fileType == FileEntry.FileType.VIDEO) {
+                    window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+            }
+        }
+        
         if (fileType == FileEntry.FileType.VIDEO) {
             window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
         (currentActivity as? MainActivity)?.volumeKeyPagingActive = false
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            lifecycleOwner.lifecycle.removeObserver(observer)
             // Reset orientation when leaving
             currentActivity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }

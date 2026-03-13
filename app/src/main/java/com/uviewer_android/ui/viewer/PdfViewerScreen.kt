@@ -112,9 +112,18 @@ fun PdfViewerScreen(
         c as? MainActivity
     }
     
-    DisposableEffect(currentActivity) {
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(currentActivity, lifecycleOwner) {
         val window = currentActivity?.window
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+        
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
             // Save progress one last time on dispose
@@ -123,6 +132,8 @@ fun PdfViewerScreen(
             }
 
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            
             currentActivity?.volumeKeyPagingActive = false
             try {
                 renderer?.close()
