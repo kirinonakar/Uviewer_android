@@ -252,24 +252,29 @@ object ViewerScripts {
                       if (chunks.length > 4) { 
                           if (isNext) {
                               var firstChunk = chunks[0];
-                              if (isVertical && window.pageXOffset > -firstChunk.offsetWidth) return;
-                              if (!isVertical && window.pageYOffset < firstChunk.offsetHeight) return;
+                              var r = firstChunk.getBoundingClientRect();
+                              var chunkHeight = r.height;
+                              var chunkWidth = r.width;
+
+                              if (isVertical && window.pageXOffset > -chunkWidth) return;
+                              if (!isVertical && window.pageYOffset < chunkHeight) return;
                               
-                              var removeWidth = firstChunk.offsetWidth;
-                              var removeHeight = firstChunk.offsetHeight;
                               firstChunk.parentNode.removeChild(firstChunk);
                               
-                              if (isVertical) window.safeScrollBy(removeWidth, 0); 
-                              else window.safeScrollBy(0, -removeHeight);
+                              if (isVertical) window.safeScrollBy(chunkWidth, 0); 
+                              else window.safeScrollBy(0, -chunkHeight);
                           } else {
                               var lastChunk = chunks[chunks.length - 1];
+                              var r = lastChunk.getBoundingClientRect();
+                              var chunkHeight = r.height;
+                              var chunkWidth = r.width;
                               
                               if (isVertical) {
                                   var maxScroll = document.documentElement.scrollWidth - window.innerWidth;
-                                  if (window.pageXOffset < -(maxScroll - lastChunk.offsetWidth)) return;
+                                  if (window.pageXOffset < -(maxScroll - chunkWidth)) return;
                               } else {
                                   var maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-                                  if (window.pageYOffset > (maxScroll - lastChunk.offsetHeight)) return;
+                                  if (window.pageYOffset > (maxScroll - chunkHeight)) return;
                               }
                               lastChunk.parentNode.removeChild(lastChunk);
                           }
@@ -486,14 +491,14 @@ object ViewerScripts {
                           var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
                           var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
                           
-                          var cutTop = textVisible.filter(function(l) { return l.top < -0.05; });
+                          var cutTop = textVisible.filter(function(l) { return l.top < -0.1; });
                           if (cutTop.length > 0) {
                               var maxB = 0;
                               for (var i = 0; i < cutTop.length; i++) { if (cutTop[i].bottom > maxB) maxB = cutTop[i].bottom; }
                               masks.top = Math.ceil(maxB + 1);
                           }
                           
-                          var cutBottom = textVisible.filter(function(l) { return l.bottom > h + 0.05; });
+                          var cutBottom = textVisible.filter(function(l) { return l.bottom > h + 0.1; });
                           if (cutBottom.length > 0) {
                               var minT = h;
                               for (var i = 0; i < cutBottom.length; i++) { if (cutBottom[i].top < minT) minT = cutBottom[i].top; }
@@ -505,7 +510,7 @@ object ViewerScripts {
                               if (img.bottom > h - masks.bottom) masks.bottom = Math.max(0, Math.floor(h - img.bottom));
                           });
 
-                          var fullText = textVisible.filter(function(l) { return l.top >= -0.05 && l.bottom <= h + 0.05; });
+                          var fullText = textVisible.filter(function(l) { return l.top >= -0.1 && l.bottom <= h + 0.1; });
                           if (fullText.length > 0) {
                               var minTVal = h, maxBVal = 0;
                               fullText.forEach(function(l) {
@@ -550,10 +555,11 @@ object ViewerScripts {
                                if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
                            });
                        }
-                       if (!isVertical) {
-                           if (window._scrollDir === 1) { masks.top = 0; }
-                           if (window._scrollDir === -1) { masks.bottom = 0; }
-                       } else {
+                        if (!isVertical) {
+                            // 가로모드에서는 항상 잘린 줄을 가려야 하므로 스크롤 방향에 따른 강제 마스크 해제 제거
+                            // if (window._scrollDir === 1) { masks.top = 0; }
+                            // if (window._scrollDir === -1) { masks.bottom = 0; }
+                        } else {
                            if (window._scrollDir === 1) {
                                masks.right = 0; 
                            }
@@ -643,12 +649,15 @@ object ViewerScripts {
                            var scrollDelta = h;
                            if (visible.length > 0) {
                                // 완전히 보이는 줄만 별도로 필터 (상하 모두 화면 안에 있는 줄)
-                               var fullyVisible = visible.filter(function(l) { return l.top >= -0.5 && l.bottom <= h + 0.5; });
+                               // [수정] mask 판정 범위와 동일하게 -1, +1px 기준으로 조정하여 잘린 줄이 다음 페이지에 확실히 포함되게 함
+                               var fullyVisible = visible.filter(function(l) { return l.top >= -1 && l.bottom <= h + 1; });
                                if (fullyVisible.length > 0) {
                                    var lastFull = fullyVisible[fullyVisible.length - 1];
                                    var idx = lines.indexOf(lastFull);
                                    if (idx >= 0 && idx < lines.length - 1) {
-                                       // 다음 줄의 top을 기준으로 스크롤
+                                       // 다음 줄의 top을 기준으로 스크롤 (idx + 1)
+                                       // [개선] 만약 idx+1번 줄이 이전 줄과 너무 가까우면(중복 느낌 방지) 그 다음줄로 갈 수도 있지만,
+                                       // 기본적으로는 idx+1이 맞습니다.
                                        scrollDelta = lines[idx + 1].top;
                                    } else {
                                        // 마지막 줄이 완전히 보인다 = 끝에 도달 (autoLoadNext에서 이미 처리)
@@ -664,7 +673,7 @@ object ViewerScripts {
                                    }
                                }
                            }
-                           window.scrollBy({ top: Math.max(20, Math.min(scrollDelta, h)), behavior: 'instant' });
+                           window.scrollBy({ top: Math.max(20, Math.min(scrollDelta - 10, h - 20)), behavior: 'instant' });
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = -w;
@@ -722,7 +731,7 @@ object ViewerScripts {
                           var scrollDelta = -h;
                           if (visible.length > 0) {
                                // 완전히 보이는 줄만 별도로 필터
-                               var fullyVisible = visible.filter(function(l) { return l.top >= -0.5 && l.bottom <= h + 0.5; });
+                               var fullyVisible = visible.filter(function(l) { return l.top >= -1 && l.bottom <= h + 1; });
                                if (fullyVisible.length > 0) {
                                    var firstFull = fullyVisible[0];
                                    var idx = lines.indexOf(firstFull);
@@ -743,7 +752,7 @@ object ViewerScripts {
                                    }
                                }
                            }
-                          window.scrollBy({ top: Math.max(-h, Math.min(scrollDelta, -20)), behavior: 'instant' });
+                           window.scrollBy({ top: Math.max(-h + 20, Math.min(scrollDelta + 10, -20)), behavior: 'instant' });
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = w;
@@ -873,9 +882,11 @@ object ViewerScripts {
                       box-sizing: border-box !important;
                       text-align: left !important;
                   }
-                  .content-chunk {
-                      overflow-anchor: none !important;
-                  }
+                   .content-chunk {
+                       overflow-anchor: none !important;
+                       margin: 0 !important;
+                       padding: 0 !important;
+                   }
                  /* Remove padding for images to make them edge-to-edge */
                  div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
                      padding: 0 !important;
