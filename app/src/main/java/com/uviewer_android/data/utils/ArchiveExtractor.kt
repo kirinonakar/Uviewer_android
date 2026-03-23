@@ -31,8 +31,14 @@ object ArchiveExtractor {
                     file.mkdirs()
                 } else {
                     file.parentFile?.mkdirs()
-                    FileOutputStream(file).use { fos ->
-                        zis.copyTo(fos)
+                    val tempFile = File(file.parentFile, "${file.name}.tmp")
+                    try {
+                        FileOutputStream(tempFile).use { fos ->
+                            zis.copyTo(fos)
+                        }
+                        tempFile.renameTo(file)
+                    } finally {
+                        if (tempFile.exists()) tempFile.delete()
                     }
                 }
             }
@@ -54,14 +60,20 @@ object ArchiveExtractor {
                         file.mkdirs()
                     } else {
                         file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { fos ->
-                            archive.extractFile(header, fos)
+                        val tempFile = File(file.parentFile, "${file.name}.tmp")
+                        try {
+                            FileOutputStream(tempFile).use { fos ->
+                                archive.extractFile(header, fos)
+                            }
+                            tempFile.renameTo(file)
+                        } finally {
+                            if (tempFile.exists()) tempFile.delete()
                         }
                     }
                     header = archive.nextFileHeader()
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
             throw IOException("RAR Extraction failed: ${e.message}")
         }
@@ -73,7 +85,8 @@ object ArchiveExtractor {
             SevenZFile(sevenZFile).use { s7z ->
                 var entry = s7z.nextEntry
                 while (entry != null) {
-                    val file = File(targetDir, entry.name)
+                    val entryNormalizedName = entry.name.replace('\\', '/').trimStart('/')
+                    val file = File(targetDir, entryNormalizedName)
                     if (!file.canonicalPath.startsWith(targetDir.canonicalPath)) {
                         entry = s7z.nextEntry
                         continue
@@ -82,18 +95,24 @@ object ArchiveExtractor {
                         file.mkdirs()
                     } else {
                         file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { fos ->
-                            val buffer = ByteArray(8192)
-                            var n: Int
-                            while (s7z.read(buffer).also { n = it } != -1) {
-                                fos.write(buffer, 0, n)
+                        val tempFile = File(file.parentFile, "${file.name}.tmp")
+                        try {
+                            FileOutputStream(tempFile).use { fos ->
+                                val buffer = ByteArray(8192)
+                                var n: Int
+                                while (s7z.read(buffer).also { n = it } != -1) {
+                                    fos.write(buffer, 0, n)
+                                }
                             }
+                            tempFile.renameTo(file)
+                        } finally {
+                            if (tempFile.exists()) tempFile.delete()
                         }
                     }
                     entry = s7z.nextEntry
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             e.printStackTrace()
             throw IOException("7Z Extraction failed: ${e.message}")
         }

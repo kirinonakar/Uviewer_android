@@ -10,35 +10,33 @@ import coil.request.Options
 import com.uviewer_android.data.repository.WebDavRepository
 import okio.Buffer
 
-class RemoteZipImageFetcherFactory(private val webDavRepository: WebDavRepository) : Fetcher.Factory<android.net.Uri> {
-    private val managers = mutableMapOf<String, RemoteZipManager>()
+class Remote7zImageFetcherFactory(private val webDavRepository: WebDavRepository) : Fetcher.Factory<android.net.Uri> {
+    private val managers = mutableMapOf<String, Remote7zManager>()
 
     override fun create(data: android.net.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
-        if (data.scheme != "webdav-zip") return null
+        if (data.scheme != "webdav-7z") return null
         
         val serverId = data.host?.toIntOrNull() ?: return null
-        val zipPath = data.path ?: return null
+        val path = data.path ?: return null
         val entryName = data.getQueryParameter("entry") ?: return null
         
-        val managerKey = "$serverId:$zipPath"
+        val managerKey = "$serverId:$path"
         
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {
-                Log.d("RemoteZipFetcher", "Fetching $entryName from $zipPath (Server $serverId)")
+                Log.d("Remote7zFetcher", "Fetching $entryName from $path (Server $serverId)")
                 
                 try {
-                    val zipSize = webDavRepository.getFileSize(serverId, zipPath)
-                    if (zipSize <= 0) return null
+                    val fileSize = webDavRepository.getFileSize(serverId, path)
+                    if (fileSize <= 0) return null
 
                     val manager = synchronized(managers) {
                         managers.getOrPut(managerKey) {
-                             RemoteZipManager(webDavRepository, serverId, zipPath, zipSize)
+                             Remote7zManager(webDavRepository, serverId, path, fileSize)
                         }
                     }
                     
-                    val entries = manager.getEntries()
-                    val entry = entries.find { it.name == entryName } ?: return null
-                    val dataBytes = manager.getEntryData(entry) ?: return null
+                    val dataBytes = manager.getEntryData(entryName) ?: return null
                     
                     val extension = entryName.substringAfterLast('.', "").lowercase()
                     val mimeType = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "image/*"
@@ -52,7 +50,7 @@ class RemoteZipImageFetcherFactory(private val webDavRepository: WebDavRepositor
                         dataSource = DataSource.NETWORK
                     )
                 } catch (e: Exception) {
-                    Log.e("RemoteZipFetcher", "Error fetching entry $entryName", e)
+                    Log.e("Remote7zFetcher", "Error fetching entry $entryName", e)
                     return null
                 }
             }

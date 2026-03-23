@@ -20,11 +20,13 @@ commonsIo = "2.16.1"
 jsoup = "1.18.1"
 folioreader = "0.5.4" # Or alternative
 ksp = "2.0.21-1.0.27"
+xz = "1.10"
 appcompat = "1.7.1"
 junrar = "7.5.5"
 commonsCompress = "1.26.1"
 
 [libraries]
+xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

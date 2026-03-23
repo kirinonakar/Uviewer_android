@@ -178,7 +178,16 @@ fun ImageViewerScreen(
 
     if (uiState.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator()
+                uiState.loadingProgress?.let { progress ->
+                    Spacer(Modifier.height(16.dp))
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.width(200.dp)
+                    )
+                }
+            }
         }
         return
     } else if (uiState.error != null) {
@@ -205,7 +214,7 @@ fun ImageViewerScreen(
         // But isDualPage is state. 
         // Let's hoist declarations.
         
-        val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+        val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
         val viewMode = uiState.viewMode
         val pageCount = when (viewMode) {
             ViewMode.SINGLE -> totalImages
@@ -305,7 +314,7 @@ fun ImageViewerScreen(
                                 IconButton(onClick = onNavigateToNext) {
                                     Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
                                 }
-                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") }
+                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
                                 val currentImageIndex = when (viewMode) {
                                     ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)
                                     ViewMode.SPLIT -> (pagerState.currentPage / 2).coerceAtMost(uiState.images.size - 1)
@@ -694,7 +703,8 @@ fun ZoomableImage(
             fun buildRequest(url: String): ImageRequest {
                 Log.d("ImageViewer", "ZoomableImage: buildRequest: url=$url, isWebDav=$isWebDav")
                 
-                if (url.startsWith("webdav-zip://")) {
+                // Handle custom schemes (webdav-zip, waiting-file, webdav-7z)
+                if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .crossfade(true)
@@ -932,7 +942,8 @@ fun ZoomableDualImage(
             fun buildRequest(url: String): ImageRequest {
                 Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav")
 
-                if (url.startsWith("webdav-zip://")) {
+                // Handle custom schemes (webdav-zip, waiting-file, webdav-7z)
+                if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .crossfade(true)

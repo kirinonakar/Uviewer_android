@@ -164,11 +164,11 @@ class WebDavRepository(
         }
     }
 
-    suspend fun downloadFile(serverId: Int, path: String, targetFile: java.io.File) {
+    suspend fun downloadFile(serverId: Int, path: String, targetFile: java.io.File, progress: ((Float) -> Unit)? = null) {
         withContext(Dispatchers.IO) {
             val client = getClient(serverId) ?: throw Exception("Client not found for server $serverId")
             val password = credentialsManager.getPassword(serverId) ?: throw Exception("Password not found")
-            client.downloadToFile(password, path, targetFile)
+            client.downloadToFile(password, path, targetFile, progress)
         }
     }
 }

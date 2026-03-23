@@ -29,6 +29,8 @@ class UviewerApplication : Application(), ImageLoaderFactory {
                 }
                 add(com.uviewer_android.data.utils.ZipThumbnailFetcher.Factory())
                 add(com.uviewer_android.data.utils.RemoteZipImageFetcherFactory(container.webDavRepository))
+                add(com.uviewer_android.data.utils.Remote7zImageFetcherFactory(container.webDavRepository))
+                add(com.uviewer_android.data.utils.WaitingFileFetcherFactory())
             }
             .crossfade(true)
             .build()

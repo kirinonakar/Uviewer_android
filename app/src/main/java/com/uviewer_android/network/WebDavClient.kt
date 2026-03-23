@@ -229,7 +229,7 @@ class WebDavClient(
         }
     }
 
-    suspend fun downloadToFile(password: String, path: String, destinationFile: java.io.File) {
+    suspend fun downloadToFile(password: String, path: String, destinationFile: java.io.File, progress: ((Float) -> Unit)? = null) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val url = buildUrl(path)
             val request = Request.Builder()
@@ -241,9 +241,19 @@ class WebDavClient(
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
             
+            val totalBytes = response.body?.contentLength() ?: -1L
             response.body?.byteStream()?.use { input ->
                 java.io.FileOutputStream(destinationFile).use { output ->
-                    input.copyTo(output)
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0L
+                    while (input.read(buffer).also { bytesRead = it } != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                        if (totalBytes > 0) {
+                            progress?.invoke(totalRead.toFloat() / totalBytes)
+                        }
+                    }
                 }
             }
         }

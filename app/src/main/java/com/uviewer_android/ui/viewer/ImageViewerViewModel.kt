@@ -24,6 +24,7 @@ data class ImageViewerUiState(
     val serverUrl: String? = null,
     val isContentLoadedFromWebDav: Boolean = false,
     val containerName: String? = null,
+    val loadingProgress: Float? = null,
     val persistZoom: Boolean = false,
     val sharpeningAmount: Int = 0,
     val viewMode: ViewMode = ViewMode.SINGLE
@@ -231,12 +232,15 @@ enum class ViewMode {
                             val zipImages = entries.filter { !it.isDirectory && it.name.lowercase().let { n -> 
                                 imageExtensions.any { ext -> n.endsWith(".$ext") }
                             } }.map { entry ->
-                                val uri = android.net.Uri.Builder()
+                                val uriBuilder = android.net.Uri.Builder()
                                     .scheme("webdav-zip")
                                     .authority(serverId.toString())
-                                    .path(filePath)
-                                    .appendQueryParameter("entry", entry.name)
-                                    .build()
+                                
+                                filePath.split("/").filter { it.isNotEmpty() }.forEach {
+                                    uriBuilder.appendPath(it)
+                                }
+                                uriBuilder.appendQueryParameter("entry", entry.name)
+                                val uri = uriBuilder.build()
                                     
                                 FileEntry(
                                     name = entry.name.substringAfterLast('/'),
@@ -257,38 +261,108 @@ enum class ViewMode {
                             }
                             zipImages
                         } else if (isWebDav && serverId != null) {
-                            // Non-ZIP Archive on WebDAV (RAR, 7Z) -> Download then extract
+                            // Non-ZIP Archive on WebDAV (RAR, 7Z)
                             val context = getApplication<Application>()
                             val cacheDir = context.cacheDir
-                            val tempFile = File(cacheDir, "temp_archive_${System.currentTimeMillis()}.${filePath.substringAfterLast('.')}")
-                            val unzipDir = File(cacheDir, "zip_${tempFile.name}_unzipped")
+                            val archiveExt = filePath.substringAfterLast('.').lowercase()
                             
-                            if (unzipDir.exists()) {
+                            // Stable cache key for this server and file path
+                            val cacheKey = "${serverId}_${filePath}".hashCode().toString(36)
+                            val unzipDir = File(cacheDir, "unzipped_$cacheKey")
+                            val isDoneFile = File(unzipDir, ".extracted_done")
+                            val tempFile = File(cacheDir, "temp_download_$cacheKey.$archiveExt")
+                            val imageExtensions = listOf("jpg", "jpeg", "png", "gif", "webp", "bmp")
+
+                            if (isDoneFile.exists()) {
+                                Log.d("ImageViewer", "Archive already extracted in cache: $unzipDir")
                                 cacheManager.touch(unzipDir)
+                                unzipDir.walkTopDown()
+                                    .filter { it.isFile && it.extension.lowercase() in imageExtensions }
+                                    .map { file ->
+                                        FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
+                                    }.sortedBy { it.name.lowercase() }.toList()
                             } else {
                                 val fileSize = webDavRepository.getFileSize(serverId, filePath)
-                                cacheManager.ensureCapacity(fileSize + (fileSize * 2)) // Zip + estimate unzip
-                                webDavRepository.downloadFile(serverId, filePath, tempFile)
-                                
-                                unzipDir.mkdirs()
-                                com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
-                                tempFile.delete() // Clean up the archive file
-                            }
-                            
-                            unzipDir.walkTopDown()
-                                .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
-                                .map { file ->
-                                    FileEntry(
-                                        name = file.name,
-                                        path = file.absolutePath,
-                                        isDirectory = false,
-                                        type = FileEntry.FileType.IMAGE,
-                                        lastModified = file.lastModified(),
-                                        size = file.length()
-                                    )
+                                cacheManager.ensureCapacity(fileSize + (fileSize * 2))
+
+                                if (archiveExt == "7z") {
+                                    // Step 1: Remote Listing (Fast)
+                                    val manager = com.uviewer_android.data.utils.Remote7zManager(webDavRepository, serverId, filePath, fileSize)
+                                    val entries = manager.getEntries()
+                                    val remoteImages = entries.filter { !it.isDirectory && it.name.lowercase().let { n -> 
+                                        imageExtensions.any { ext -> n.endsWith(".$ext") }
+                                    } }.map { entry ->
+                                        // Points to where the file WILL be after extraction
+                                        // Normalize separators and trim leading slash to ensure correct joining
+                                        val entryNormalizedName = entry.name.replace('\\', '/').trimStart('/')
+                                        val targetFile = File(unzipDir, entryNormalizedName)
+                                        val uri = android.net.Uri.Builder()
+                                            .scheme("waiting-file")
+                                            .authority("") // Ensures waiting-file:/// format
+                                            .path(targetFile.absolutePath)
+                                            .build()
+                                        FileEntry(
+                                            name = entry.name.substringAfterLast('/'),
+                                            path = uri.toString(),
+                                            isDirectory = false,
+                                            type = FileEntry.FileType.IMAGE,
+                                            lastModified = 0L,
+                                            size = entry.size,
+                                            serverId = serverId,
+                                            isWebDav = true
+                                        )
+                                    }.sortedBy { it.name.lowercase() }
+
+                                    // Step 2: Background download & extract if not done
+                                    viewModelScope.launch {
+                                        try {
+                                            if (!isDoneFile.exists()) {
+                                                Log.d("ImageViewer", "Background 7z download started: $filePath")
+                                                webDavRepository.downloadFile(serverId, filePath, tempFile) { progress ->
+                                                    // Optional UI progress
+                                                }
+                                                unzipDir.mkdirs()
+                                                com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
+                                                isDoneFile.createNewFile()
+                                                tempFile.delete()
+                                                Log.d("ImageViewer", "7z extraction done: $unzipDir")
+                                            }
+                                            
+                                            // Refresh silently to local paths
+                                            val localImages = unzipDir.walkTopDown()
+                                                .filter { it.isFile && it.extension.lowercase() in imageExtensions }
+                                                .map { file ->
+                                                    FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
+                                                }.sortedBy { it.name.lowercase() }.toList()
+
+                                            if (localImages.isNotEmpty()) {
+                                                _uiState.value = _uiState.value.copy(images = localImages)
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e("ImageViewer", "Background 7z processing failed", e)
+                                        }
+                                    }
+                                    
+                                    if (remoteImages.isNotEmpty()) remoteImages else throw Exception("No images found in 7z archive.")
+                                } else {
+                                    // For other archives (like RAR), wait for download but with progress
+                                    webDavRepository.downloadFile(serverId, filePath, tempFile) { progress ->
+                                        _uiState.value = _uiState.value.copy(loadingProgress = progress)
+                                    }
+                                    _uiState.value = _uiState.value.copy(loadingProgress = null) // Clear progress when done
+
+                                    unzipDir.mkdirs()
+                                    com.uviewer_android.data.utils.ArchiveExtractor.extract(tempFile, unzipDir)
+                                    isDoneFile.createNewFile()
+                                    tempFile.delete()
+
+                                    unzipDir.walkTopDown()
+                                        .filter { it.isFile && it.extension.lowercase() in imageExtensions }
+                                        .map { file ->
+                                            FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
+                                        }.sortedBy { it.name.lowercase() }.toList()
                                 }
-                                .sortedBy { it.name.lowercase() }
-                                .toList()
+                            }
                         } else {
                             // Local Zip logic
                             val context = getApplication<Application>()
