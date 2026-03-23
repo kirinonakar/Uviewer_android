@@ -17,7 +17,7 @@ object ArchiveExtractor {
         val extension = archiveFile.extension.lowercase()
         when (extension) {
             "zip", "cbz", "epub" -> unzip(archiveFile, targetDir)
-            "rar", "7z"          -> extractWithSevenZip(archiveFile, targetDir)
+            "rar", "cbr", "7z", "cb7" -> extractWithSevenZip(archiveFile, targetDir)
         }
     }
 

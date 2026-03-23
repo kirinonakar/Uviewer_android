@@ -187,7 +187,7 @@ enum class ViewMode {
             currentPath = filePath
             currentIsWebDav = isWebDav
             currentServerId = serverId
-            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
+            val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
             currentIsZip = isZip
 
             viewModelScope.launch {
@@ -282,10 +282,11 @@ enum class ViewMode {
                                         FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
                                     }.sortedBy { it.name.lowercase() }.toList()
                             } else {
+                                // For all non-streamable archives (RAR, 7Z), download first
                                 val fileSize = webDavRepository.getFileSize(serverId, filePath)
                                 cacheManager.ensureCapacity(fileSize + (fileSize * 2))
 
-                                if (archiveExt == "7z") {
+                                if (archiveExt == "7z" || archiveExt == "cb7") {
                                     // Step 1: Remote Listing (Fast)
                                     val manager = com.uviewer_android.data.utils.Remote7zManager(webDavRepository, serverId, filePath, fileSize)
                                     val entries = manager.getEntries()
@@ -343,7 +344,7 @@ enum class ViewMode {
                                         }
                                     }
                                     
-                                    if (remoteImages.isNotEmpty()) remoteImages else throw Exception("No images found in 7z archive.")
+                                    if (remoteImages.isNotEmpty()) remoteImages else throw Exception("No images found in the archive ($archiveExt).")
                                 } else {
                                     // For other archives (like RAR), wait for download but with progress
                                     webDavRepository.downloadFile(serverId, filePath, tempFile) { progress ->

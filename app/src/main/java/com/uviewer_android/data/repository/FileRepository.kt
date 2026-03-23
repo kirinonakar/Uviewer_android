@@ -29,8 +29,8 @@ class FileRepository {
             extension == "pdf" -> FileEntry.FileType.PDF
             extension == "epub" -> FileEntry.FileType.EPUB
             extension in listOf("zip", "cbz") -> FileEntry.FileType.ZIP
-            extension == "rar" -> FileEntry.FileType.RAR
-            extension == "7z" -> FileEntry.FileType.SEVEN_ZIP
+            extension in listOf("rar", "cbr") -> FileEntry.FileType.RAR
+            extension in listOf("7z", "cb7") -> FileEntry.FileType.SEVEN_ZIP
             extension in listOf("mp3", "wav", "ogg", "flac", "m4a", "aac") -> FileEntry.FileType.AUDIO
             extension in listOf("mp4", "mkv", "avi", "mov", "webm", "3gp") -> FileEntry.FileType.VIDEO
             else -> FileEntry.FileType.UNKNOWN

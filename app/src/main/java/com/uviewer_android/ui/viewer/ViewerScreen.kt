@@ -40,7 +40,9 @@ fun ViewerScreen(
         val ext = filePath.substringAfterLast(".", "").lowercase()
         when (ext) {
             "png", "jpg", "jpeg", "webp", "gif", "bmp", "avif" -> FileEntry.FileType.IMAGE
-            "zip", "cbz", "rar", "7z" -> FileEntry.FileType.ZIP
+            "zip", "cbz" -> FileEntry.FileType.ZIP
+            "rar", "cbr" -> FileEntry.FileType.RAR
+            "7z", "cb7" -> FileEntry.FileType.SEVEN_ZIP
             "txt", "md", "csv", "log", "aozora" -> FileEntry.FileType.TEXT
             "epub" -> FileEntry.FileType.EPUB
             "pdf" -> FileEntry.FileType.PDF
@@ -55,7 +57,7 @@ fun ViewerScreen(
     // For images, it's 0-based. For documents, it's 1-based (line).
 
     when (resolvedType) {
-        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP -> {
+        FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP, FileEntry.FileType.RAR, FileEntry.FileType.SEVEN_ZIP -> {
             ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         }
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {

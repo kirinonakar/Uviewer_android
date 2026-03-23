@@ -50,7 +50,7 @@ class Remote7zManager(
                 }
             } catch (e: Exception) {
                 Log.e("Remote7z", "Error listing 7z entries for $path", e)
-                entries = emptyList()
+                throw IOException("Archive open error: ${e.message}", e)
             }
         }
         entries!!

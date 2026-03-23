@@ -214,7 +214,7 @@ fun ImageViewerScreen(
         // But isDualPage is state. 
         // Let's hoist declarations.
         
-        val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
+        val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
         val viewMode = uiState.viewMode
         val pageCount = when (viewMode) {
             ViewMode.SINGLE -> totalImages
@@ -314,7 +314,7 @@ fun ImageViewerScreen(
                                 IconButton(onClick = onNavigateToNext) {
                                     Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
                                 }
-                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".7z") }
+                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
                                 val currentImageIndex = when (viewMode) {
                                     ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)
                                     ViewMode.SPLIT -> (pagerState.currentPage / 2).coerceAtMost(uiState.images.size - 1)
