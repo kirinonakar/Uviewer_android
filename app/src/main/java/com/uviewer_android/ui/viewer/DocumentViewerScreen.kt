@@ -807,14 +807,28 @@ val style = ViewerScripts.getStyleSheet(
     sideMargin = uiState.sideMargin
 )
                                    // Inject style intelligently and prevent Quirks Mode
-                                   val contentWithStyle = if (uiState.content.contains("</head>")) {
-                                       uiState.content.replace("</head>", "$style</head>")
-                                   } else if (uiState.content.contains("<body")) {
-                                       val match = "<body[^>]*>".toRegex().find(uiState.content)
+                                   // [추가/수정] 뷰포트 메타 태그가 있으면 교체하고, 없으면 새로 삽입하여 세로쓰기 레이아웃이 잘리지 않게 함
+                                   val viewportTag = if (uiState.isVertical) {
+                                       "<meta name=\"viewport\" content=\"height=device-height, initial-scale=1.0, user-scalable=yes, minimum-scale=1.0, maximum-scale=5.0\">"
+                                   } else {
+                                       "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">"
+                                   }
+                                   
+                                   var finalContent = uiState.content
+                                   if (finalContent.contains("<meta name=\"viewport\"", ignoreCase = true)) {
+                                       finalContent = finalContent.replace("<meta name=\"viewport\"[^>]*>".toRegex(RegexOption.IGNORE_CASE), viewportTag)
+                                   } else if (finalContent.contains("<head>", ignoreCase = true)) {
+                                       finalContent = finalContent.replace("<head>", "<head>$viewportTag", ignoreCase = true)
+                                   }
+
+                                   val contentWithStyle = if (finalContent.contains("</head>", ignoreCase = true)) {
+                                       finalContent.replace("</head>", "$style</head>", ignoreCase = true)
+                                   } else if (finalContent.contains("<body", ignoreCase = true)) {
+                                       val match = "<body[^>]*>".toRegex(RegexOption.IGNORE_CASE).find(finalContent)
                                        if (match != null) {
-                                           uiState.content.substring(0, match.range.last + 1) + style + uiState.content.substring(match.range.last + 1)
+                                           finalContent.substring(0, match.range.last + 1) + style + finalContent.substring(match.range.last + 1)
                                        } else {
-                                           "$style${uiState.content}"
+                                           "$style$finalContent"
                                        }
                                    } else {
                                        // 태그가 없는 순수 텍스트라면, 표준 HTML 뼈대를 만들어 감싸줌 (높이 확보의 핵심)
@@ -823,11 +837,11 @@ val style = ViewerScripts.getStyleSheet(
                                        <html>
                                        <head>
                                            <meta charset="utf-8">
-                                           <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                                           $viewportTag
                                            $style
                                        </head>
                                        <body>
-                                           ${uiState.content}
+                                           $finalContent
                                        </body>
                                        </html>
                                        """.trimIndent()

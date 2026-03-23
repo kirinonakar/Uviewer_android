@@ -331,7 +331,7 @@ object ViewerScripts {
                      var h = window.innerHeight;
                      var textLines = [];
                      var seenRuby = new Set();
-                     var padding = isVertical ? w : h;
+                     var padding = isVertical ? w * 2 : h * 2;
                      
                      var walker = document.createTreeWalker(
                          document.body,
@@ -585,20 +585,21 @@ object ViewerScripts {
                          var w = document.documentElement.clientWidth;
                          var lines = window.getVisualLines();
                          if (lines.length > 0) {
-                             var farRightLine = lines[0];
-                             if (farRightLine.right > w) {
-                                 var scrollDelta = farRightLine.right - w;
-                                 window.scrollBy({ left: scrollDelta, behavior: 'instant' });
+                             // vertical-rl에서 '끝'은 가장 왼쪽 줄입니다.
+                             // getVisualLines는 b.right - a.right로 정렬하므로, lines[lines.length-1]이 가장 왼쪽 줄입니다.
+                             var lastLine = lines[lines.length - 1];
+                             if (lastLine.left < 0) {
+                                 window.scrollBy({ left: lastLine.left, behavior: 'instant' });
                              }
                          }
                      } else {
                          window.scrollTo(0, 1000000);
                          var lines = window.getVisualLines();
                          if (lines.length > 0) {
-                             var topCutLine = lines[0];
-                             if (topCutLine.top < 0) {
-                                 var scrollDelta = topCutLine.top;
-                                 window.scrollBy({ top: scrollDelta, behavior: 'instant' });
+                             var lastLine = lines[lines.length - 1];
+                             var h = window.innerHeight;
+                             if (lastLine.bottom > h) {
+                                 window.scrollBy({ top: lastLine.bottom - h, behavior: 'instant' });
                              }
                          }
                      }
@@ -619,20 +620,29 @@ object ViewerScripts {
                          }
                      } else {
                          var maxScrollX = Math.max(0, document.documentElement.scrollWidth - w);
-                         var reachedScrollEnd = (window.pageXOffset <= -(maxScrollX - 5));
+                         var currentScrollX = Math.abs(window.pageXOffset);
+                         var reachedScrollEnd = (currentScrollX >= (maxScrollX - 10));
 
                          var lines = window.getVisualLines();
                          if (lines.length > 0) {
                              var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
                              if (visibleLines.length > 0) {
-                                 var lastVisible = visibleLines[visibleLines.length - 1]; 
-                                 if (lines.indexOf(lastVisible) === lines.length - 1) {
-                                     var isLastFullyVisible = (lastVisible.left >= -5);
-                                     isAtBottom = isLastFullyVisible;
-                                     if (!isAtBottom && reachedScrollEnd && window._lastScrollX === window.pageXOffset) {
-                                         if (lastVisible.left >= -10) isAtBottom = true;
-                                     }
-                                 }
+                                  var lastVisible = visibleLines[visibleLines.length - 1]; 
+                                  if (lines.indexOf(lastVisible) === lines.length - 1) {
+                                      var isLastFullyVisible = (lastVisible.left >= -5);
+                                      // [중요 로직 변경] 
+                                      // 1. 스크롤 끝(reachedScrollEnd)에 도달했고 + 마지막 줄이 완전히 보일 때만 autoLoadNext
+                                      // 2. 만약 스크롤 여유가 있다면(!reachedScrollEnd), 마지막 줄이 보이더라도 일단 다음 페이지로 넘김을 시도함
+                                      if (reachedScrollEnd && isLastFullyVisible) {
+                                          isAtBottom = true;
+                                      } else {
+                                          isAtBottom = false;
+                                      }
+                                      
+                                      if (!isAtBottom && reachedScrollEnd && window._lastScrollX === window.pageXOffset) {
+                                          if (lastVisible.left >= -10) isAtBottom = true;
+                                      }
+                                  }
                              } else {
                                  isAtBottom = reachedScrollEnd;
                              }
@@ -820,8 +830,10 @@ object ViewerScripts {
             <style>
                 /* 1. 스크롤 방향 강제 및 오버스크롤(튕김) 방지 */
                 html {
-                    width: 100vw !important;
-                    height: 100vh !important;
+                    width: ${if (isVertical) "auto" else "100vw"} !important;
+                    height: ${if (isVertical) "100vh" else "auto"} !important;
+                    min-width: 100vw !important;
+                    min-height: 100vh !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     /* 세로쓰기일 땐 X축만, 가로쓰기일 땐 Y축만 허용 */
@@ -839,6 +851,7 @@ object ViewerScripts {
                 }
             
                  body {
+                     min-width: 100vw !important;
                      min-height: 100vh !important;
                      height: ${if (isVertical) "100vh" else "auto"} !important; /* 가로쓰기 시 auto로 두어야 무한 세로 스크롤 가능 */
                      width: ${if (isVertical) "auto" else "100%"} !important; /* 세로쓰기 시 auto로 두어야 무한 가로 스크롤 가능 */
