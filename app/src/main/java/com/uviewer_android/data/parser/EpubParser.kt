@@ -51,13 +51,17 @@ object EpubParser {
         if (!containerFile.exists()) throw IOException("Invalid EPUB: META-INF/container.xml not found")
         
         val containerDoc = Jsoup.parse(containerFile.inputStream(), "UTF-8", containerFile.absolutePath, Parser.xmlParser())
-        val opfPath = containerDoc.select("rootfile").attr("full-path")
-        if (opfPath.isEmpty()) throw IOException("Invalid EPUB: OPF path not found in container.xml")
+        val opfPathRaw = containerDoc.select("rootfile").attr("full-path")
+        if (opfPathRaw.isEmpty()) throw IOException("Invalid EPUB: OPF path not found in container.xml")
         
-        val opfFile = File(epubRoot, opfPath)
-        val opfDir = opfFile.parentFile ?: epubRoot // Directory containing OPF, relative paths base
+        val opfFile = resolveFile(epubRoot, opfPathRaw)
+        val opfDir = opfFile.parentFile ?: epubRoot
         
-        val opfDoc = Jsoup.parse(opfFile.inputStream(), "UTF-8", opfFile.absolutePath, Parser.xmlParser())
+        val opfDoc = if (opfFile.exists()) {
+            Jsoup.parse(opfFile.inputStream(), "UTF-8", opfFile.absolutePath, Parser.xmlParser())
+        } else {
+            throw IOException("Invalid EPUB: OPF file not found at ${opfFile.absolutePath}")
+        }
         
         // Metadata
         val title = opfDoc.select("metadata > dc|title").text() // Namespace handling tricky in Jsoup select without setup?
@@ -73,43 +77,47 @@ object EpubParser {
 
         // Manifest (id -> href)
         val manifest = mutableMapOf<String, String>()
-        val manifestItems = opfDoc.select("manifest > item")
+        val manifestItems = opfDoc.getElementsByTag("item")
         for (item in manifestItems) {
             val id = item.attr("id")
-            val rawHref = item.attr("href")
-            // URL decode href as they are often encoded in OPF
-            val href = try { java.net.URLDecoder.decode(rawHref, "UTF-8") } catch (e: Exception) { rawHref }
-            manifest[id] = href
+            val href = item.attr("href")
+            if (id.isNotEmpty() && href.isNotEmpty()) {
+                manifest[id] = href
+            }
         }
 
         // Spine (ordered list of ids)
         val spine = mutableListOf<EpubSpineItem>()
-        val spineItems = opfDoc.select("spine > itemref")
+        val spineItems = opfDoc.getElementsByTag("itemref")
         for (itemref in spineItems) {
             val idref = itemref.attr("idref")
-            val href = manifest[idref]
-            if (href != null) {
-                val file = File(opfDir, href)
+            val relativeHref = manifest[idref]
+            if (relativeHref != null) {
+                val file = resolveFile(opfDir, relativeHref)
                 spine.add(EpubSpineItem(href = file.absolutePath, id = idref))
             }
         }
 
         // TOC Parsing (NCX)
-        val ncxId = opfDoc.select("spine").attr("toc")
+        val spineTag = opfDoc.getElementsByTag("spine").first()
+        val ncxId = spineTag?.attr("toc") ?: ""
+        val pageDirection = spineTag?.attr("page-progression-direction") ?: "ltr"
+        
         val ncxHref = manifest[ncxId]
         val tocMap = mutableMapOf<String, String>() // href -> title
         if (ncxHref != null) {
-            val ncxFile = File(opfDir, ncxHref)
+            val ncxFile = resolveFile(opfDir, ncxHref)
             if (ncxFile.exists()) {
                 val ncxDoc = Jsoup.parse(ncxFile.inputStream(), "UTF-8", ncxFile.absolutePath, Parser.xmlParser())
-                val navPoints = ncxDoc.select("navPoint")
+                val navPoints = ncxDoc.getElementsByTag("navPoint")
                 for (point in navPoints) {
                     val label = point.select("navLabel > text").first()?.text()
                     val src = point.select("content").attr("src")
-                    // src might have fragments (#...), strip them for matching href
-                    val cleanSrc = src.substringBefore("#")
-                    if (label != null) {
-                        tocMap[cleanSrc] = label
+                    if (src.isNotEmpty()) {
+                        val cleanSrc = try { java.net.URLDecoder.decode(src, "UTF-8") } catch (e: Exception) { src }.substringBefore("#")
+                        if (label != null) {
+                            tocMap[cleanSrc] = label
+                        }
                     }
                 }
             }
@@ -128,8 +136,36 @@ object EpubParser {
             author = authorText,
             coverPath = null, // TODO: Parse cover logic
             spine = finalSpine,
-            rootDir = epubRoot.absolutePath
+            rootDir = epubRoot.absolutePath,
+            pageProgressionDirection = pageDirection
         )
+    }
+
+    private fun resolveFile(baseDir: File, relativePath: String): File {
+        // 1. Decode URL encoding (e.g. %20 -> space)
+        val decodedPath = try { java.net.URLDecoder.decode(relativePath, "UTF-8") } catch (e: Exception) { relativePath }
+        
+        // 2. Remove leading slashes and fix separators
+        val cleanPath = decodedPath.trimStart('/', '\\').replace('\\', File.separatorChar).replace('/', File.separatorChar)
+        
+        // 3. Try exact match
+        val file = File(baseDir, cleanPath)
+        if (file.exists()) return file
+        
+        // 4. Try case-insensitive matching
+        return findFileCaseInsensitive(baseDir, cleanPath) ?: file
+    }
+
+    private fun findFileCaseInsensitive(parent: File, path: String): File? {
+        val parts = path.split(File.separatorChar).filter { it.isNotEmpty() }
+        var current = parent
+        for (part in parts) {
+            val children = current.listFiles() ?: return null
+            val match = children.find { it.name.equals(part, ignoreCase = true) }
+            if (match == null) return null
+            current = match
+        }
+        return current
     }
 
     /**
@@ -140,7 +176,7 @@ object EpubParser {
     fun extractFlatContent(
         spine: List<EpubSpineItem>,
         isVertical: Boolean = false
-    ): Triple<String, Map<Int, Int>, Map<Int, Int>> {
+    ): Triple<List<String>, Map<Int, Int>, Map<Int, Int>> {
         val allLines = mutableListOf<String>()
         val chapterStartLines = mutableMapOf<Int, Int>() // chapterIndex -> startLine (1-based)
         val chapterLineCounts = mutableMapOf<Int, Int>() // chapterIndex -> lineCount
@@ -164,10 +200,9 @@ object EpubParser {
                         if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
                             // Strip query/fragment
                             val cleanSrc = src.substringBefore("?").substringBefore("#")
-                            val decodedSrc = try { java.net.URLDecoder.decode(cleanSrc, "UTF-8") } catch (e: Exception) { cleanSrc }
-                            val imgFile = File(baseDir, decodedSrc)
+                            val imgFile = if (baseDir != null) resolveFile(baseDir, cleanSrc) else File(cleanSrc)
                             
-                            val encodedPath = imgFile.absolutePath.split(File.separator).joinToString("/") { segment ->
+                            val encodedPath = imgFile.absolutePath.split(File.separatorChar).joinToString("/") { segment ->
                                 if (segment.isEmpty()) "" 
                                 else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                             }
@@ -183,9 +218,8 @@ object EpubParser {
                         var src = img.attr("xlink:href").ifEmpty { img.attr("href") }
                         if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
                             val cleanSrc = src.substringBefore("?").substringBefore("#")
-                            val decodedSrc = try { java.net.URLDecoder.decode(cleanSrc, "UTF-8") } catch (e: Exception) { cleanSrc }
-                            val imgFile = File(baseDir, decodedSrc)
-                            val encodedPath = imgFile.absolutePath.split(File.separator).joinToString("/") { segment ->
+                            val imgFile = if (baseDir != null) resolveFile(baseDir, cleanSrc) else File(cleanSrc)
+                            val encodedPath = imgFile.absolutePath.split(File.separatorChar).joinToString("/") { segment ->
                                 if (segment.isEmpty()) ""
                                 else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                             }
@@ -197,7 +231,8 @@ object EpubParser {
                     }
                 }
 
-                val body = doc.body() ?: continue
+                // Fixed-layout EPUB(만화)의 경우 body 태그가 없거나 Jsoup XML 파서에서 인식되지 않을 수 있음
+                val body = doc.getElementsByTag("body").first() ?: doc.getElementsByTag("html").first() ?: doc
                 val chapterLines = mutableListOf<String>()
 
                 // body를 순회하면서 텍스트, 이미지, 루비만 추출
@@ -222,7 +257,7 @@ object EpubParser {
             }
         }
 
-        return Triple(allLines.joinToString("\n"), chapterStartLines, chapterLineCounts)
+        return Triple(allLines, chapterStartLines, chapterLineCounts)
     }
 
     /**
@@ -440,18 +475,18 @@ object EpubParser {
             for (img in images) {
                 val src = img.attr("src")
                 if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://")) {
-                    val imgFile = File(baseDir, src)
-                    val separator = File.separator
-                    val encodedPath = imgFile.canonicalPath.split(separator).joinToString("/") { segment ->
+                    val imgFile = resolveFile(baseDir, src)
+                    val encodedPath = imgFile.absolutePath.split(File.separatorChar).joinToString("/") { segment ->
                         java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
                     }
                     img.attr("src", "file:///$encodedPath")
                 }
                 
-                // p 태그 안에 div를 넣으면 HTML이 깨지며 빈 p 태그가 생성됨.
-                // 이미지가 단독으로 있는 p/div 라면 태그 자체를 래퍼로 변환.
+                // [수정됨] 래퍼가 이미 있으면 중복 래핑 방지
                 val parent = img.parent()
-                if (parent != null && (parent.tagName() == "p" || parent.tagName() == "div") && parent.text().isBlank() && parent.childrenSize() == 1) {
+                if (parent != null && parent.className() == "image-page-wrapper") {
+                    // Skip
+                } else if (parent != null && (parent.tagName() == "p" || parent.tagName() == "div") && parent.text().isBlank() && parent.childrenSize() == 1) {
                     parent.tagName("div")
                     parent.addClass("image-page-wrapper")
                     parent.removeAttr("style")

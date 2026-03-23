@@ -128,8 +128,7 @@ class DocumentViewerViewModel(
                     if (epubBook != null) {
                         val book = epubBook!!
                         viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                            val (flatText, chapterStarts, _) = EpubParser.extractFlatContent(book.spine, _uiState.value.isVertical)
-                            val flatLines = flatText.split("\n")
+                            val (flatLines, chapterStarts, _) = EpubParser.extractFlatContent(book.spine, _uiState.value.isVertical)
                             epubFlatTextLines = flatLines
                             epubChapterStartLines = chapterStarts
                             val savedLine = _uiState.value.currentLine
@@ -237,52 +236,57 @@ class DocumentViewerViewModel(
 
                     // [핵심 변경] 모든 챕터를 Aozora처럼 플랫 텍스트 파이프라인으로 변환하여 사용
                     viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                        val (flatText, chapterStarts, chapterLineCounts) = EpubParser.extractFlatContent(book.spine, _uiState.value.isVertical)
-                        val flatLines = flatText.split("\n")
-                        epubFlatTextLines = flatLines
-                        epubChapterStartLines = chapterStarts
+                        try {
+                            val (flatLines, chapterStarts, chapterLineCounts) = EpubParser.extractFlatContent(book.spine, _uiState.value.isVertical)
+                            epubFlatTextLines = flatLines
+                            epubChapterStartLines = chapterStarts
 
-                        // savedLine 변환: 기존 챕터*1000000+라인 -> 플랫 라인 번호
-                        val chapterIdx = savedLine / 1000000
-                        val lineInChapter = savedLine % 1000000
-                        val flatStartLine = if (chapterIdx in chapterStarts) {
-                            val chStart = chapterStarts[chapterIdx]!!
-                            val chLinesCount = chapterLineCounts[chapterIdx] ?: 0
-                            // 휴리스틱: lineInChapter가 챕터 길이를 넘어서고 전체 범위 내라면,
-                            // 버그로 인해 글로벌 라인이 저장된 것으로 보고 그대로 사용함.
-                            if (lineInChapter > chLinesCount && lineInChapter >= chStart && lineInChapter <= flatLines.size) {
-                                lineInChapter
+                            // savedLine 변환: 기존 챕터*1000000+라인 -> 플랫 라인 번호
+                            val chapterIdx = savedLine / 1000000
+                            val lineInChapter = savedLine % 1000000
+                            val flatStartLine = if (chapterIdx in chapterStarts) {
+                                val chStart = chapterStarts[chapterIdx]!!
+                                val chLinesCount = chapterLineCounts[chapterIdx] ?: 0
+                                // 휴리스틱: lineInChapter가 챕터 길이를 넘어서고 전체 범위 내라면,
+                                // 버그로 인해 글로벌 라인이 저장된 것으로 보고 그대로 사용함.
+                                if (lineInChapter > chLinesCount && lineInChapter >= chStart && lineInChapter <= flatLines.size) {
+                                    lineInChapter
+                                } else {
+                                    (chStart + lineInChapter - 1).coerceIn(1, flatLines.size)
+                                }
                             } else {
-                                (chStart + lineInChapter - 1).coerceIn(1, flatLines.size)
+                                // chapterIdx가 유효하지 않으면 savedLine을 글로벌 라인으로 취급
+                                savedLine.coerceIn(1, flatLines.size)
                             }
-                        } else {
-                            // chapterIdx가 유효하지 않으면 savedLine을 글로벌 라인으로 취급
-                            savedLine.coerceIn(1, flatLines.size)
-                        }
 
-                        val chunkIdx = (flatStartLine - 1) / LINES_PER_CHUNK
-                        
-                        // 챕터 경계를 이용한 TOC 매핑 (epubChapters의 href를 line-N 형식으로 변경)
-                        val tocChapters = book.spine.mapIndexed { idx, item ->
-                            val startLine = chapterStarts[idx] ?: 1
-                            item.copy(href = "line-$startLine")
-                        }
+                            val chunkIdx = (flatStartLine - 1) / LINES_PER_CHUNK
+                            
+                            // 챕터 경계를 이용한 TOC 매핑 (epubChapters의 href를 line-N 형식으로 변경)
+                            val tocChapters = book.spine.mapIndexed { idx, item ->
+                                val startLine = chapterStarts[idx] ?: 1
+                                item.copy(href = "line-$startLine")
+                            }
 
-                        val currentChIdx = tocChapters.indexOfLast { 
-                            it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= flatStartLine 
-                        }.coerceAtLeast(0)
+                            val currentChIdx = tocChapters.indexOfLast { 
+                                it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= flatStartLine 
+                            }.coerceAtLeast(0)
 
-                        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                            _uiState.value = _uiState.value.copy(
-                                totalLines = flatLines.size,
-                                currentLine = flatStartLine,
-                                currentChapterIndex = currentChIdx,
-                                currentChunkIndex = chunkIdx,
-                                epubChapters = tocChapters
-                            )
-                            loadedStartChunk = chunkIdx
-                            loadedEndChunk = chunkIdx
-                            loadEpubFlatChunk(chunkIdx, updateType = 0)
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(
+                                    totalLines = flatLines.size,
+                                    currentLine = flatStartLine,
+                                    currentChapterIndex = currentChIdx,
+                                    currentChunkIndex = chunkIdx,
+                                    epubChapters = tocChapters
+                                )
+                                loadedStartChunk = chunkIdx
+                                loadedEndChunk = chunkIdx
+                                loadEpubFlatChunk(chunkIdx, updateType = 0)
+                            }
+                        } catch (e: Exception) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                _uiState.value = _uiState.value.copy(isLoading = false, error = "EPUB processing error: ${e.message}")
+                            }
                         }
                     }
                 } else {
@@ -709,10 +713,10 @@ class DocumentViewerViewModel(
                 val lines = flatLines.subList(startLine - 1, endLine)
                 val htmlBody = lines.mapIndexed { index, line ->
                     val lineNum = globalLineOffset + index + 1
-                    val trimmed = line.trimStart()
-                    if (line.isBlank()) {
+                    val trimmed = line.trim()
+                    if (line.isEmpty()) {
                         "<div id=\"line-$lineNum\" class=\"blank-line\"></div>"
-                    } else if (trimmed.startsWith("<img", ignoreCase = true) || trimmed.startsWith("<svg", ignoreCase = true)) {
+                    } else if (trimmed.startsWith("<img", ignoreCase = true) || trimmed.startsWith("<svg", ignoreCase = true) || trimmed.startsWith("<image", ignoreCase = true) || trimmed.startsWith("<figure", ignoreCase = true)) {
                         // 이미지/SVG는 image-page-wrapper로 감싸서 전체 화면 표시
                         "<div id=\"line-$lineNum\" class=\"image-page-wrapper\">$line</div>"
                     } else {

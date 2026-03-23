@@ -5,7 +5,8 @@ data class EpubBook(
     val author: String?,
     val coverPath: String?,
     val spine: List<EpubSpineItem>,
-    val rootDir: String // Absolute path to unzipped EPUB root
+    val rootDir: String, // Absolute path to unzipped EPUB root
+    val pageProgressionDirection: String = "ltr" // "rtl" or "ltr"
 )
 
 data class EpubSpineItem(
