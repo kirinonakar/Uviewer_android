@@ -683,7 +683,7 @@ object ViewerScripts {
                                    }
                                }
                            }
-                           window.scrollBy({ top: Math.max(20, Math.min(scrollDelta - 10, h - 20)), behavior: 'instant' });
+                           window.scrollBy({ top: Math.max(1, Math.min(scrollDelta - 10, h - 20)), behavior: 'instant' }); // [수정] max 20→1: scrollDelta<30 시 강제 20px 스크롤로 줄 건너뛰던 문제 수정
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = -w;
@@ -762,7 +762,7 @@ object ViewerScripts {
                                    }
                                }
                            }
-                           window.scrollBy({ top: Math.max(-h + 20, Math.min(scrollDelta + 10, -20)), behavior: 'instant' });
+                           window.scrollBy({ top: Math.max(-h + 20, Math.min(scrollDelta + 10, -1)), behavior: 'instant' }); // [수정] min -20→-1: 직전 줄이 화면 근처에 있을 때 20px 강제로 건너뛰던 문제 수정
                       } else {
                           var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
                           var scrollDelta = w;
