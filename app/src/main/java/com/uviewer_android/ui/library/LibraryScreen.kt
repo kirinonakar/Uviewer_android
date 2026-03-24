@@ -606,7 +606,20 @@ fun FileItemRow(
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
-                if (!file.isDirectory) {
+                if (isPinnedTab) {
+                    val parentPath = if (file.path.startsWith("server:")) "" else {
+                        try { java.io.File(file.path).parent ?: "" } catch (e: Exception) { "" }
+                    }
+                    if (parentPath.isNotEmpty()) {
+                        Text(
+                            parentPath,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                } else if (!file.isDirectory) {
                     Text(
                         com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
                         style = MaterialTheme.typography.labelSmall
@@ -776,7 +789,22 @@ fun FileItemGridCard(
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
-                if (!file.isDirectory) {
+                if (isPinnedTab) {
+                    val parentPath = if (file.path.startsWith("server:")) "" else {
+                        try { java.io.File(file.path).parent ?: "" } catch (e: Exception) { "" }
+                    }
+                    if (parentPath.isNotEmpty()) {
+                        Text(
+                            parentPath,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else if (!file.isDirectory) {
                     Text(
                         com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
                         style = MaterialTheme.typography.labelSmall,
