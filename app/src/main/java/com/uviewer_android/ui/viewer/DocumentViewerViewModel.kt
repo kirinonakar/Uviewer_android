@@ -576,6 +576,7 @@ class DocumentViewerViewModel(
                             text-align: left !important;
                         }
                         .content-chunk {
+                            display: flow-root !important;
                             overflow-anchor: none !important;
                         }
                         
@@ -753,7 +754,7 @@ class DocumentViewerViewModel(
     }
 
     fun nextChunk() {
-        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && epubFlatTextLines != null
         if (isEpubFlat) {
             val totalLines = epubFlatTextLines!!.size
             if ((loadedEndChunk + 1) * LINES_PER_CHUNK < totalLines) {
@@ -767,7 +768,7 @@ class DocumentViewerViewModel(
     }
     
     fun prevChunk() {
-        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && epubFlatTextLines != null
         if (isEpubFlat) {
             if (loadedStartChunk > 0) {
                 loadedStartChunk--
@@ -1041,6 +1042,7 @@ class DocumentViewerViewModel(
                                 text-align: left !important;
                             }
                             .content-chunk {
+                                display: flow-root !important;
                                 overflow-anchor: none !important;
                             }
                             /* Remove padding for images to make them edge-to-edge */

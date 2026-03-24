@@ -415,7 +415,7 @@ function fixRubySpacing() {
                         overflow-y: ${if (isVertical) "hidden" else "scroll"} !important;
                         overscroll-behavior: none !important;
                         touch-action: ${if (isVertical) "pan-x" else "pan-y"} !important;
-                        overflow-anchor: auto !important;
+                        overflow-anchor: none !important;
                         writing-mode: $writingMode !important;
                         -webkit-writing-mode: $writingMode !important;
                     }
@@ -431,7 +431,7 @@ function fixRubySpacing() {
                         padding: 0 !important;
                         line-height: 1.8;
                         overflow: visible !important;
-                        overflow-anchor: auto !important;
+                        overflow-anchor: none !important;
                         height: 100vh !important;
                         min-height: 100vh !important;
                         width: ${if (isVertical) "auto" else "100%"};
@@ -441,7 +441,7 @@ function fixRubySpacing() {
                         height: auto !important;
                         width: auto !important;
                         margin-top: 0 !important;
-                        margin-bottom: ${if (isVertical) "0" else "0.2em"} !important;
+                        margin-bottom: ${if (isVertical) "0" else "0.5em"} !important;
                         margin-left: ${if (isVertical) "0.3em" else "0"} !important;
                         padding-left: ${if (isVertical) "0" else "${marginEm}em"} !important;
                         padding-right: ${if (isVertical) "0" else "${marginEm}em"} !important;
@@ -450,7 +450,8 @@ function fixRubySpacing() {
                         box-sizing: border-box !important;
                     }
                     .content-chunk {
-                        overflow-anchor: auto !important;
+                        display: flow-root !important;
+                        overflow-anchor: none !important;
                         margin-left: 0 !important;
                     }
 
@@ -593,7 +594,7 @@ function fixRubySpacing() {
                 ${if (isVertical) 
                     """<div id="end-marker" style="display:inline-block; width:1px; height:100vh;"></div>"""
                   else 
-                    """<div style="height: 50vh; width: 100%; clear: both;"></div><div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>"""}
+                    """<div id="viewer-end-spacer" style="height: 50vh; width: 100%; clear: both;"></div><div id="end-marker" style="height: 1px; width: 100%; clear: both;"></div>"""}
             </body>
             </html>
         """.trimIndent()

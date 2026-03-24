@@ -123,6 +123,7 @@ object ViewerScripts {
                           var parser = new DOMParser();
                           var doc = parser.parseFromString(htmlStr, 'text/html');
                           var container = document.body;
+                          var spacer = document.getElementById('viewer-end-spacer');
                           var endMarker = document.getElementById('end-marker');
                           
                           var chunkWrapper = document.createElement('div');
@@ -134,16 +135,9 @@ object ViewerScripts {
                               chunkWrapper.appendChild(node);
                           });
 
-                          // [핵심 수정] display: none 제거. 즉시 화면에 그려 scrollWidth를 확보해야 
-                          // 스페이서를 지웠을 때 스크롤이 뒤로 튕기는(내용 스킵) 현상이 발생하지 않습니다.
-                          if (endMarker) container.insertBefore(chunkWrapper, endMarker);
+                          if (spacer) container.insertBefore(chunkWrapper, spacer);
+                          else if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
-
-                          // 새 내용이 DOM에 완벽히 추가된 직후에 스페이서를 제거하여 스크롤 유지
-                          var spacer = document.getElementById('viewer-end-spacer');
-                          if (spacer) {
-                              spacer.parentNode.removeChild(spacer);
-                          }
 
                           setTimeout(function() {
                               window.enforceChunkLimit(true);
@@ -249,7 +243,7 @@ object ViewerScripts {
 
                   window.enforceChunkLimit = function(isNext) {
                       var chunks = document.getElementsByClassName('content-chunk');
-                      if (chunks.length > 4) { 
+                      if (chunks.length > window.MAX_CHUNKS) { 
                           if (isNext) {
                               var firstChunk = chunks[0];
                               var r = firstChunk.getBoundingClientRect();
