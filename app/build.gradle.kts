@@ -17,10 +17,15 @@ android {
         applicationId = "com.uviewer_android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 20
-        versionName = "1.2.0"
+        versionCode = 21
+        versionName = "1.2.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk {
+            // Select only necessary architectures to reduce APK size
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
