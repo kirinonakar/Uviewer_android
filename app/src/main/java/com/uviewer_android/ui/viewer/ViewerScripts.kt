@@ -84,8 +84,6 @@ object ViewerScripts {
                           var distToStart = Math.abs(window.pageXOffset);            
 
                           if (distToEnd <= preloadMarginX) {
-                              // [수정] 백그라운드 이어붙이기가 지원될 때만 호출. 
-                              // 일반 autoLoadNext를 호출하면 남은 내용을 무시하고 강제 페이지 전환을 해버립니다.
                               if(Android.autoLoadNextBg) {
                                   window.isScrolling = true; 
                                   Android.autoLoadNextBg();
@@ -281,7 +279,6 @@ object ViewerScripts {
                      var points = [];
                      
                      if (isVertical) {
-                         // 세로모드: 오른쪽에서 왼쪽으로 검색 범위를 넓힘 (패딩/마진 등으로 인한 미검출 방지)
                          var offsetsX = [10, 30, 60, 100, 150, 200]; 
                          var offsetsY = [0.1, 0.25, 0.5, 0.75, 0.9];
                          for (var i = 0; i < offsetsX.length; i++) {
@@ -292,7 +289,6 @@ object ViewerScripts {
                              }
                          }
                      } else {
-                         // 가로모드: 상단에서 하단으로 검색
                          var offsetsY = [10, 30, 60, 100];
                          var offsetsX = [0.1, 0.25, 0.5, 0.75, 0.9];
                          for (var i = 0; i < offsetsY.length; i++) {
@@ -521,24 +517,20 @@ object ViewerScripts {
                            var textVisible = visible.filter(function(l) { return !l.isImageWrapper; });
                            var imageVisible = visible.filter(function(l) { return l.isImageWrapper; });
                            
-                           // [수정] "완전하게 보이는 맨 마지막 줄(맨 왼쪽)" 기준 마스킹
                            var fullyVisibleText = textVisible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
                            if (fullyVisibleText.length > 0) {
                                var lastFull = fullyVisibleText[fullyVisibleText.length - 1];
-                               // 이 줄보다 왼쪽에 걸쳐있는 줄이 있는지 확인
                                var cutLeft = textVisible.filter(function(l) { return l.left < lastFull.left - 2; });
                                if (cutLeft.length > 0) {
                                    masks.left = Math.ceil(lastFull.left);
                                }
                                
-                               // [추가] 오른쪽(시작부분)도 마찬가지로 잘린게 있으면 가려줌 (pageUp 대응)
                                var firstFull = fullyVisibleText[0];
                                var cutRight = textVisible.filter(function(l) { return l.right > firstFull.right + 2; });
                                if (cutRight.length > 0) {
                                    masks.right = Math.ceil(w - firstFull.right);
                                }
                            } else if (textVisible.length > 0) {
-                               // 화면에 꽉 차는 긴 한 줄만 있는 경우
                                var theLine = textVisible[0];
                                if (theLine.left < 0) masks.left = 0;
                                if (theLine.right > w) masks.right = 0;
@@ -549,11 +541,7 @@ object ViewerScripts {
                                if (img.right > w - masks.right) masks.right = Math.max(0, Math.floor(w - img.right));
                            });
                        }
-                        if (!isVertical) {
-                            // 가로모드에서는 항상 잘린 줄을 가려야 하므로 스크롤 방향에 따른 강제 마스크 해제 제거
-                            // if (window._scrollDir === 1) { masks.top = 0; }
-                            // if (window._scrollDir === -1) { masks.bottom = 0; }
-                        } else {
+                       if (isVertical) {
                            if (window._scrollDir === 1) {
                                masks.right = 0; 
                            }
@@ -579,8 +567,6 @@ object ViewerScripts {
                          var w = document.documentElement.clientWidth;
                          var lines = window.getVisualLines();
                          if (lines.length > 0) {
-                             // vertical-rl에서 '끝'은 가장 왼쪽 줄입니다.
-                             // getVisualLines는 b.right - a.right로 정렬하므로, lines[lines.length-1]이 가장 왼쪽 줄입니다.
                              var lastLine = lines[lines.length - 1];
                              if (lastLine.left < 0) {
                                  window.scrollBy({ left: lastLine.left, behavior: 'instant' });
@@ -604,10 +590,10 @@ object ViewerScripts {
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtBottom = false;
+                     var lines = window.getVisualLines(); // 1번만 호출하여 재사용
 
                      if (!isVertical) {
                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
-                         var lines = window.getVisualLines();
                          if (lines.length > 0) {
                              var lastVisible = lines.filter(function(l) { return l.bottom > -2 && l.top < h + 2; }).pop();
                              if (lastVisible && lines.indexOf(lastVisible) === lines.length - 1) isAtBottom = true;
@@ -617,16 +603,12 @@ object ViewerScripts {
                          var currentScrollX = Math.abs(window.pageXOffset);
                          var reachedScrollEnd = (currentScrollX >= (maxScrollX - 10));
 
-                         var lines = window.getVisualLines();
                          if (lines.length > 0) {
                              var visibleLines = lines.filter(function(l) { return l.left < w && l.right > 0; });
                              if (visibleLines.length > 0) {
                                   var lastVisible = visibleLines[visibleLines.length - 1]; 
                                   if (lines.indexOf(lastVisible) === lines.length - 1) {
                                       var isLastFullyVisible = (lastVisible.left >= -5);
-                                      // [중요 로직 변경] 
-                                      // 1. 스크롤 끝(reachedScrollEnd)에 도달했고 + 마지막 줄이 완전히 보일 때만 autoLoadNext
-                                      // 2. 만약 스크롤 여유가 있다면(!reachedScrollEnd), 마지막 줄이 보이더라도 일단 다음 페이지로 넘김을 시도함
                                       if (reachedScrollEnd && isLastFullyVisible) {
                                           isAtBottom = true;
                                       } else {
@@ -647,59 +629,51 @@ object ViewerScripts {
 
                      if (isAtBottom) { window.isScrolling = true; Android.autoLoadNext(); return; }
                      
-                       var lines = window.getVisualLines();
-                       if (!isVertical) {
-                           var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
-                           var scrollDelta = h;
-                           if (visible.length > 0) {
-                               // 완전히 보이는 줄만 별도로 필터 (상하 모두 화면 안에 있는 줄)
-                               // [수정] mask 판정 범위와 동일하게 -1, +1px 기준으로 조정하여 잘린 줄이 다음 페이지에 확실히 포함되게 함
-                               var fullyVisible = visible.filter(function(l) { return l.top >= -1 && l.bottom <= h + 1; });
-                               if (fullyVisible.length > 0) {
-                                   var lastFull = fullyVisible[fullyVisible.length - 1];
-                                   var idx = lines.indexOf(lastFull);
-                                   if (idx >= 0 && idx < lines.length - 1) {
-                                       // 다음 줄의 top을 기준으로 스크롤 (idx + 1)
-                                       // [개선] 만약 idx+1번 줄이 이전 줄과 너무 가까우면(중복 느낌 방지) 그 다음줄로 갈 수도 있지만,
-                                       // 기본적으로는 idx+1이 맞습니다.
-                                       scrollDelta = lines[idx + 1].top;
-                                   } else {
-                                       // 마지막 줄이 완전히 보인다 = 끝에 도달 (autoLoadNext에서 이미 처리)
-                                       scrollDelta = h;
-                                   }
-                               } else {
-                                   // 화면에 완전히 보이는 줄이 하나도 없는 경우 (큰 요소가 화면을 덮고 있는 경우)
-                                   var last = visible[visible.length - 1];
-                                   if (last.top > 10) {
-                                       scrollDelta = last.top;
-                                   } else {
-                                       scrollDelta = h - 40;
-                                   }
-                               }
-                           }
-                           window.scrollBy({ top: Math.max(1, Math.min(scrollDelta - 10, h - 20)), behavior: 'instant' }); // [수정] max 20→1: scrollDelta<30 시 강제 20px 스크롤로 줄 건너뛰던 문제 수정
-                      } else {
-                          var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
-                          var scrollDelta = -w;
-                          if (visible.length > 0) {
-                              var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
-                              if (fullyVisible.length > 0) {
-                                  var lastFull = fullyVisible[fullyVisible.length - 1];
-                                  scrollDelta = lastFull.left - w;
-                              } else {
-                                  // 화면에 꽉 찬 긴 한 줄인 경우
-                                  var last = visible[visible.length - 1]; 
-                                  if (last.left < 2) {
-                                      if (last.right < w - 10) {
-                                          scrollDelta = last.right - w;
-                                      } else {
-                                          scrollDelta = -(w - 40);
-                                      }
-                                  }
-                              }
-                          }
-                          window.scrollBy({ left: Math.min(-20, Math.max(scrollDelta, -w)), behavior: 'instant' });
-                      }
+                     if (!isVertical) {
+                         var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                         var scrollDelta = h;
+                         if (visible.length > 0) {
+                             // [수정] mask 판정 범위(0.1)에 맞게 기준 강화
+                             var fullyVisible = visible.filter(function(l) { return l.top >= -0.1 && l.bottom <= h + 0.1; });
+                             if (fullyVisible.length > 0) {
+                                 var lastFull = fullyVisible[fullyVisible.length - 1];
+                                 var idx = lines.indexOf(lastFull);
+                                 if (idx >= 0 && idx < lines.length - 1) {
+                                     scrollDelta = lines[idx + 1].top;
+                                 } else {
+                                     scrollDelta = h;
+                                 }
+                             } else {
+                                 var last = visible[visible.length - 1];
+                                 if (last.top > 10) {
+                                     scrollDelta = last.top;
+                                 } else {
+                                     scrollDelta = h - 40;
+                                 }
+                             }
+                         }
+                         window.scrollBy({ top: Math.max(1, Math.min(scrollDelta - 10, h - 20)), behavior: 'instant' }); 
+                     } else {
+                         var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
+                         var scrollDelta = -w;
+                         if (visible.length > 0) {
+                             var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
+                             if (fullyVisible.length > 0) {
+                                 var lastFull = fullyVisible[fullyVisible.length - 1];
+                                 scrollDelta = lastFull.left - w;
+                             } else {
+                                 var last = visible[visible.length - 1]; 
+                                 if (last.left < 2) {
+                                     if (last.right < w - 10) {
+                                         scrollDelta = last.right - w;
+                                     } else {
+                                         scrollDelta = -(w - 40);
+                                     }
+                                 }
+                             }
+                         }
+                         window.scrollBy({ left: Math.min(-20, Math.max(scrollDelta, -w)), behavior: 'instant' });
+                     }
                      window.detectAndReportLine(); window.updateMask();
                      window._lastScrollX = window.pageXOffset;
                  };
@@ -709,17 +683,16 @@ object ViewerScripts {
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtTop = false;
+                     var lines = window.getVisualLines(); // 1번만 호출하여 재사용
                      
                      if (!isVertical) { 
                          if (window.pageYOffset <= 20) isAtTop = true;
-                         var lines = window.getVisualLines();
                          if (lines.length > 0) {
                              var firstVisible = lines.find(function(l) { return l.bottom > -2 && l.top < h + 2; });
                              if (firstVisible && lines.indexOf(firstVisible) === 0) isAtTop = true;
                          }
                      } else { 
                          if (window.pageXOffset >= -5) isAtTop = true; 
-                         var lines = window.getVisualLines();
                          if (lines.length > 0) {
                              var firstLine = lines[0];
                              var isFirstFullyVisible = (firstLine.right <= w + 5) || ((firstLine.right - firstLine.left) >= w - 10);
@@ -729,59 +702,51 @@ object ViewerScripts {
 
                      if (isAtTop) { window.isScrolling = true; Android.autoLoadPrev(); return; }
 
-                      var lines = window.getVisualLines();
-                      if (!isVertical) {
-                          var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
-                          var scrollDelta = -h;
-                          if (visible.length > 0) {
-                               // 완전히 보이는 줄만 별도로 필터
-                               var fullyVisible = visible.filter(function(l) { return l.top >= -1 && l.bottom <= h + 1; });
-                               if (fullyVisible.length > 0) {
-                                   var firstFull = fullyVisible[0];
-                                   var idx = lines.indexOf(firstFull);
-                                   if (idx > 0) {
-                                       // 이전 줄의 bottom을 화면 하단에 맞추도록 스크롤
-                                       scrollDelta = lines[idx - 1].bottom - h;
-                                   } else {
-                                       // 첫 줄이 완전히 보인다 = 맨 위에 도달 (autoLoadPrev에서 이미 처리)
-                                       scrollDelta = -h;
-                                   }
-                               } else {
-                                   // 화면에 완전히 보이는 줄이 하나도 없는 경우 (큰 요소가 화면을 덮고 있는 경우)
-                                   var first = visible[0];
-                                   if (first.bottom < h - 10) {
-                                       scrollDelta = first.bottom - h;
-                                   } else {
-                                       scrollDelta = -(h - 40);
-                                   }
-                               }
-                           }
-                           window.scrollBy({ top: Math.max(-h + 20, Math.min(scrollDelta + 10, -1)), behavior: 'instant' }); // [수정] min -20→-1: 직전 줄이 화면 근처에 있을 때 20px 강제로 건너뛰던 문제 수정
-                      } else {
-                          var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
-                          var scrollDelta = w;
-                          if (visible.length > 0) {
-                              var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
-                              if (fullyVisible.length > 0) {
-                                  var firstFull = fullyVisible[0];
-                                  scrollDelta = firstFull.right; // 첫 줄의 오른쪽 끝을 화면 왼쪽 끝(w)으로 보내야 하는데... 
-                                  // 아, RL 모드에서는 w가 오른쪽 끝입니다. 
-                                  // pageUp은 오른쪽(과거)으로 이동하는 것입니다. 
-                                  // 현재 화면의 첫 줄(맨 오른쪽 줄)인 firstFull.right를 화면 왼쪽 끝(0)에 맞추면 한 페이지 이동임.
-                                  scrollDelta = firstFull.right; 
-                              } else {
-                                  var first = visible[0];
-                                  if (first.right > w + 2) {
-                                      if (first.left > 10) {
-                                          scrollDelta = first.left;
-                                      } else {
-                                          scrollDelta = w - 40;
-                                      }
-                                  }
-                              }
-                          }
-                          window.scrollBy({ left: Math.min(w, Math.max(scrollDelta, 20)), behavior: 'instant' });
-                      }
+                     if (!isVertical) {
+                         var visible = lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                         var scrollDelta = -h;
+                         if (visible.length > 0) {
+                             // [수정] mask 판정 범위(0.1)에 맞게 기준 강화
+                             var fullyVisible = visible.filter(function(l) { return l.top >= -0.1 && l.bottom <= h + 0.1; });
+                             if (fullyVisible.length > 0) {
+                                 var firstFull = fullyVisible[0];
+                                 var idx = lines.indexOf(firstFull);
+                                 if (idx > 0) {
+                                     scrollDelta = lines[idx - 1].bottom - h;
+                                 } else {
+                                     scrollDelta = -h;
+                                 }
+                             } else {
+                                 var first = visible[0];
+                                 if (first.bottom < h - 10) {
+                                     scrollDelta = first.bottom - h;
+                                 } else {
+                                     scrollDelta = -(h - 40);
+                                 }
+                             }
+                         }
+                         window.scrollBy({ top: Math.max(-h + 20, Math.min(scrollDelta + 10, -1)), behavior: 'instant' }); 
+                     } else {
+                         var visible = lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
+                         var scrollDelta = w;
+                         if (visible.length > 0) {
+                             var fullyVisible = visible.filter(function(l) { return l.left >= -2 && l.right <= w + 2; });
+                             if (fullyVisible.length > 0) {
+                                 var firstFull = fullyVisible[0];
+                                 scrollDelta = firstFull.right; 
+                             } else {
+                                 var first = visible[0];
+                                 if (first.right > w + 2) {
+                                     if (first.left > 10) {
+                                         scrollDelta = first.left;
+                                     } else {
+                                         scrollDelta = w - 40;
+                                     }
+                                 }
+                             }
+                         }
+                         window.scrollBy({ left: Math.min(w, Math.max(scrollDelta, 20)), behavior: 'instant' });
+                     }
                      window.detectAndReportLine(); window.updateMask();
                  };
 
@@ -811,7 +776,6 @@ object ViewerScripts {
         """.trimIndent()
     }
 
-    // getStyleSheet() 부분은 이전과 완전히 동일하게 유지하시면 됩니다. (생략 없이 기존 코드 그대로 사용)
     fun getStyleSheet(
         isVertical: Boolean,
         bgColor: String,
@@ -960,7 +924,7 @@ object ViewerScripts {
                      display: block !important;
                  }
                .tcy { text-combine-upright: all !important; -webkit-text-combine: horizontal !important; }
-</style>
+            </style>
         """.trimIndent()
     }
 }
