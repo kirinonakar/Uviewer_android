@@ -61,7 +61,7 @@ object AozoraParser {
 
         // Aozora 및 Narou 스타일 태그 패턴 정의
         // 여러번 시작 태그가 나오면 마지막 것만 유효하게 처리하는 로직은 아래 markedText 블록에 있음
-        val boldStartPattern = "［＃(?:여기서 태그 시작|ここから太字)］"
+        val boldStartPattern = "［＃(?:여기서 태그 시작|ここから太字|太字)］"
         val boldEndPattern = "［＃(?:여기서 태그 끝|ここで太字終わり|太字終わり)］"
         
         // DOT_MATCHES_ALL을 사용하여 줄바꿈이 있어도 태그 사이를 매칭
@@ -278,9 +278,11 @@ object AozoraParser {
         val titles = mutableListOf<Pair<String, Int>>()
         val lines = text.split(Regex("\\r?\\n|\\r"))
         val pattern = Regex("［＃[大中小]見出し］(.+?)［＃[大中小]見出し終わり］")
+        val tagStripRegex = Regex("［＃.+?］|《.+?》|[｜｜|]")
         lines.forEachIndexed { index, line ->
             pattern.find(line)?.let {
-                titles.add(it.groupValues[1] to (index + lineOffset + 1))
+                val cleanTitle = it.groupValues[1].replace(tagStripRegex, "").trim()
+                titles.add(cleanTitle to (index + lineOffset + 1))
             }
         }
         return titles
