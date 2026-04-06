@@ -1,6 +1,7 @@
 # Gradle files
 .gradle/
 build/
+.agents/
 
 # Baseline Profiles (Generated metadata)
 *.dm
