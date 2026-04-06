@@ -263,7 +263,7 @@ enum class ViewMode {
                         } else if (isWebDav && serverId != null) {
                             // Non-ZIP Archive on WebDAV (RAR, 7Z)
                             val context = getApplication<Application>()
-                            val cacheDir = context.cacheDir
+                            val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                             val archiveExt = filePath.substringAfterLast('.').lowercase()
                             
                             // Stable cache key for this server and file path
@@ -367,7 +367,7 @@ enum class ViewMode {
                         } else {
                             // Local Zip logic
                             val context = getApplication<Application>()
-                            val cacheDir = context.cacheDir
+                            val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                             val zipFile = File(filePath)
                             val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
                             

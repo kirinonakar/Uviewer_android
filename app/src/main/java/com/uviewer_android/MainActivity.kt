@@ -168,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                 
                 // Fallback: Copy to temp file if path not found (common for some providers)
                 val fileName = getFileName(uri) ?: "temp_file"
-                val tempFile = java.io.File(cacheDir, fileName)
+                val tempFile = java.io.File(getExternalFilesDir("cache") ?: cacheDir, fileName)
                 contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output ->
                         input.copyTo(output)

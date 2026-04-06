@@ -60,7 +60,7 @@ class PdfViewerViewModel(
 
             try {
                 val localFile = if (isWebDav && serverId != null) {
-                    val cacheDir = getApplication<Application>().cacheDir
+                    val cacheDir = getApplication<Application>().getExternalFilesDir("cache") ?: getApplication<Application>().cacheDir
                     val tempFile = File(cacheDir, "temp_" + File(filePath).name)
                     
                     if (tempFile.exists()) {

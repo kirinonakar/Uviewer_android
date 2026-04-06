@@ -160,7 +160,10 @@ class SettingsViewModel(
 
     private fun calculateCacheSize(): Long {
         val context = getApplication<Application>()
-        return dirSize(context.cacheDir) + dirSize(context.externalCacheDir ?: context.cacheDir)
+        var size = dirSize(context.cacheDir)
+        context.externalCacheDir?.let { size += dirSize(it) }
+        context.getExternalFilesDir("cache")?.let { size += dirSize(it) }
+        return size
     }
 
     private fun dirSize(dir: File): Long {
@@ -174,6 +177,7 @@ class SettingsViewModel(
             val context = getApplication<Application>()
             context.cacheDir.deleteRecursively()
             context.externalCacheDir?.deleteRecursively()
+            context.getExternalFilesDir("cache")?.deleteRecursively()
             updateCacheSize()
         }
     }

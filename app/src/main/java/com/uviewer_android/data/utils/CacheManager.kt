@@ -28,6 +28,7 @@ class CacheManager(
         
         collectTopItems(context.cacheDir)
         context.externalCacheDir?.let { collectTopItems(it) }
+        context.getExternalFilesDir("cache")?.let { collectTopItems(it) }
         
         var currentSize = calculateCurrentSize(cacheItems)
         

@@ -129,7 +129,7 @@ object ViewerScripts {
                           chunkWrapper.dataset.index = chunkIndex;
                           
                           Array.from(doc.body.childNodes).forEach(function(node) {
-                              if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                              if (node.id === 'end-marker' || node.id === 'viewer-end-spacer' || node.id === 'start-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
                           });
 
@@ -165,7 +165,7 @@ object ViewerScripts {
                           chunkWrapper.dataset.index = chunkIndex;
                           
                           Array.from(doc.body.childNodes).forEach(function(node) {
-                              if (node.id === 'start-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                              if (node.id === 'start-marker' || node.id === 'end-marker' || node.id === 'viewer-end-spacer' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
                           });
 
@@ -217,7 +217,7 @@ object ViewerScripts {
                           chunkWrapper.dataset.index = chunkIndex;
 
                           Array.from(doc.body.childNodes).forEach(function(node) {
-                              if (node.id === 'end-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
+                              if (node.id === 'end-marker' || node.id === 'viewer-end-spacer' || node.id === 'start-marker' || node.tagName === 'SCRIPT' || node.tagName === 'STYLE') return;
                               chunkWrapper.appendChild(node);
                           });
 

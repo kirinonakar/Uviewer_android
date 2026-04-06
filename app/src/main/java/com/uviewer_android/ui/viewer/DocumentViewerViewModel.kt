@@ -194,7 +194,7 @@ class DocumentViewerViewModel(
                 if (type == FileEntry.FileType.EPUB) {
                     val epubFile = if (isWebDav && serverId != null) {
                          val context = getApplication<Application>()
-                         val cacheDir = context.cacheDir
+                         val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                          val tempFile = File(cacheDir, "temp_" + File(filePath).name)
                          
                          if (tempFile.exists()) {
@@ -211,7 +211,7 @@ class DocumentViewerViewModel(
                     
                     // Unzip EPUB
                     val context = getApplication<Application>()
-                    val cacheDir = context.cacheDir
+                    val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                     val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
                     val successFile = File(unzipDir, ".unzip_success")
                     
@@ -293,7 +293,7 @@ class DocumentViewerViewModel(
                     // Text / HTML / CSV
                     val file = if (isWebDav && serverId != null) {
                          val context = getApplication<Application>()
-                         val cacheDir = context.cacheDir
+                         val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                          val tempFile = File(cacheDir, "temp_" + File(filePath).name)
                          
                          if (tempFile.exists()) {
@@ -1381,7 +1381,7 @@ private fun convertMarkdownToHtml(md: String): String {
             if (serverId != null && parentPath != null) {
                 // WebDAV resolution
                 val context = getApplication<Application>()
-                val cacheBase = File(context.cacheDir, "webdav_img_cache/$serverId")
+                val cacheBase = File(context.getExternalFilesDir("cache") ?: context.cacheDir, "webdav_img_cache/$serverId")
                 if (!cacheBase.exists()) cacheBase.mkdirs()
                 
                 // If it's already an encoded path from AozoraParser, we should decode it first
