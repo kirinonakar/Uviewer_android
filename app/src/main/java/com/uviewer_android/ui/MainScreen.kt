@@ -35,6 +35,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.WindowInsets
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -148,11 +149,12 @@ fun MainScreen(
                         .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
                         .navigationBarsPadding(),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                    tonalElevation = 8.dp,
+                    color = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
                     shadowElevation = 4.dp
                 ) {
                     NavigationBar(
+                        windowInsets = WindowInsets(0),
                         containerColor = Color.Transparent,
                         modifier = Modifier.height(64.dp),
                         tonalElevation = 0.dp

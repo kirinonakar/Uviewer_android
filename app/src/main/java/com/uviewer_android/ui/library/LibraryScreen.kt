@@ -115,11 +115,12 @@ fun LibraryScreen(
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                tonalElevation = 8.dp,
+                color = MaterialTheme.colorScheme.background,
+                tonalElevation = 0.dp,
                 shadowElevation = 4.dp
             ) {
                 TopAppBar(
+                    windowInsets = WindowInsets(0),
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                         scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
@@ -211,7 +212,8 @@ fun LibraryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                color = MaterialTheme.colorScheme.background,
+                tonalElevation = 0.dp
             ) {
                 SecondaryTabRow(
                     selectedTabIndex = selectedTab,

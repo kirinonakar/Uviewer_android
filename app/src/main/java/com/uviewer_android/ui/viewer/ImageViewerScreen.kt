@@ -10,6 +10,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -306,11 +307,12 @@ fun ImageViewerScreen(
                                 .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                                 .fillMaxWidth(),
                             shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                            tonalElevation = 8.dp,
+                            color = MaterialTheme.colorScheme.background,
+                            tonalElevation = 0.dp,
                             shadowElevation = 4.dp
                         ) {
                             TopAppBar(
+                                windowInsets = WindowInsets(0),
                                 colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = androidx.compose.ui.graphics.Color.Transparent,
                                     scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent

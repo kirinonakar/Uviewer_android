@@ -6,6 +6,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.core.graphics.ColorUtils
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -337,11 +338,12 @@ fun DocumentViewerScreen(
                             .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                        tonalElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
                         shadowElevation = 4.dp
                     ) {
                         TopAppBar(
+                            windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = androidx.compose.ui.graphics.Color.Transparent,
                                 scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
@@ -453,8 +455,8 @@ fun DocumentViewerScreen(
                             .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-                        tonalElevation = 8.dp,
+                        color = MaterialTheme.colorScheme.background,
+                        tonalElevation = 0.dp,
                         shadowElevation = 4.dp
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
