@@ -91,294 +91,302 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .padding(bottom = 16.dp) // Extra bottom space
         ) {
             item {
-                Text(
-                    text = stringResource(R.string.section_appearance),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            item {
-                val themeLabel = when (themeMode) {
-                    UserPreferencesRepository.THEME_LIGHT -> stringResource(R.string.theme_light)
-                    UserPreferencesRepository.THEME_DARK -> stringResource(R.string.theme_dark)
-                    else -> stringResource(R.string.theme_system)
+                SettingsGroup(title = stringResource(R.string.section_appearance)) {
+                    val themeLabel = when (themeMode) {
+                        UserPreferencesRepository.THEME_LIGHT -> stringResource(R.string.theme_light)
+                        UserPreferencesRepository.THEME_DARK -> stringResource(R.string.theme_dark)
+                        else -> stringResource(R.string.theme_system)
+                    }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.theme)) },
+                        supportingContent = { Text(themeLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showThemeDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val languageLabel = when (language) {
+                        UserPreferencesRepository.LANG_EN -> stringResource(R.string.lang_en)
+                        UserPreferencesRepository.LANG_KO -> stringResource(R.string.lang_ko)
+                        UserPreferencesRepository.LANG_JA -> stringResource(R.string.lang_ja)
+                        else -> stringResource(R.string.lang_system)
+                    }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.language)) },
+                        supportingContent = { Text(languageLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLanguageDialog = true }
+                    )
                 }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.theme)) },
-                    supportingContent = { Text(themeLabel) },
-                    modifier = Modifier.clickable { showThemeDialog = true }
-                )
             }
-            item {
-                val languageLabel = when (language) {
-                    UserPreferencesRepository.LANG_EN -> stringResource(R.string.lang_en)
-                    UserPreferencesRepository.LANG_KO -> stringResource(R.string.lang_ko)
-                    UserPreferencesRepository.LANG_JA -> stringResource(R.string.lang_ja)
-                    else -> stringResource(R.string.lang_system)
-                }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.language)) },
-                    supportingContent = { Text(languageLabel) },
-                    modifier = Modifier.clickable { showLanguageDialog = true }
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.section_reading),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            item {
-                val docBgLabel = when (docBackgroundColor) {
-                    UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
-                    UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
-                    UserPreferencesRepository.DOC_BG_DARK -> stringResource(R.string.doc_bg_dark)
-                    UserPreferencesRepository.DOC_BG_COMFORT -> stringResource(R.string.doc_bg_comfort)
-                    UserPreferencesRepository.DOC_BG_CUSTOM -> stringResource(R.string.doc_bg_custom)
-                    else -> stringResource(R.string.doc_bg_white)
-                }
 
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.document_background)) },
-                    supportingContent = { Text(docBgLabel) },
-                    modifier = Modifier.clickable { showDocBgDialog = true }
-                )
+            item {
+                SettingsGroup(title = stringResource(R.string.section_reading)) {
+                    val docBgLabel = when (docBackgroundColor) {
+                        UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
+                        UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
+                        UserPreferencesRepository.DOC_BG_DARK -> stringResource(R.string.doc_bg_dark)
+                        UserPreferencesRepository.DOC_BG_COMFORT -> stringResource(R.string.doc_bg_comfort)
+                        UserPreferencesRepository.DOC_BG_CUSTOM -> stringResource(R.string.doc_bg_custom)
+                        else -> stringResource(R.string.doc_bg_white)
+                    }
 
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.document_background)) },
+                        supportingContent = { Text(docBgLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showDocBgDialog = true }
+                    )
 
-                var showCustomColorDialog by remember { mutableStateOf(false) }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.manual_color_picker)) },
-                    supportingContent = { Text("${stringResource(R.string.background_color)}: $customDocBackgroundColor, ${stringResource(R.string.text_color)}: $customDocTextColor") },
-                    trailingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
-                    modifier = Modifier.clickable { showCustomColorDialog = true }
-                )
-                
-                if (showCustomColorDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showCustomColorDialog = false },
-                        shape = RoundedCornerShape(28.dp),
-                        title = { Text(stringResource(R.string.manual_color_picker)) },
-                        text = {
-                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                Text(stringResource(R.string.text_color), style = MaterialTheme.typography.labelMedium)
-                                HSLColorPicker(
-                                    initialColor = customDocTextColor,
-                                    onColorChanged = { viewModel.setCustomDocTextColor(it) }
-                                )
-                                
-                                Text(stringResource(R.string.background_color), style = MaterialTheme.typography.labelMedium)
-                                HSLColorPicker(
-                                    initialColor = customDocBackgroundColor,
-                                    onColorChanged = { viewModel.setCustomDocBackgroundColor(it) }
-                                )
-                                
-                                Spacer(Modifier.height(8.dp))
-                                Text("Preview:", style = MaterialTheme.typography.labelMedium)
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(60.dp)
-                                        .background(
-                                            try { Color(android.graphics.Color.parseColor(customDocBackgroundColor)) } catch (e: Exception) { Color.White },
-                                            shape = MaterialTheme.shapes.small
-                                        )
-                                        .padding(8.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        "Sample Text",
-                                        color = try { Color(android.graphics.Color.parseColor(customDocTextColor)) } catch (e: Exception) { Color.Black }
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    
+                    var showCustomColorDialog by remember { mutableStateOf(false) }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.manual_color_picker)) },
+                        supportingContent = { Text("${stringResource(R.string.background_color)}: $customDocBackgroundColor, ${stringResource(R.string.text_color)}: $customDocTextColor") },
+                        trailingContent = { Icon(Icons.Default.Palette, contentDescription = null) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showCustomColorDialog = true }
+                    )
+                    
+                    if (showCustomColorDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showCustomColorDialog = false },
+                            shape = RoundedCornerShape(28.dp),
+                            title = { Text(stringResource(R.string.manual_color_picker)) },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Text(stringResource(R.string.text_color), style = MaterialTheme.typography.labelMedium)
+                                    HSLColorPicker(
+                                        initialColor = customDocTextColor,
+                                        onColorChanged = { viewModel.setCustomDocTextColor(it) }
                                     )
+                                    
+                                    Text(stringResource(R.string.background_color), style = MaterialTheme.typography.labelMedium)
+                                    HSLColorPicker(
+                                        initialColor = customDocBackgroundColor,
+                                        onColorChanged = { viewModel.setCustomDocBackgroundColor(it) }
+                                    )
+                                    
+                                    Spacer(Modifier.height(8.dp))
+                                    Text("Preview:", style = MaterialTheme.typography.labelMedium)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(60.dp)
+                                            .background(
+                                                try { Color(android.graphics.Color.parseColor(customDocBackgroundColor)) } catch (e: Exception) { Color.White },
+                                                shape = MaterialTheme.shapes.small
+                                            )
+                                            .padding(8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "Sample Text",
+                                            color = try { Color(android.graphics.Color.parseColor(customDocTextColor)) } catch (e: Exception) { Color.Black }
+                                        )
+                                    }
                                 }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showCustomColorDialog = false }) { Text(stringResource(R.string.confirm)) }
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(stringResource(R.string.font_size_fmt, fontSize), style = MaterialTheme.typography.bodyMedium)
+                        val fontSizeInteractionSource = remember { MutableInteractionSource() }
+                        Slider(
+                            value = fontSize.toFloat(),
+                            onValueChange = { viewModel.setFontSize(it.toInt()) },
+                            valueRange = 12f..36f,
+                            thumb = {
+                                SliderDefaults.Thumb(
+                                    interactionSource = fontSizeInteractionSource,
+                                    thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                )
+                            },
+                            track = { sliderState ->
+                                SliderDefaults.Track(
+                                    sliderState = sliderState,
+                                    modifier = Modifier.height(4.dp),
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                )
+                            },
+                            interactionSource = fontSizeInteractionSource
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    val fontLabel = when(fontFamily) {
+                        "serif" -> stringResource(R.string.font_serif)
+                        "sans-serif" -> stringResource(R.string.font_sans_serif)
+                        "monospace" -> stringResource(R.string.font_monospace)
+                        else -> stringResource(R.string.font_default)
+                    }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.font_family)) },
+                        supportingContent = { Text(fontLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showFontDialog = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.volume_key_paging)) },
+                        trailingContent = {
+                            Switch(
+                                checked = volumeKeyPaging,
+                                onCheckedChange = { viewModel.setVolumeKeyPaging(it) }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = stringResource(R.string.section_image_viewer)) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.persist_zoom)) },
+                        supportingContent = { Text(stringResource(R.string.persist_zoom_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = persistZoom,
+                                onCheckedChange = { viewModel.setPersistZoom(it) }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(stringResource(R.string.sharpening_amount_fmt, sharpeningAmount), style = MaterialTheme.typography.bodyMedium)
+                        val sharpeningInteractionSource = remember { MutableInteractionSource() }
+                        Slider(
+                            value = sharpeningAmount.toFloat(),
+                            onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
+                            valueRange = 0f..10f,
+                            thumb = {
+                                SliderDefaults.Thumb(
+                                    interactionSource = sharpeningInteractionSource,
+                                    thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                )
+                            },
+                            track = { sliderState ->
+                                SliderDefaults.Track(
+                                    sliderState = sliderState,
+                                    modifier = Modifier.height(4.dp),
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                )
+                            },
+                            interactionSource = sharpeningInteractionSource
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.invert_image_control)) },
+                        supportingContent = { Text(stringResource(R.string.invert_image_control_desc)) },
+                        trailingContent = {
+                            Switch(
+                                checked = invertImageControl,
+                                onCheckedChange = { viewModel.setInvertImageControl(it) }
+                            )
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    val orderLabel = if (dualPageOrder == 0) stringResource(R.string.dual_page_ltr) else stringResource(R.string.dual_page_rtl)
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.dual_page_order)) },
+                        supportingContent = { Text(orderLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showDualPageOrderDialog = true }
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    val modeLabel = when(imageViewMode) {
+                        0 -> stringResource(R.string.image_view_single)
+                        1 -> stringResource(R.string.image_view_dual)
+                        2 -> stringResource(R.string.image_view_split)
+                        else -> stringResource(R.string.image_view_single)
+                    }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.image_view_mode)) },
+                        supportingContent = { Text(modeLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showImageViewModeDialog = true }
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = stringResource(R.string.section_storage)) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.app_cache)) },
+                        supportingContent = { Text(stringResource(R.string.cache_size_fmt, cacheSize)) },
+                        trailingContent = {
+                            TextButton(onClick = { viewModel.clearCache() }) {
+                                Text(stringResource(R.string.clear_cache))
                             }
                         },
-                        confirmButton = {
-                            TextButton(onClick = { showCustomColorDialog = false }) { Text(stringResource(R.string.confirm)) }
-                        }
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent)
                     )
-                }
 
-            }
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(stringResource(R.string.font_size_fmt, fontSize))
-                    val fontSizeInteractionSource = remember { MutableInteractionSource() }
-                    Slider(
-                        value = fontSize.toFloat(),
-                        onValueChange = { viewModel.setFontSize(it.toInt()) },
-                        valueRange = 12f..36f,
-                        thumb = {
-                            SliderDefaults.Thumb(
-                                interactionSource = fontSizeInteractionSource,
-                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
-                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
-                            )
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier.height(4.dp),
-                                colors = SliderDefaults.colors(
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                            )
-                        },
-                        interactionSource = fontSizeInteractionSource
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.cache_limit)) },
+                        supportingContent = { Text(FileRepository.formatFileSize(maxCacheSize)) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showCacheLimitDialog = true }
                     )
                 }
             }
+
             item {
-               val fontLabel = when(fontFamily) {
-                   "serif" -> stringResource(R.string.font_serif)
-                   "sans-serif" -> stringResource(R.string.font_sans_serif)
-                   "monospace" -> stringResource(R.string.font_monospace)
-                   else -> stringResource(R.string.font_default)
-               }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.font_family)) },
-                    supportingContent = { Text(fontLabel) },
-                    modifier = Modifier.clickable { showFontDialog = true }
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.volume_key_paging)) },
-                    trailingContent = {
-                        Switch(
-                            checked = volumeKeyPaging,
-                            onCheckedChange = { viewModel.setVolumeKeyPaging(it) }
-                        )
-                    }
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.section_image_viewer),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.persist_zoom)) },
-                    supportingContent = { Text(stringResource(R.string.persist_zoom_desc)) },
-                    trailingContent = {
-                        Switch(
-                            checked = persistZoom,
-                            onCheckedChange = { viewModel.setPersistZoom(it) }
-                        )
-                    }
-                )
-            }
-            item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    Text(stringResource(R.string.sharpening_amount_fmt, sharpeningAmount))
-                    val sharpeningInteractionSource = remember { MutableInteractionSource() }
-                    Slider(
-                        value = sharpeningAmount.toFloat(),
-                        onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
-                        valueRange = 0f..10f,
-                        thumb = {
-                            SliderDefaults.Thumb(
-                                interactionSource = sharpeningInteractionSource,
-                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
-                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
-                            )
-                        },
-                        track = { sliderState ->
-                            SliderDefaults.Track(
-                                sliderState = sliderState,
-                                modifier = Modifier.height(4.dp),
-                                colors = SliderDefaults.colors(
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                                )
-                            )
-                        },
-                        interactionSource = sharpeningInteractionSource
+                SettingsGroup(title = stringResource(R.string.section_webdav)) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showAddDialog = true }
                     )
-                }
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.invert_image_control)) },
-                    supportingContent = { Text(stringResource(R.string.invert_image_control_desc)) },
-                    trailingContent = {
-                        Switch(
-                            checked = invertImageControl,
-                            onCheckedChange = { viewModel.setInvertImageControl(it) }
-                        )
+
+                    if (servers.isNotEmpty()) {
+                        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     }
-                )
-            }
-            item {
-                val orderLabel = if (dualPageOrder == 0) stringResource(R.string.dual_page_ltr) else stringResource(R.string.dual_page_rtl)
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.dual_page_order)) },
-                    supportingContent = { Text(orderLabel) },
-                    modifier = Modifier.clickable { showDualPageOrderDialog = true }
-                )
-            }
-            item {
-                val modeLabel = when(imageViewMode) {
-                    0 -> stringResource(R.string.image_view_single)
-                    1 -> stringResource(R.string.image_view_dual)
-                    2 -> stringResource(R.string.image_view_split)
-                    else -> stringResource(R.string.image_view_single)
-                }
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.image_view_mode)) },
-                    supportingContent = { Text(modeLabel) },
-                    modifier = Modifier.clickable { showImageViewModeDialog = true }
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.section_storage),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.app_cache)) },
-                    supportingContent = { Text(stringResource(R.string.cache_size_fmt, cacheSize)) },
-                    trailingContent = {
-                        TextButton(onClick = { viewModel.clearCache() }) {
-                            Text(stringResource(R.string.clear_cache))
+                    
+                    servers.forEachIndexed { index, server ->
+                        ServerItemRow(
+                            server = server,
+                            onDelete = { viewModel.deleteServer(server) }
+                        )
+                        if (index < servers.size - 1) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                     }
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.cache_limit)) },
-                    supportingContent = { Text(FileRepository.formatFileSize(maxCacheSize)) },
-                    modifier = Modifier.clickable { showCacheLimitDialog = true }
-                )
-            }
-            item {
-                Text(
-                    text = stringResource(R.string.section_webdav),
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-            item {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
-                    modifier = Modifier.clickable { showAddDialog = true }
-                )
-            }
-            items(servers) { server ->
-                ServerItemRow(
-                    server = server,
-                    onDelete = { viewModel.deleteServer(server) }
-                )
+                }
             }
         }
 
@@ -693,6 +701,7 @@ fun ServerItemRow(
         modifier = Modifier.fillMaxWidth(),
         headlineContent = { Text(server.name, maxLines = 1) },
         supportingContent = { Text(server.url, maxLines = 1) },
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         trailingContent = {
             IconButton(onClick = onDelete) {
                 Icon(
@@ -703,6 +712,35 @@ fun ServerItemRow(
             }
         }
     )
+}
+
+@Composable
+fun SettingsGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxWidth()
+    ) {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 16.dp, bottom = 8.dp)
+        )
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+            tonalElevation = 1.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp),
+                content = content
+            )
+        }
+    }
 }
 
 @Composable
