@@ -339,8 +339,8 @@ fun DocumentViewerScreen(
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 8.dp,
-                        shadowElevation = 8.dp
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp
                     ) {
                         TopAppBar(
                             windowInsets = androidx.compose.foundation.layout.WindowInsets(0),
@@ -352,26 +352,26 @@ fun DocumentViewerScreen(
                                 // Filename hidden as requested
                             },
                             navigationIcon = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
                                 }
                             },
                             actions = {
-                                IconButton(onClick = onNavigateToPrev) {
-                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
+                                IconButton(onClick = onNavigateToPrev, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), modifier = Modifier.size(24.dp))
                                 }
-                                IconButton(onClick = onNavigateToNext) {
-                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                                IconButton(onClick = onNavigateToNext, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), modifier = Modifier.size(24.dp))
                                 }
-                                IconButton(onClick = { viewModel.toggleVerticalReading() }) {
+                                IconButton(onClick = { viewModel.toggleVerticalReading() }, modifier = Modifier.size(40.dp)) {
                                     Text(
                                         "V",
-                                        style = MaterialTheme.typography.titleLarge,
+                                        style = MaterialTheme.typography.titleMedium,
                                         color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
                                     )
                                 }
-                                IconButton(onClick = { showEncodingDialog = true }) {
-                                    Icon(Icons.Default.Translate, contentDescription = "Encoding")
+                                IconButton(onClick = { showEncodingDialog = true }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.Translate, contentDescription = "Encoding", modifier = Modifier.size(24.dp))
                                 }
                                 val context = androidx.compose.ui.platform.LocalContext.current
                                 IconButton(onClick = {
@@ -384,21 +384,21 @@ fun DocumentViewerScreen(
                                         "Bookmark Saved: Line $currentLine"
                                     }
                                     android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                                }) {
-                                    Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", modifier = Modifier.size(24.dp))
                                 }
                                 if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
-                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents))
+                                    IconButton(onClick = { scope.launch { drawerState.open() } }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents), modifier = Modifier.size(24.dp))
                                     }
                                 } else if (uiState.totalLines > 0) {
-                                    IconButton(onClick = { showGoToLineDialog = true }) {
-                                        Text("G", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                    IconButton(onClick = { showGoToLineDialog = true }, modifier = Modifier.size(40.dp)) {
+                                        Text("G", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
                                     }
                                 }
 
-                                IconButton(onClick = { showFontSettingsDialog = true }) {
-                                    Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
+                                IconButton(onClick = { showFontSettingsDialog = true }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings), modifier = Modifier.size(24.dp))
                                 }
                             }
                         )
@@ -456,8 +456,8 @@ fun DocumentViewerScreen(
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.background,
-                        tonalElevation = 0.dp,
-                        shadowElevation = 4.dp
+                        tonalElevation = 2.dp,
+                        shadowElevation = 2.dp
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             if (!uiState.isLoading) {

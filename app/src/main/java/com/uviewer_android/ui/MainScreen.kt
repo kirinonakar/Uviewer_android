@@ -150,8 +150,8 @@ fun MainScreen(
                         .navigationBarsPadding(),
                     shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp
+                    tonalElevation = 4.dp,
+                    shadowElevation = 4.dp
                 ) {
                     NavigationBar(
                         windowInsets = WindowInsets(0),

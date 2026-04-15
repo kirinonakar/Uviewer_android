@@ -309,8 +309,8 @@ fun ImageViewerScreen(
                                 .fillMaxWidth(),
                             shape = RoundedCornerShape(28.dp),
                             color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 8.dp,
-                            shadowElevation = 8.dp
+                            tonalElevation = 4.dp,
+                            shadowElevation = 4.dp
                         ) {
                             TopAppBar(
                                 windowInsets = WindowInsets(0),
@@ -322,16 +322,16 @@ fun ImageViewerScreen(
                                     // Filename hidden as requested
                                 }, 
                                 navigationIcon = {
-                                    IconButton(onClick = onBack) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                                    IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
                                     }
                                 },
                                 actions = {
-                                    IconButton(onClick = onNavigateToPrev) {
-                                        Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
+                                    IconButton(onClick = onNavigateToPrev, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), modifier = Modifier.size(24.dp))
                                     }
-                                    IconButton(onClick = onNavigateToNext) {
-                                        Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                                    IconButton(onClick = onNavigateToNext, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), modifier = Modifier.size(24.dp))
                                     }
                                     val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
                                     val currentImageIndex = when (viewMode) {
@@ -345,28 +345,30 @@ fun ImageViewerScreen(
                                         val imageName = if (currentImageIndex >= 0 && currentImageIndex < uiState.images.size) uiState.images[currentImageIndex].name else ""
                                         val displayTitle = if (imageName.isNotEmpty() && archiveName != imageName) "$archiveName - $imageName" else imageName
                                         android.widget.Toast.makeText(context, "Bookmark Saved: $displayTitle", android.widget.Toast.LENGTH_SHORT).show()
-                                    }) {
-                                        Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                                    }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", modifier = Modifier.size(24.dp))
                                     }
-                                    IconButton(onClick = { viewModel.toggleViewMode() }) {
+                                    IconButton(onClick = { viewModel.toggleViewMode() }, modifier = Modifier.size(40.dp)) {
                                         Icon(
                                             when (viewMode) {
                                                 ViewMode.SINGLE -> Icons.Default.ViewCarousel
                                                 ViewMode.DUAL -> Icons.Default.ViewAgenda
                                                 ViewMode.SPLIT -> Icons.Default.VerticalSplit
                                             }, 
-                                            contentDescription = "Toggle View Mode"
+                                            contentDescription = "Toggle View Mode",
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                    IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
+                                    IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }, modifier = Modifier.size(40.dp)) {
                                         Icon(
                                             if (invertImageControl) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
                                             contentDescription = "Flip Controls",
-                                            tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                            tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
-                                    IconButton(onClick = { showSettingsDialog = true }) {
-                                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                                    IconButton(onClick = { showSettingsDialog = true }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(24.dp))
                                     }
                                 }
                             )
@@ -469,8 +471,8 @@ fun ImageViewerScreen(
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        tonalElevation = 12.dp,
-                        shadowElevation = 8.dp
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp
                     ) {
                         Column(
                             modifier = Modifier

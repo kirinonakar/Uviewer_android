@@ -202,8 +202,8 @@ fun PdfViewerScreen(
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 8.dp,
-                    shadowElevation = 8.dp
+                    tonalElevation = 4.dp,
+                    shadowElevation = 4.dp
                 ) {
                     TopAppBar(
                         windowInsets = WindowInsets(0),
@@ -213,16 +213,16 @@ fun PdfViewerScreen(
                         ),
                         title = { Text(File(filePath).name, style = MaterialTheme.typography.titleMedium, maxLines = 1) },
                         navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(24.dp))
                             }
                         },
                         actions = {
                             IconButton(onClick = {
                                 viewModel.toggleBookmark(filePath, currentPage, pageCount, isWebDav, serverId)
                                 android.widget.Toast.makeText(context, "Bookmark Saved: Page ${currentPage + 1}", android.widget.Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                            }, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", modifier = Modifier.size(24.dp))
                             }
                         }
                     )
@@ -237,8 +237,8 @@ fun PdfViewerScreen(
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.background,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 4.dp
+                    tonalElevation = 2.dp,
+                    shadowElevation = 2.dp
                 ) {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                         Row(

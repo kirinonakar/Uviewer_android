@@ -280,8 +280,8 @@ fun MediaPlayerScreen(
                             .fillMaxWidth(),
                         shape = RoundedCornerShape(28.dp),
                         color = Color.Black.copy(alpha = 0.7f),
-                        tonalElevation = 8.dp,
-                        shadowElevation = 8.dp,
+                        tonalElevation = 4.dp,
+                        shadowElevation = 4.dp,
                         border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
                     ) {
                         TopAppBar(
@@ -295,20 +295,20 @@ fun MediaPlayerScreen(
                                 }
                             },
                             navigationIcon = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
+                                IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             },
                             actions = {
                                 IconButton(onClick = { 
                                     mediaController?.seekToPrevious()
-                                }) {
-                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White)
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                                 IconButton(onClick = { 
                                     mediaController?.seekToNext()
-                                }) {
-                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
+                                }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                                 if (fileType == FileEntry.FileType.VIDEO) {
                                     IconButton(onClick = {
@@ -319,16 +319,17 @@ fun MediaPlayerScreen(
                                         }
                                         currentActivity?.requestedOrientation = newOrientation
                                         currentOrientation = newOrientation
-                                    }) {
+                                    }, modifier = Modifier.size(40.dp)) {
                                         Icon(
                                             if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
                                             contentDescription = "Rotate Screen",
-                                            tint = Color.White
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
                                         )
                                     }
                                     var showSubtitleMenu by remember { mutableStateOf(false) }
-                                    IconButton(onClick = { showSubtitleMenu = true }) {
-                                        Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                                    IconButton(onClick = { showSubtitleMenu = true }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White, modifier = Modifier.size(24.dp))
                                     }
                                     if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
                                         DropdownMenu(
