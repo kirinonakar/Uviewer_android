@@ -11,10 +11,10 @@
 ---
 
 <p align="center">
-  <img src="assets/screenshot1.png" width="23%" />
-  <img src="assets/screenshot2.png" width="23%" />
-  <img src="assets/screenshot3.png" width="23%" />
-  <img src="assets/screenshot4.png" width="23%" />
+  <img src="assets/screenshot1.jpg" width="23%" />
+  <img src="assets/screenshot2.jpg" width="23%" />
+  <img src="assets/screenshot3.jpg" width="23%" />
+  <img src="assets/screenshot4.jpg" width="23%" />
 </p>
 
 

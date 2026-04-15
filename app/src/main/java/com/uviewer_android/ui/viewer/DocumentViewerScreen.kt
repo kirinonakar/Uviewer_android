@@ -1022,6 +1022,7 @@ val style = ViewerScripts.getStyleSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FontSettingsDialog(
     viewModel: DocumentViewerViewModel,
@@ -1040,12 +1041,31 @@ fun FontSettingsDialog(
                 Column {
                     Text(stringResource(R.string.font_size_fmt, fontSize))
                     var sliderValue by remember { mutableFloatStateOf(fontSize.toFloat()) }
+                    val fontSizeInteractionSource = remember { MutableInteractionSource() }
                     Slider(
                         value = sliderValue,
                         onValueChange = { sliderValue = it },
                         onValueChangeFinished = { viewModel.setFontSize(sliderValue.toInt()) },
                         valueRange = 12f..36f,
-                        steps = 23 // Corrected steps for range 12-36
+                        steps = 23,
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = fontSizeInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            )
+                        },
+                        interactionSource = fontSizeInteractionSource
                     )
                 }
                 
@@ -1097,11 +1117,30 @@ fun FontSettingsDialog(
                 val marginValue by viewModel.sideMargin.collectAsState()
                 Column {
                     Text(stringResource(R.string.side_margin_fmt, marginValue))
+                    val marginInteractionSource = remember { MutableInteractionSource() }
                     Slider(
                         value = marginValue.toFloat(),
                         onValueChange = { viewModel.setSideMargin(it.toInt()) },
                         valueRange = 0f..40f,
-                        steps = 40
+                        steps = 40,
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = marginInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            )
+                        },
+                        interactionSource = marginInteractionSource
                     )
                 }
             }

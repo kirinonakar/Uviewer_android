@@ -8,12 +8,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.gestures.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.FilterQuality
@@ -406,11 +406,30 @@ fun ImageViewerScreen(
                                         }
                                         Column(modifier = Modifier.padding(horizontal = 4.dp)) {
                                             Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}", style = MaterialTheme.typography.labelMedium)
+                                            val sharpeningInteractionSource = remember { MutableInteractionSource() }
                                             Slider(
                                                 value = uiState.sharpeningAmount.toFloat(),
                                                 onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
                                                 valueRange = 0f..10f,
-                                                steps = 9
+                                                steps = 9,
+                                                thumb = {
+                                                    SliderDefaults.Thumb(
+                                                        interactionSource = sharpeningInteractionSource,
+                                                        thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                                    )
+                                                },
+                                                track = { sliderState ->
+                                                    SliderDefaults.Track(
+                                                        sliderState = sliderState,
+                                                        modifier = Modifier.height(4.dp),
+                                                        colors = SliderDefaults.colors(
+                                                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                                                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                                        )
+                                                    )
+                                                },
+                                                interactionSource = sharpeningInteractionSource
                                             )
                                         }
                                         Column(modifier = Modifier.padding(horizontal = 4.dp)) {
