@@ -893,6 +893,10 @@ fun HSLColorPicker(
                 value = h,
                 onValueChange = { h = it; onColorChanged(hslToHex(h, s, l)) },
                 valueRange = 0f..360f,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                ),
                 modifier = Modifier.weight(1f).height(32.dp)
             )
         }
@@ -903,6 +907,10 @@ fun HSLColorPicker(
                 value = s,
                 onValueChange = { s = it; onColorChanged(hslToHex(h, s, l)) },
                 valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                ),
                 modifier = Modifier.weight(1f).height(32.dp)
             )
         }
@@ -913,6 +921,10 @@ fun HSLColorPicker(
                 value = l,
                 onValueChange = { l = it; onColorChanged(hslToHex(h, s, l)) },
                 valueRange = 0f..1f,
+                colors = SliderDefaults.colors(
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                ),
                 modifier = Modifier.weight(1f).height(32.dp)
             )
         }

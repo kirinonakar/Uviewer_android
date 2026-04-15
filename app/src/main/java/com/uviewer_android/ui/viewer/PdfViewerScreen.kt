@@ -201,9 +201,9 @@ fun PdfViewerScreen(
                         .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                         .fillMaxWidth(),
                     shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.background,
-                    tonalElevation = 0.dp,
-                    shadowElevation = 4.dp
+                    color = MaterialTheme.colorScheme.surface,
+                    tonalElevation = 8.dp,
+                    shadowElevation = 8.dp
                 ) {
                     TopAppBar(
                         windowInsets = WindowInsets(0),
@@ -283,7 +283,7 @@ fun PdfViewerScreen(
                                     modifier = Modifier.height(4.dp),
                                     colors = SliderDefaults.colors(
                                         activeTrackColor = MaterialTheme.colorScheme.primary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                                     )
                                 )
                             },

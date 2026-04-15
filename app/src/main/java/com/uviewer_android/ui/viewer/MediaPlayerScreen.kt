@@ -281,7 +281,7 @@ fun MediaPlayerScreen(
                         shape = RoundedCornerShape(28.dp),
                         color = Color.Black.copy(alpha = 0.7f),
                         tonalElevation = 8.dp,
-                        shadowElevation = 4.dp,
+                        shadowElevation = 8.dp,
                         border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
                     ) {
                         TopAppBar(
