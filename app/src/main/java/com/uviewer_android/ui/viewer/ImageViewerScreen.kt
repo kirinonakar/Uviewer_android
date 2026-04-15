@@ -106,7 +106,7 @@ fun ImageViewerScreen(
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var currentPageIndex by remember { mutableIntStateOf(initialIndex ?: 0) }
+    var currentPageIndex by remember(uiState.images) { mutableIntStateOf(uiState.initialIndex) }
 
     // Sync is done after pagerState is created (see below)
 
@@ -230,12 +230,12 @@ fun ImageViewerScreen(
         var globalScale by remember { mutableFloatStateOf(1f) }
         // currentPageIndex hoisted to top level
 
-        // Recreate pagerState when viewMode or initialIndex changes, so pager starts at correct page
-        val pagerState = key(viewMode, uiState.initialIndex) {
+        // Recreate pagerState when viewMode or images change, maintaining current relative position
+        val pagerState = key(viewMode, uiState.images) {
             val initial = when (viewMode) {
-                ViewMode.SINGLE -> uiState.initialIndex
-                ViewMode.DUAL -> uiState.initialIndex / 2
-                ViewMode.SPLIT -> uiState.initialIndex * 2
+                ViewMode.SINGLE -> currentPageIndex
+                ViewMode.DUAL -> currentPageIndex / 2
+                ViewMode.SPLIT -> currentPageIndex * 2
             }
             rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
                 pageCount
