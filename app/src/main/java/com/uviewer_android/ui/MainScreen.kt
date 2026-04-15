@@ -172,7 +172,7 @@ fun MainScreen(
                         NavigationBar(
                             windowInsets = WindowInsets(0),
                             containerColor = Color.Transparent,
-                            modifier = Modifier.height(64.dp),
+                            modifier = Modifier.height(72.dp),
                             tonalElevation = 0.dp
                         ) {
                             val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -267,7 +267,7 @@ fun MainScreen(
                                             }
                                         }
                                     },
-                                    icon = { Icon(screen.icon, contentDescription = title) },
+                                    icon = { Icon(screen.icon, contentDescription = title, modifier = Modifier.padding(vertical = 4.dp)) },
                                     label = null,
                                     colors = NavigationBarItemDefaults.colors(
                                         selectedIconColor = MaterialTheme.colorScheme.primary,
