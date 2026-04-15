@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
@@ -496,6 +497,8 @@ fun ImageViewerScreen(
                                 )
                             }
                             
+                            val sliderInteractionSource = remember { MutableInteractionSource() }
+                            
                             // Slider for navigation
                             Slider(
                                 value = currentPageIndex.toFloat(),
@@ -513,7 +516,25 @@ fun ImageViewerScreen(
                                     }
                                 },
                                 valueRange = 0f..(uiState.images.size - 1).coerceAtLeast(0).toFloat(),
-                                modifier = Modifier.fillMaxWidth().height(32.dp)
+                                thumb = {
+                                    SliderDefaults.Thumb(
+                                        interactionSource = sliderInteractionSource,
+                                        thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                },
+                                track = { sliderState ->
+                                    SliderDefaults.Track(
+                                        sliderState = sliderState,
+                                        modifier = Modifier.height(4.dp),
+                                        colors = SliderDefaults.colors(
+                                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().height(32.dp),
+                                interactionSource = sliderInteractionSource
                             )
                         }
                     }

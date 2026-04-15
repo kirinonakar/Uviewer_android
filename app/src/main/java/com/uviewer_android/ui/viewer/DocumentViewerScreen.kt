@@ -549,6 +549,23 @@ fun DocumentViewerScreen(
                                 },
                                 valueRange = sliderRange,
                                 interactionSource = sliderInteractionSource,
+                                thumb = {
+                                    SliderDefaults.Thumb(
+                                        interactionSource = sliderInteractionSource,
+                                        thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                    )
+                                },
+                                track = { sliderState ->
+                                    SliderDefaults.Track(
+                                        sliderState = sliderState,
+                                        modifier = Modifier.height(4.dp),
+                                        colors = SliderDefaults.colors(
+                                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                                            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                },
                                 modifier = Modifier.fillMaxWidth().height(32.dp)
                             )
                          }

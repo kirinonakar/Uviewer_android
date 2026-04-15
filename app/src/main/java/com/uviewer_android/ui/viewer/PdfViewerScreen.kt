@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -27,6 +28,7 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.uviewer_android.R
 import kotlinx.coroutines.Dispatchers
@@ -224,6 +226,71 @@ fun PdfViewerScreen(
                             }
                         }
                     )
+                }
+            }
+        },
+        bottomBar = {
+            if (!isFullScreen && pageCount > 0) {
+                Surface(
+                    modifier = Modifier
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.background,
+                    tonalElevation = 0.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = File(filePath).name,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Page: ${currentPage + 1} / $pageCount (${((currentPage + 1) * 100 / pageCount.coerceAtLeast(1))}% )",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+
+                        val sliderInteractionSource = remember { MutableInteractionSource() }
+                        Slider(
+                            value = currentPage.toFloat(),
+                            onValueChange = { 
+                                scope.launch {
+                                    listState.scrollToItem(it.toInt())
+                                }
+                            },
+                            valueRange = 0f..(pageCount - 1).coerceAtLeast(0).toFloat(),
+                            thumb = {
+                                SliderDefaults.Thumb(
+                                    interactionSource = sliderInteractionSource,
+                                    thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                )
+                            },
+                            track = { sliderState ->
+                                SliderDefaults.Track(
+                                    sliderState = sliderState,
+                                    modifier = Modifier.height(4.dp),
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                            interactionSource = sliderInteractionSource
+                        )
+                    }
                 }
             }
         }
