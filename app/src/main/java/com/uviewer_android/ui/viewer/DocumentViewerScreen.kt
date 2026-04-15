@@ -1047,7 +1047,6 @@ fun FontSettingsDialog(
                         onValueChange = { sliderValue = it },
                         onValueChangeFinished = { viewModel.setFontSize(sliderValue.toInt()) },
                         valueRange = 12f..36f,
-                        steps = 23,
                         thumb = {
                             SliderDefaults.Thumb(
                                 interactionSource = fontSizeInteractionSource,
@@ -1122,7 +1121,6 @@ fun FontSettingsDialog(
                         value = marginValue.toFloat(),
                         onValueChange = { viewModel.setSideMargin(it.toInt()) },
                         valueRange = 0f..40f,
-                        steps = 40,
                         thumb = {
                             SliderDefaults.Thumb(
                                 interactionSource = marginInteractionSource,

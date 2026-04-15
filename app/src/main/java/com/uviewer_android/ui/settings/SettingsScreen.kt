@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -204,11 +205,29 @@ fun SettingsScreen(
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(stringResource(R.string.font_size_fmt, fontSize))
+                    val fontSizeInteractionSource = remember { MutableInteractionSource() }
                     Slider(
                         value = fontSize.toFloat(),
                         onValueChange = { viewModel.setFontSize(it.toInt()) },
                         valueRange = 12f..36f,
-                        steps = 24
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = fontSizeInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            )
+                        },
+                        interactionSource = fontSizeInteractionSource
                     )
                 }
             }
@@ -258,11 +277,29 @@ fun SettingsScreen(
             item {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text(stringResource(R.string.sharpening_amount_fmt, sharpeningAmount))
+                    val sharpeningInteractionSource = remember { MutableInteractionSource() }
                     Slider(
                         value = sharpeningAmount.toFloat(),
                         onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
                         valueRange = 0f..10f,
-                        steps = 9
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = sharpeningInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+                            )
+                        },
+                        interactionSource = sharpeningInteractionSource
                     )
                 }
             }

@@ -411,7 +411,6 @@ fun ImageViewerScreen(
                                                 value = uiState.sharpeningAmount.toFloat(),
                                                 onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
                                                 valueRange = 0f..10f,
-                                                steps = 9,
                                                 thumb = {
                                                     SliderDefaults.Thumb(
                                                         interactionSource = sharpeningInteractionSource,
