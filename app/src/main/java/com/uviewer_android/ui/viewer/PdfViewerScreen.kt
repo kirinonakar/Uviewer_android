@@ -188,6 +188,7 @@ fun PdfViewerScreen(
     }
 
     Scaffold(
+        containerColor = if (isFullScreen) Color.Black else MaterialTheme.colorScheme.surface,
         topBar = {
             if (!isFullScreen) {
                 Surface(
@@ -228,7 +229,7 @@ fun PdfViewerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(if (isFullScreen) Color.Black else MaterialTheme.colorScheme.surface)
+                .background(Color.Transparent)
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
