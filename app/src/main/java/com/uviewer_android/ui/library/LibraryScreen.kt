@@ -10,11 +10,14 @@ import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.activity.compose.BackHandler
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -41,8 +44,6 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.background
@@ -108,76 +109,97 @@ fun LibraryScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    val title = if (uiState.selectedTabIndex == 2) {
-                        stringResource(R.string.pinned)
-                    } else if (uiState.currentPath == rootPath) {
-                        stringResource(R.string.local)
-                    } else if (uiState.currentPath == "WebDAV") {
-                        stringResource(R.string.remote)
-                    } else {
-                        // Extract parent or current folder name
-                        val file = java.io.File(uiState.currentPath)
-                        if (uiState.selectedTabIndex == 1 && uiState.currentPath == "/") {
-                             "Root"
+            Surface(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                tonalElevation = 8.dp,
+                shadowElevation = 4.dp
+            ) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                    ),
+                    title = { 
+                        val title = if (uiState.selectedTabIndex == 2) {
+                            stringResource(R.string.pinned)
+                        } else if (uiState.currentPath == rootPath) {
+                            stringResource(R.string.local)
+                        } else if (uiState.currentPath == "WebDAV") {
+                            stringResource(R.string.remote)
                         } else {
-                             file.name.ifEmpty { uiState.currentPath }
+                            // Extract parent or current folder name
+                            val file = java.io.File(uiState.currentPath)
+                            if (uiState.selectedTabIndex == 1 && uiState.currentPath == "/") {
+                                 "Root"
+                            } else {
+                                 file.name.ifEmpty { uiState.currentPath }
+                            }
+                        }
+                        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) 
+                    },
+                    navigationIcon = {
+                        val showBack = uiState.selectedTabIndex != 2 && 
+                                     uiState.currentPath != rootPath && 
+                                     uiState.currentPath != "WebDAV"
+                        if (showBack) {
+                            IconButton(onClick = { viewModel.navigateUp() }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
+                            }
+                        }
+                    },
+                    actions = {
+                        var sortExpanded by remember { mutableStateOf(false) }
+                        IconButton(onClick = { sortExpanded = true }) {
+                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                        }
+                        DropdownMenu(
+                            expanded = sortExpanded,
+                            onDismissRequest = { sortExpanded = false },
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sort_name)) },
+                                onClick = { viewModel.setSortOption(SortOption.NAME); sortExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sort_date_desc)) },
+                                onClick = { viewModel.setSortOption(SortOption.DATE_DESC); sortExpanded = false }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.sort_date_asc)) },
+                                onClick = { viewModel.setSortOption(SortOption.DATE_ASC); sortExpanded = false }
+                            )
+                        }
+
+                        IconButton(onClick = { viewModel.toggleViewMode() }) {
+                            Icon(
+                                if (uiState.isGridView) Icons.Default.ViewList else Icons.Default.ViewModule,
+                                contentDescription = if (uiState.isGridView) "Switch to List View" else "Switch to Grid View"
+                            )
+                        }
+
+                        IconButton(onClick = { viewModel.navigateToRoot() }) {
+                            Icon(Icons.Default.Home, contentDescription = stringResource(R.string.go_to_root))
                         }
                     }
-                    Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) 
-                },
-                navigationIcon = {
-                    val showBack = uiState.selectedTabIndex != 2 && 
-                                 uiState.currentPath != rootPath && 
-                                 uiState.currentPath != "WebDAV"
-                    if (showBack) {
-                        IconButton(onClick = { viewModel.navigateUp() }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
-                        }
-                    }
-                },
-                actions = {
-                    var sortExpanded by remember { mutableStateOf(false) }
-                    IconButton(onClick = { sortExpanded = true }) {
-                        Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
-                    }
-                    DropdownMenu(
-                        expanded = sortExpanded,
-                        onDismissRequest = { sortExpanded = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sort_name)) },
-                            onClick = { viewModel.setSortOption(SortOption.NAME); sortExpanded = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sort_date_desc)) },
-                            onClick = { viewModel.setSortOption(SortOption.DATE_DESC); sortExpanded = false }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.sort_date_asc)) },
-                            onClick = { viewModel.setSortOption(SortOption.DATE_ASC); sortExpanded = false }
-                        )
-                    }
-
-                    IconButton(onClick = { viewModel.toggleViewMode() }) {
-                        Icon(
-                            if (uiState.isGridView) Icons.Default.ViewList else Icons.Default.ViewModule,
-                            contentDescription = if (uiState.isGridView) "Switch to List View" else "Switch to Grid View"
-                        )
-                    }
-
-                    IconButton(onClick = { viewModel.navigateToRoot() }) {
-                        Icon(Icons.Default.Home, contentDescription = stringResource(R.string.go_to_root))
-                    }
-                }
-            )
+                )
+            }
         },
         floatingActionButton = {
             // Show Add Server FAB only when on server list (not browsing a server)
             val isServerList = selectedTab == 1 && (uiState.serverId == null || uiState.currentPath == "WebDAV")
             if (isServerList) {
-                FloatingActionButton(onClick = { showAddServerDialog = true }) {
+                FloatingActionButton(
+                    onClick = { showAddServerDialog = true },
+                    shape = RoundedCornerShape(16.dp),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
                     Icon(Icons.Default.Add, contentDescription = "Add Server")
                 }
             }
@@ -185,22 +207,41 @@ fun LibraryScreen(
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
             HorizontalDivider()
-            TabRow(selectedTabIndex = selectedTab) {
-                Tab(
-                    selected = selectedTab == 0,
-                    onClick = { viewModel.selectTab(0) },
-                    text = { Text(stringResource(R.string.local)) }
-                )
-                Tab(
-                    selected = selectedTab == 1,
-                    onClick = { viewModel.selectTab(1) },
-                    text = { Text(stringResource(R.string.remote)) }
-                )
-                Tab(
-                    selected = selectedTab == 2,
-                    onClick = { viewModel.selectTab(2) },
-                    text = { Text(stringResource(R.string.pinned)) } 
-                )
+            Surface(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ) {
+                SecondaryTabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                    indicator = {
+                        TabRowDefaults.SecondaryIndicator(
+                            Modifier.tabIndicatorOffset(selectedTab),
+                            height = 3.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    divider = {}
+                ) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { viewModel.selectTab(0) },
+                        text = { Text(stringResource(R.string.local), style = MaterialTheme.typography.labelLarge) }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { viewModel.selectTab(1) },
+                        text = { Text(stringResource(R.string.remote), style = MaterialTheme.typography.labelLarge) }
+                    )
+                    Tab(
+                        selected = selectedTab == 2,
+                        onClick = { viewModel.selectTab(2) },
+                        text = { Text(stringResource(R.string.pinned), style = MaterialTheme.typography.labelLarge) } 
+                    )
+                }
             }
 
             if (uiState.isLoading) {
@@ -437,7 +478,8 @@ fun LibraryScreen(
 
                 AlertDialog(
                     onDismissRequest = { showAddServerDialog = false },
-                    title = { Text(stringResource(R.string.add_webdav_server)) },
+                    shape = RoundedCornerShape(28.dp),
+                    title = { Text(stringResource(R.string.add_webdav_server), style = MaterialTheme.typography.headlineSmall) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             OutlinedTextField(
@@ -446,17 +488,19 @@ fun LibraryScreen(
                                 label = { Text(stringResource(R.string.server_name_hint)) }, 
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f))
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                                Text(stringResource(R.string.use_https), modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
                                 Switch(checked = useHttps, onCheckedChange = { useHttps = it })
                             }
                             if (!useHttps) {
                                 Text(
                                     stringResource(R.string.insecure_connection_warning),
                                     color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelSmall
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
                             OutlinedTextField(
@@ -465,6 +509,7 @@ fun LibraryScreen(
                                 label = { Text(stringResource(R.string.server_host_hint)) }, 
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                             )
                             OutlinedTextField(
@@ -473,6 +518,7 @@ fun LibraryScreen(
                                 label = { Text(stringResource(R.string.server_port_hint)) }, 
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number,
                                     imeAction = ImeAction.Next
@@ -484,6 +530,7 @@ fun LibraryScreen(
                                 label = { Text(stringResource(R.string.username)) }, 
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
                             )
                             OutlinedTextField(
@@ -493,6 +540,7 @@ fun LibraryScreen(
                                 modifier = Modifier.fillMaxWidth(), 
                                 visualTransformation = PasswordVisualTransformation(),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Password,
                                     imeAction = ImeAction.Done
@@ -504,19 +552,25 @@ fun LibraryScreen(
                         }
                     },
                     confirmButton = {
-                        Button(onClick = {
-                            if (name.isNotEmpty() && host.isNotEmpty()) {
-                                val protocol = if (useHttps) "https://" else "http://"
-                                val portPart = if (port.isNotEmpty()) ":$port" else ""
-                                val cleanHost = host.removePrefix("http://").removePrefix("https://").trim('/')
-                                val finalUrl = "$protocol$cleanHost$portPart"
-                                viewModel.addServer(name, finalUrl, user, pass)
-                                showAddServerDialog = false
-                            }
-                        }) { Text(stringResource(R.string.add)) }
+                        Button(
+                            onClick = {
+                                if (name.isNotEmpty() && host.isNotEmpty()) {
+                                    val protocol = if (useHttps) "https://" else "http://"
+                                    val portPart = if (port.isNotEmpty()) ":$port" else ""
+                                    val cleanHost = host.removePrefix("http://").removePrefix("https://").trim('/')
+                                    val finalUrl = "$protocol$cleanHost$portPart"
+                                    viewModel.addServer(name, finalUrl, user, pass)
+                                    showAddServerDialog = false
+                                }
+                            },
+                            shape = RoundedCornerShape(20.dp)
+                        ) { Text(stringResource(R.string.add)) }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showAddServerDialog = false }) { Text(stringResource(R.string.cancel)) }
+                        TextButton(
+                            onClick = { showAddServerDialog = false },
+                            shape = RoundedCornerShape(20.dp)
+                        ) { Text(stringResource(R.string.cancel)) }
                     }
                 )
             }

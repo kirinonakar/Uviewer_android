@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -329,69 +331,85 @@ fun DocumentViewerScreen(
             containerColor = if (isFullScreen) targetDocColor else MaterialTheme.colorScheme.background,
             topBar = {
                 if (!isFullScreen) {
-                    TopAppBar(
-                        title = { 
-                            // Filename hidden as requested
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = onNavigateToPrev) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
-                            }
-                            IconButton(onClick = onNavigateToNext) {
-                                Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
-                            }
-                            IconButton(onClick = { viewModel.toggleVerticalReading() }) {
-                                Text(
-                                    "V",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
-                                )
-                            }
-                            IconButton(onClick = { showEncodingDialog = true }) {
-                                Icon(Icons.Default.Translate, contentDescription = "Encoding")
-                            }
-                            val context = androidx.compose.ui.platform.LocalContext.current
-                            IconButton(onClick = {
-                                val typeStr = if (type == FileEntry.FileType.EPUB) "EPUB" else "TEXT"
-                                viewModel.toggleBookmark(filePath, currentLine, isWebDav, serverId, typeStr)
-                                val msg = if (type == FileEntry.FileType.EPUB) {
-                                    val ch = uiState.currentChapterIndex + 1
-                                    "Bookmark Saved: Ch $ch / Line $currentLine"
-                                } else {
-                                    "Bookmark Saved: Line $currentLine"
+                    Surface(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        tonalElevation = 8.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        TopAppBar(
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                            ),
+                            title = { 
+                                // Filename hidden as requested
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
                                 }
-                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
-                            }
-                            if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
-                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents))
+                            },
+                            actions = {
+                                IconButton(onClick = onNavigateToPrev) {
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
                                 }
-                            } else if (uiState.totalLines > 0) {
-                                IconButton(onClick = { showGoToLineDialog = true }) {
-                                    Text("G", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                IconButton(onClick = onNavigateToNext) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
                                 }
-                            }
+                                IconButton(onClick = { viewModel.toggleVerticalReading() }) {
+                                    Text(
+                                        "V",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
+                                    )
+                                }
+                                IconButton(onClick = { showEncodingDialog = true }) {
+                                    Icon(Icons.Default.Translate, contentDescription = "Encoding")
+                                }
+                                val context = androidx.compose.ui.platform.LocalContext.current
+                                IconButton(onClick = {
+                                    val typeStr = if (type == FileEntry.FileType.EPUB) "EPUB" else "TEXT"
+                                    viewModel.toggleBookmark(filePath, currentLine, isWebDav, serverId, typeStr)
+                                    val msg = if (type == FileEntry.FileType.EPUB) {
+                                        val ch = uiState.currentChapterIndex + 1
+                                        "Bookmark Saved: Ch $ch / Line $currentLine"
+                                    } else {
+                                        "Bookmark Saved: Line $currentLine"
+                                    }
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                                }
+                                if (type == FileEntry.FileType.EPUB || (type == FileEntry.FileType.TEXT && uiState.epubChapters.isNotEmpty())) {
+                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                        Icon(Icons.AutoMirrored.Filled.List, contentDescription = stringResource(R.string.table_of_contents))
+                                    }
+                                } else if (uiState.totalLines > 0) {
+                                    IconButton(onClick = { showGoToLineDialog = true }) {
+                                        Text("G", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
 
-                            IconButton(onClick = { showFontSettingsDialog = true }) {
-                                Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
+                                IconButton(onClick = { showFontSettingsDialog = true }) {
+                                    Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings))
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
                 
                 if (showEncodingDialog) {
                     AlertDialog(
                         onDismissRequest = { showEncodingDialog = false },
-                        title = { Text(stringResource(R.string.select_encoding)) },
+                        shape = RoundedCornerShape(28.dp),
+                        title = { Text(stringResource(R.string.select_encoding), style = MaterialTheme.typography.headlineSmall) },
                         text = {
-                            Column {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 val encodings = listOf(
                                     stringResource(R.string.encoding_auto) to null,
                                     "UTF-8" to "UTF-8",
@@ -404,22 +422,26 @@ fun DocumentViewerScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
                                             .clickable { 
                                                 viewModel.setManualEncoding(value, isWebDav, serverId)
                                                 showEncodingDialog = false 
                                             }
-                                            .padding(16.dp),
+                                            .padding(vertical = 4.dp, horizontal = 0.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         RadioButton(selected = uiState.manualEncoding == value, onClick = null)
                                         Spacer(Modifier.width(8.dp))
-                                        Text(label)
+                                        Text(label, style = MaterialTheme.typography.bodyLarge)
                                     }
                                 }
                             }
                         },
                         confirmButton = {
-                            TextButton(onClick = { showEncodingDialog = false }) { Text(stringResource(R.string.cancel)) }
+                            TextButton(
+                                onClick = { showEncodingDialog = false },
+                                shape = RoundedCornerShape(20.dp)
+                            ) { Text(stringResource(R.string.cancel)) }
                         }
                     )
                 }
@@ -427,25 +449,29 @@ fun DocumentViewerScreen(
             bottomBar = {
                 if (!isFullScreen) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        tonalElevation = 3.dp
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        tonalElevation = 8.dp,
+                        shadowElevation = 4.dp
                     ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)) {
+                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
                             if (!uiState.isLoading) {
                                 Text(
                                     uiState.fileName ?: "", 
                                     style = MaterialTheme.typography.labelSmall,
                                     maxLines = 2,
                                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 2.dp)
                                 )
-                            } else {
-                                Spacer(modifier = Modifier.height(14.dp)) // Spacer to maintain layout height
                             }
                             val isEpub = type == FileEntry.FileType.EPUB
                             val isEpubFlat = isEpub
                             val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
-
+                            
                             // [핵심 1] 글로벌 진행도 계산
                             val sliderValue = if (isEpub && !isEpubFlat) {
                                 val chIdx = uiState.currentChapterIndex
@@ -456,12 +482,11 @@ fun DocumentViewerScreen(
                             }
 
                             val sliderRange = if (isEpub && !isEpubFlat) {
-                                0f..totalCh.toFloat() // EPUB 범위: 0 ~ 총 챕터 수
+                                0f..totalCh.toFloat()
                             } else {
-                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f) // 라인 기반 범위
+                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f)
                             }
 
-                            // 퍼센트 표시도 글로벌 스케일에 맞게 수정
                             val progressPercent = if (isEpub && !isEpubFlat) {
                                 ((sliderValue / totalCh) * 100).toInt().coerceIn(0, 100)
                             } else {
@@ -469,20 +494,20 @@ fun DocumentViewerScreen(
                             }
 
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
                                     if (isEpub) {
                                         val ch = uiState.currentChapterIndex + 1
-                                        "Ch: $ch / $totalCh | Line: $currentLine / ${uiState.totalLines}"
+                                        "Ch: $ch / $totalCh | Line: $currentLine"
                                     } else {
                                         "Line: $currentLine / ${uiState.totalLines}"
                                     },
                                     style = MaterialTheme.typography.bodySmall
                                 )
-                                Text("$progressPercent%", style = MaterialTheme.typography.bodySmall)
+                                Text("$progressPercent%", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
                             }
 
                             val displayValue = if (tempSliderValue >= 0f) tempSliderValue else sliderValue
@@ -492,31 +517,23 @@ fun DocumentViewerScreen(
                                 onValueChange = { tempSliderValue = it },
                                 onValueChangeFinished = {
                                     val finalVal = tempSliderValue
-                                    tempSliderValue = -1f // 임시값 초기화
+                                    tempSliderValue = -1f 
                                     
                                     if (isEpub && !isEpubFlat) {
-                                        // [EPUB 가로모드 점프] 슬라이더 위치에 해당하는 챕터로 이동
                                         val targetCh = finalVal.toInt().coerceIn(0, totalCh - 1)
-                                        
-                                        // 돔(DOM) 찌꺼기가 남지 않게 화면을 비우고 점프
                                         isNavigating = true
                                         isPageLoading = true
                                         webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
                                         viewModel.jumpToChapter(targetCh)
-                                        
                                     } else {
-                                        // [일반 텍스트 / EPUB 세로모드(플랫) 점프]
                                         val targetLine = finalVal.toInt()
                                         currentLine = targetLine
                                         val targetChunk = (targetLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
-                                        
                                         if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
                                             isNavigating = true
                                             isPageLoading = true
                                         }
                                         viewModel.jumpToLine(targetLine)
-                                        
-                                        // 동일 청크 내 점프인 경우의 스크롤 복구
                                         if (targetChunk == uiState.currentChunkIndex) {
                                             val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });"
                                             webViewRef?.evaluateJavascript(js) {
@@ -530,10 +547,9 @@ fun DocumentViewerScreen(
                                 },
                                 valueRange = sliderRange,
                                 interactionSource = sliderInteractionSource,
-                                modifier = Modifier.fillMaxWidth().height(32.dp).padding(horizontal = 16.dp)
+                                modifier = Modifier.fillMaxWidth().height(32.dp)
                             )
                          }
-
                     }
                 }
             },

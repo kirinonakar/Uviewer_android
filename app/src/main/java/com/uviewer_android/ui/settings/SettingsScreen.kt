@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -63,7 +64,24 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text(stringResource(R.string.title_settings)) })
+            Surface(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                tonalElevation = 8.dp,
+                shadowElevation = 4.dp
+            ) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                    ),
+                    title = { Text(stringResource(R.string.title_settings), style = MaterialTheme.typography.titleLarge) }
+                )
+            }
         }
     ) { innerPadding ->
         LazyColumn(
@@ -140,6 +158,7 @@ fun SettingsScreen(
                 if (showCustomColorDialog) {
                     AlertDialog(
                         onDismissRequest = { showCustomColorDialog = false },
+                        shape = RoundedCornerShape(28.dp),
                         title = { Text(stringResource(R.string.manual_color_picker)) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -417,7 +436,6 @@ fun SettingsScreen(
                 }
             )
         }
-
     }
 }
 
@@ -437,6 +455,7 @@ fun CacheLimitSelectionDialog(
     )
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.cache_limit)) },
         text = {
             Column {
@@ -466,6 +485,7 @@ fun DualPageOrderSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_dual_page_order)) },
         text = {
             Column {
@@ -489,6 +509,7 @@ fun ImageViewModeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.image_view_mode)) },
         text = {
             Column {
@@ -513,6 +534,7 @@ fun LanguageSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_language)) },
         text = {
             Column {
@@ -538,6 +560,7 @@ fun DocBgSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_doc_bg)) },
         text = {
             Column {
@@ -565,6 +588,7 @@ fun FontSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_font_family)) },
         text = {
             Column {
@@ -588,6 +612,7 @@ fun ThemeSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_theme)) },
         text = {
             Column {
@@ -662,7 +687,8 @@ fun AddServerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.add_webdav_server)) },
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.add_server_menu)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(

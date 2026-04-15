@@ -1,17 +1,6 @@
 package com.uviewer_android.ui.viewer
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.wrapContentHeight
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import android.content.pm.ActivityInfo
@@ -39,6 +28,7 @@ import com.uviewer_android.ui.AppViewModelProvider
 import com.uviewer_android.MainActivity
 import androidx.core.view.isVisible
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -283,97 +273,111 @@ fun MediaPlayerScreen(
         topBar = {
             if (!isFullScreen) {
                 Column {
-                    TopAppBar(
-                        title = { 
-                            Column {
-                                Text(uiState.title ?: uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1) 
-                                if (!uiState.artist.isNullOrBlank() || !uiState.album.isNullOrBlank()) {
-                                    val meta = listOfNotNull(uiState.artist, uiState.album).joinToString(" - ")
-                                    Text(meta, color = Color.LightGray, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                                }
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
-                            }
-                        },
-                        actions = {
-                            IconButton(onClick = { 
-                                mediaController?.seekToPrevious()
-                                // viewModel.prev removed to avoid double navigation
-                            }) {
-                                Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White)
-                            }
-                            IconButton(onClick = { 
-                                mediaController?.seekToNext()
-                                // viewModel.next removed to avoid double navigation
-                            }) {
-                                Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
-                            }
-                            if (fileType == FileEntry.FileType.VIDEO) {
-                                IconButton(onClick = {
-                                    val newOrientation = if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
-                                        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-                                    } else {
-                                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                    Surface(
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = Color.Black.copy(alpha = 0.7f),
+                        tonalElevation = 8.dp,
+                        shadowElevation = 4.dp,
+                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+                    ) {
+                        TopAppBar(
+                            title = { 
+                                Column {
+                                    Text(uiState.title ?: uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1) 
+                                    if (!uiState.artist.isNullOrBlank() || !uiState.album.isNullOrBlank()) {
+                                        val meta = listOfNotNull(uiState.artist, uiState.album).joinToString(" - ")
+                                        Text(meta, color = Color.LightGray, style = MaterialTheme.typography.labelSmall, maxLines = 1)
                                     }
-                                    currentActivity?.requestedOrientation = newOrientation
-                                    currentOrientation = newOrientation
+                                }
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = onBack) {
+                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White)
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { 
+                                    mediaController?.seekToPrevious()
                                 }) {
-                                    Icon(
-                                        if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
-                                        contentDescription = "Rotate Screen",
-                                        tint = Color.White
-                                    )
+                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file), tint = Color.White)
                                 }
-                                var showSubtitleMenu by remember { mutableStateOf(false) }
-                                IconButton(onClick = { showSubtitleMenu = true }) {
-                                    Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                                IconButton(onClick = { 
+                                    mediaController?.seekToNext()
+                                }) {
+                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), tint = Color.White)
                                 }
-                                if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
-                                    DropdownMenu(
-                                        expanded = showSubtitleMenu,
-                                        onDismissRequest = { showSubtitleMenu = false }
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Off") },
-                                            onClick = { 
-                                                mediaController?.let { controller ->
-                                                    val params = controller.trackSelectionParameters
-                                                        .buildUpon()
-                                                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
-                                                        .build()
-                                                    controller.trackSelectionParameters = params
-                                                }
-                                                viewModel.toggleSubtitleEnabled(false)
-                                                showSubtitleMenu = false 
-                                            }
+                                if (fileType == FileEntry.FileType.VIDEO) {
+                                    IconButton(onClick = {
+                                        val newOrientation = if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                        } else {
+                                            ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                                        }
+                                        currentActivity?.requestedOrientation = newOrientation
+                                        currentOrientation = newOrientation
+                                    }) {
+                                        Icon(
+                                            if (currentOrientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) Icons.Default.ScreenLockPortrait else Icons.Default.ScreenRotation,
+                                            contentDescription = "Rotate Screen",
+                                            tint = Color.White
                                         )
-                                        uiState.subtitleTracks.forEach { track ->
+                                    }
+                                    var showSubtitleMenu by remember { mutableStateOf(false) }
+                                    IconButton(onClick = { showSubtitleMenu = true }) {
+                                        Icon(Icons.Default.Subtitles, contentDescription = "Subtitles", tint = Color.White)
+                                    }
+                                    if (showSubtitleMenu && uiState.subtitleTracks.isNotEmpty()) {
+                                        DropdownMenu(
+                                            expanded = showSubtitleMenu,
+                                            onDismissRequest = { showSubtitleMenu = false },
+                                            shape = RoundedCornerShape(16.dp),
+                                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                                        ) {
                                             DropdownMenuItem(
-                                                text = { Text(track.label) },
-                                                onClick = {
+                                                text = { Text("Off") },
+                                                onClick = { 
                                                     mediaController?.let { controller ->
                                                         val params = controller.trackSelectionParameters
                                                             .buildUpon()
-                                                            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
-                                                            .setPreferredTextLanguage(track.language)
+                                                            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, true)
                                                             .build()
                                                         controller.trackSelectionParameters = params
                                                     }
-                                                    viewModel.toggleSubtitleEnabled(true)
-                                                    showSubtitleMenu = false
+                                                    viewModel.toggleSubtitleEnabled(false)
+                                                    showSubtitleMenu = false 
                                                 }
                                             )
+                                            uiState.subtitleTracks.forEach { track ->
+                                                DropdownMenuItem(
+                                                    text = { Text(track.label) },
+                                                    onClick = {
+                                                        mediaController?.let { controller ->
+                                                            val params = controller.trackSelectionParameters
+                                                                .buildUpon()
+                                                                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_TEXT, false)
+                                                                .setPreferredTextLanguage(track.language)
+                                                                .build()
+                                                            controller.trackSelectionParameters = params
+                                                        }
+                                                        viewModel.toggleSubtitleEnabled(true)
+                                                        showSubtitleMenu = false
+                                                    }
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black)
-                    )
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.3f))
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = Color.Transparent,
+                                scrolledContainerColor = Color.Transparent
+                            )
+                        )
+                    }
                 }
             }
         }

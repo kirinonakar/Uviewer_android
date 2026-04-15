@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -37,16 +38,31 @@ fun RecentFilesScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.title_recent_files)) },
-                actions = {
-                    if (recentFiles.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.clearAll() }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Clear All")
+            Surface(
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                tonalElevation = 8.dp,
+                shadowElevation = 4.dp
+            ) {
+                TopAppBar(
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                        scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                    ),
+                    title = { Text(stringResource(R.string.title_recent_files), style = MaterialTheme.typography.titleLarge) },
+                    actions = {
+                        if (recentFiles.isNotEmpty()) {
+                            IconButton(onClick = { viewModel.clearAll() }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Clear All")
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
     ) { innerPadding ->
         if (recentFiles.isEmpty()) {

@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -189,22 +190,37 @@ fun PdfViewerScreen(
     Scaffold(
         topBar = {
             if (!isFullScreen) {
-                TopAppBar(
-                    title = { Text(File(filePath).name, maxLines = 1) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                Surface(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    TopAppBar(
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent
+                        ),
+                        title = { Text(File(filePath).name, style = MaterialTheme.typography.titleMedium, maxLines = 1) },
+                        navigationIcon = {
+                            IconButton(onClick = onBack) {
+                                Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = {
+                                viewModel.toggleBookmark(filePath, currentPage, pageCount, isWebDav, serverId)
+                                android.widget.Toast.makeText(context, "Bookmark Saved: Page ${currentPage + 1}", android.widget.Toast.LENGTH_SHORT).show()
+                            }) {
+                                Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                            }
                         }
-                    },
-                    actions = {
-                        IconButton(onClick = {
-                            viewModel.toggleBookmark(filePath, currentPage, pageCount, isWebDav, serverId)
-                            android.widget.Toast.makeText(context, "Bookmark Saved: Page ${currentPage + 1}", android.widget.Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
-                        }
-                    }
-                )
+                    )
+                }
             }
         }
     ) { innerPadding ->

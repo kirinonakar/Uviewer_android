@@ -16,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.material3.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -298,80 +300,109 @@ fun ImageViewerScreen(
                     var showSettingsDialog by remember { mutableStateOf(false) }
 
                     Column {
-                        TopAppBar(
-                            title = {
-                                // Filename hidden as requested
-                            }, 
-                            navigationIcon = {
-                                IconButton(onClick = onBack) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                        Surface(
+                            modifier = Modifier
+                                .statusBarsPadding()
+                                .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+                                .fillMaxWidth(),
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                            tonalElevation = 8.dp,
+                            shadowElevation = 4.dp
+                        ) {
+                            TopAppBar(
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                                    scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+                                ),
+                                title = {
+                                    // Filename hidden as requested
+                                }, 
+                                navigationIcon = {
+                                    IconButton(onClick = onBack) {
+                                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back))
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = onNavigateToPrev) {
+                                        Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
+                                    }
+                                    IconButton(onClick = onNavigateToNext) {
+                                        Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
+                                    }
+                                    val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
+                                    val currentImageIndex = when (viewMode) {
+                                        ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)
+                                        ViewMode.SPLIT -> (pagerState.currentPage / 2).coerceAtMost(uiState.images.size - 1)
+                                        else -> pagerState.currentPage
+                                    }
+                                    IconButton(onClick = { 
+                                        viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
+                                        val archiveName = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
+                                        val imageName = if (currentImageIndex >= 0 && currentImageIndex < uiState.images.size) uiState.images[currentImageIndex].name else ""
+                                        val displayTitle = if (imageName.isNotEmpty() && archiveName != imageName) "$archiveName - $imageName" else imageName
+                                        android.widget.Toast.makeText(context, "Bookmark Saved: $displayTitle", android.widget.Toast.LENGTH_SHORT).show()
+                                    }) {
+                                        Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
+                                    }
+                                    IconButton(onClick = { viewModel.toggleViewMode() }) {
+                                        Icon(
+                                            when (viewMode) {
+                                                ViewMode.SINGLE -> Icons.Default.ViewCarousel
+                                                ViewMode.DUAL -> Icons.Default.ViewAgenda
+                                                ViewMode.SPLIT -> Icons.Default.VerticalSplit
+                                            }, 
+                                            contentDescription = "Toggle View Mode"
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
+                                        Icon(
+                                            if (invertImageControl) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+                                            contentDescription = "Flip Controls",
+                                            tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current
+                                        )
+                                    }
+                                    IconButton(onClick = { showSettingsDialog = true }) {
+                                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+                                    }
                                 }
-                            },
-                            actions = {
-                                IconButton(onClick = onNavigateToPrev) {
-                                    Icon(Icons.Default.SkipPrevious, contentDescription = stringResource(R.string.prev_file))
-                                }
-                                IconButton(onClick = onNavigateToNext) {
-                                    Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file))
-                                }
-                                val isZip = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") || it.endsWith(".rar") || it.endsWith(".cbr") || it.endsWith(".7z") || it.endsWith(".cb7") }
-                                val currentImageIndex = when (viewMode) {
-                                    ViewMode.DUAL -> (pagerState.currentPage * 2).coerceAtMost(uiState.images.size - 1)
-                                    ViewMode.SPLIT -> (pagerState.currentPage / 2).coerceAtMost(uiState.images.size - 1)
-                                    else -> pagerState.currentPage
-                                }
-                                IconButton(onClick = { 
-                                    viewModel.toggleBookmark(filePath, currentImageIndex, isWebDav, serverId, if (isZip) "ZIP" else "IMAGE", uiState.images)
-                                    val archiveName = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
-                                    val imageName = if (currentImageIndex >= 0 && currentImageIndex < uiState.images.size) uiState.images[currentImageIndex].name else ""
-                                    val displayTitle = if (imageName.isNotEmpty() && archiveName != imageName) "$archiveName - $imageName" else imageName
-                                    android.widget.Toast.makeText(context, "Bookmark Saved: $displayTitle", android.widget.Toast.LENGTH_SHORT).show()
-                                }) {
-                                    Icon(Icons.Default.Bookmark, contentDescription = "Bookmark")
-                                }
-                                IconButton(onClick = { viewModel.toggleViewMode() }) {
-                                    Icon(
-                                        when (viewMode) {
-                                            ViewMode.SINGLE -> Icons.Default.ViewCarousel
-                                            ViewMode.DUAL -> Icons.Default.ViewAgenda
-                                            ViewMode.SPLIT -> Icons.Default.VerticalSplit
-                                        }, 
-                                        contentDescription = "Toggle View Mode"
-                                    )
-                                }
-                                IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }) {
-                                    Icon(
-                                        if (invertImageControl) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
-                                        contentDescription = "Flip Controls",
-                                        tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current
-                                    )
-                                }
-                                IconButton(onClick = { showSettingsDialog = true }) {
-                                    Icon(Icons.Default.Settings, contentDescription = "Settings")
-                                }
-                            }
-                        )
-                        HorizontalDivider()
+                            )
+                        }
                         
                         if (showSettingsDialog) {
                             AlertDialog(
                                 onDismissRequest = { showSettingsDialog = false },
-                                title = { Text(stringResource(R.string.section_image_viewer)) },
+                                shape = RoundedCornerShape(28.dp),
+                                title = { Text(stringResource(R.string.section_image_viewer), style = MaterialTheme.typography.headlineSmall) },
                                 text = {
                                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { viewModel.setInvertImageControl(!invertImageControl) }.padding(vertical = 4.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically, 
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { viewModel.setInvertImageControl(!invertImageControl) }
+                                                .padding(vertical = 8.dp)
+                                        ) {
                                             Checkbox(checked = invertImageControl, onCheckedChange = { viewModel.setInvertImageControl(it) })
                                             Column {
-                                                Text(stringResource(R.string.invert_image_control))
+                                                Text(stringResource(R.string.invert_image_control), style = MaterialTheme.typography.bodyLarge)
                                                 Text(stringResource(R.string.invert_image_control_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                             }
                                         }
-                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { viewModel.setPersistZoom(!uiState.persistZoom) }) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically, 
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .clickable { viewModel.setPersistZoom(!uiState.persistZoom) }
+                                                .padding(vertical = 8.dp)
+                                        ) {
                                             Checkbox(checked = uiState.persistZoom, onCheckedChange = { viewModel.setPersistZoom(it) })
-                                            Text(stringResource(R.string.persist_zoom))
+                                            Text(stringResource(R.string.persist_zoom), style = MaterialTheme.typography.bodyLarge)
                                         }
-                                        Column {
-                                            Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}")
+                                        Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                                            Text(stringResource(R.string.sharpening_amount) + ": ${uiState.sharpeningAmount}", style = MaterialTheme.typography.labelMedium)
                                             Slider(
                                                 value = uiState.sharpeningAmount.toFloat(),
                                                 onValueChange = { viewModel.setSharpeningAmount(it.toInt()) },
@@ -379,25 +410,30 @@ fun ImageViewerScreen(
                                                 steps = 9
                                             )
                                         }
-                                        Column {
-                                            Text(stringResource(R.string.dual_page_order))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Column(modifier = Modifier.padding(horizontal = 4.dp)) {
+                                            Text(stringResource(R.string.dual_page_order), style = MaterialTheme.typography.labelMedium)
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 4.dp)) {
                                                 FilterChip(
                                                     selected = dualPageOrder == 0,
                                                     onClick = { viewModel.setDualPageOrder(0) },
-                                                    label = { Text(stringResource(R.string.dual_page_ltr)) }
+                                                    label = { Text(stringResource(R.string.dual_page_ltr)) },
+                                                    shape = RoundedCornerShape(12.dp)
                                                 )
                                                 FilterChip(
                                                     selected = dualPageOrder == 1,
                                                     onClick = { viewModel.setDualPageOrder(1) },
-                                                    label = { Text(stringResource(R.string.dual_page_rtl)) }
+                                                    label = { Text(stringResource(R.string.dual_page_rtl)) },
+                                                    shape = RoundedCornerShape(12.dp)
                                                 )
                                             }
                                         }
                                     }
                                 },
                                 confirmButton = {
-                                    Button(onClick = { showSettingsDialog = false }) { Text("Close") }
+                                    Button(
+                                        onClick = { showSettingsDialog = false },
+                                        shape = RoundedCornerShape(20.dp)
+                                    ) { Text("Close") }
                                 }
                             )
                         }
@@ -407,14 +443,18 @@ fun ImageViewerScreen(
             bottomBar = {
                 if (!isFullScreen && uiState.images.size > 1) {
                     Surface(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        tonalElevation = 3.dp,
-                        modifier = Modifier.height(intrinsicSize = IntrinsicSize.Min)
+                        modifier = Modifier
+                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
+                            .fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                        tonalElevation = 8.dp,
+                        shadowElevation = 4.dp
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
                         ) {
                             // File Name (Archive Name)
                             val containerName = uiState.containerName
@@ -450,7 +490,7 @@ fun ImageViewerScreen(
                                 
                                 Text(
                                     text = "${currentImgIdx + 1} / ${uiState.images.size} (${((currentImgIdx + 1) * 100 / uiState.images.size)}%)",
-                                    style = MaterialTheme.typography.bodySmall
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 )
                             }
                             
