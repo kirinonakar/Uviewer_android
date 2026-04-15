@@ -14,7 +14,15 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -135,21 +143,48 @@ fun MainScreen(
     Scaffold(
         bottomBar = {
             if (!isFullScreen) {
-                NavigationBar {
-                    val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentDestination = navBackStackEntry?.destination
-                    items.forEach { screen ->
-                        val title = if (screen is Screen.Resume) "Resume" else when(screen) {
-                            is Screen.Library -> screen.title
-                            is Screen.Favorites -> screen.title
-                            is Screen.Recent -> screen.title
-                            is Screen.Settings -> screen.title
-                            else -> ""
-                        }
-                        NavigationBarItem(
-                            icon = { Icon(screen.icon, contentDescription = null) },
-                            label = { Text(title) },
-                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                Surface(
+                    modifier = Modifier
+                        .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
+                        .navigationBarsPadding(),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                    tonalElevation = 8.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        modifier = Modifier.height(64.dp),
+                        tonalElevation = 0.dp
+                    ) {
+                        val navBackStackEntry by navController.currentBackStackEntryAsState()
+                        val currentDestination = navBackStackEntry?.destination
+                        items.forEach { screen ->
+                            val title = if (screen is Screen.Resume) "Resume" else when(screen) {
+                                is Screen.Library -> screen.title
+                                is Screen.Favorites -> screen.title
+                                is Screen.Recent -> screen.title
+                                is Screen.Settings -> screen.title
+                                else -> ""
+                            }
+                            NavigationBarItem(
+                                icon = { Icon(screen.icon, contentDescription = title) },
+                                label = null,
+                                selected = currentDestination?.hierarchy?.any { 
+                                    val route = it.route
+                                    if (screen is Screen.Library) {
+                                        route?.startsWith("library") == true
+                                    } else if (screen is Screen.Resume) {
+                                        route?.startsWith("viewer") == true
+                                    } else {
+                                        route == screen.route
+                                    }
+                                } == true,
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                ),
                             onClick = {
                                 if (screen is Screen.Resume) {
                                     val recent = libraryUiState.mostRecentFile
@@ -230,7 +265,8 @@ fun MainScreen(
                 }
             }
         }
-    ) { innerPadding ->
+    }
+) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = "library",
