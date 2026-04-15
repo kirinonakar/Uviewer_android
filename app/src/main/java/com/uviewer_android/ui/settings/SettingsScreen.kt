@@ -79,7 +79,7 @@ fun SettingsScreen(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                         scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
                     ),
-                    title = { Text(stringResource(R.string.title_settings), style = MaterialTheme.typography.titleLarge) }
+                    title = { Text(stringResource(R.string.title_settings), style = MaterialTheme.typography.titleMedium) }
                 )
             }
         }
@@ -89,7 +89,6 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_appearance),
@@ -122,7 +121,6 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showLanguageDialog = true }
                 )
             }
-            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_reading),
@@ -236,7 +234,6 @@ fun SettingsScreen(
                     }
                 )
             }
-            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_image_viewer),
@@ -300,8 +297,6 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showImageViewModeDialog = true }
                 )
             }
-
-            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_storage),
@@ -327,8 +322,6 @@ fun SettingsScreen(
                     modifier = Modifier.clickable { showCacheLimitDialog = true }
                 )
             }
-
-            item { HorizontalDivider() }
             item {
                 Text(
                     text = stringResource(R.string.section_webdav),

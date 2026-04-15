@@ -571,7 +571,6 @@ fun DocumentViewerScreen(
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        if (!isFullScreen) HorizontalDivider()
                         Box(modifier = Modifier.weight(1f)) {
                             AndroidView(
                          modifier = Modifier.fillMaxSize(),

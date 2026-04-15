@@ -59,7 +59,7 @@ fun FavoritesScreen(
                             containerColor = androidx.compose.ui.graphics.Color.Transparent,
                             scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
                         ),
-                        title = { Text(stringResource(R.string.title_favorites), style = MaterialTheme.typography.titleLarge) }
+                        title = { Text(stringResource(R.string.title_favorites), style = MaterialTheme.typography.titleMedium) }
                     )
                 }
                 

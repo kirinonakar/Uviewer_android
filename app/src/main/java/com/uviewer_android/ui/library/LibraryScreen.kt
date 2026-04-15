@@ -206,7 +206,6 @@ fun LibraryScreen(
         }
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
-            HorizontalDivider()
             Surface(
                 modifier = Modifier
                     .padding(horizontal = 16.dp, vertical = 8.dp)

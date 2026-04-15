@@ -53,7 +53,7 @@ fun RecentFilesScreen(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                         scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
                     ),
-                    title = { Text(stringResource(R.string.title_recent_files), style = MaterialTheme.typography.titleLarge) },
+                    title = { Text(stringResource(R.string.title_recent_files), style = MaterialTheme.typography.titleMedium) },
                     actions = {
                         if (recentFiles.isNotEmpty()) {
                             IconButton(onClick = { viewModel.clearAll() }) {
@@ -76,7 +76,6 @@ fun RecentFilesScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(innerPadding)
             ) {
-                item { HorizontalDivider() }
                 items(recentFiles) { file ->
                     RecentFileItemRow(
                         file = file,
