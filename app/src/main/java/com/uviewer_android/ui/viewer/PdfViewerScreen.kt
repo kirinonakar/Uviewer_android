@@ -54,6 +54,7 @@ fun PdfViewerScreen(
     onBack: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel? = null,
     activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
@@ -67,6 +68,69 @@ fun PdfViewerScreen(
     
     val listState = rememberLazyListState()
     val currentPage by remember { derivedStateOf { listState.firstVisibleItemIndex } }
+
+    androidx.compose.runtime.DisposableEffect(isFullScreen, pageCount, currentPage) {
+        if (!isFullScreen && pageCount > 0) {
+            libraryViewModel?.setViewerBottomBarContent {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = File(filePath).name,
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Page: ${currentPage + 1} / $pageCount (${((currentPage + 1) * 100 / pageCount.coerceAtLeast(1))}% )",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        )
+                    }
+
+                    val sliderInteractionSource = remember { MutableInteractionSource() }
+                    Slider(
+                        value = currentPage.toFloat(),
+                        onValueChange = { 
+                            scope.launch {
+                                listState.scrollToItem(it.toInt())
+                            }
+                        },
+                        valueRange = 0f..(pageCount - 1).coerceAtLeast(0).toFloat(),
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = sliderInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().height(32.dp),
+                        interactionSource = sliderInteractionSource
+                    )
+                }
+            }
+        } else {
+            libraryViewModel?.setViewerBottomBarContent(null)
+        }
+        onDispose {
+            libraryViewModel?.setViewerBottomBarContent(null)
+        }
+    }
 
     // Track and save progress
     LaunchedEffect(currentPage, pageCount) {
@@ -226,71 +290,6 @@ fun PdfViewerScreen(
                             }
                         }
                     )
-                }
-            }
-        },
-        bottomBar = {
-            if (!isFullScreen && pageCount > 0) {
-                Surface(
-                    modifier = Modifier
-                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.background,
-                    tonalElevation = 2.dp,
-                    shadowElevation = 2.dp
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = File(filePath).name,
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Page: ${currentPage + 1} / $pageCount (${((currentPage + 1) * 100 / pageCount.coerceAtLeast(1))}% )",
-                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            )
-                        }
-
-                        val sliderInteractionSource = remember { MutableInteractionSource() }
-                        Slider(
-                            value = currentPage.toFloat(),
-                            onValueChange = { 
-                                scope.launch {
-                                    listState.scrollToItem(it.toInt())
-                                }
-                            },
-                            valueRange = 0f..(pageCount - 1).coerceAtLeast(0).toFloat(),
-                            thumb = {
-                                SliderDefaults.Thumb(
-                                    interactionSource = sliderInteractionSource,
-                                    thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
-                                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
-                                )
-                            },
-                            track = { sliderState ->
-                                SliderDefaults.Track(
-                                    sliderState = sliderState,
-                                    modifier = Modifier.height(4.dp),
-                                    colors = SliderDefaults.colors(
-                                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                    )
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth().height(32.dp),
-                            interactionSource = sliderInteractionSource
-                        )
-                    }
                 }
             }
         }

@@ -11,6 +11,7 @@ import com.uviewer_android.data.repository.WebDavRepository
 import com.uviewer_android.data.repository.CredentialsManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.Composable
 
 data class LibraryUiState(
     val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
@@ -40,6 +41,13 @@ class LibraryViewModel(
 
 
     private val _state = MutableStateFlow(LibraryUiState())
+    private val _viewerBottomBarContent = MutableStateFlow<(@Composable () -> Unit)?>(null)
+    val viewerBottomBarContent = _viewerBottomBarContent.asStateFlow()
+
+    fun setViewerBottomBarContent(content: (@Composable () -> Unit)?) {
+        _viewerBottomBarContent.value = content
+    }
+
     private val _servers = webDavServerDao.getAllServers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

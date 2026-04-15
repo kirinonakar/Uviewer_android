@@ -28,6 +28,7 @@ fun ViewerScreen(
     onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel? = null,
     activity: com.uviewer_android.MainActivity? = null
 ) {
     val type = try {
@@ -58,10 +59,10 @@ fun ViewerScreen(
 
     when (resolvedType) {
         FileEntry.FileType.IMAGE, FileEntry.FileType.ZIP, FileEntry.FileType.WEBP, FileEntry.FileType.IMAGE_ZIP, FileEntry.FileType.RAR, FileEntry.FileType.SEVEN_ZIP -> {
-            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+            ImageViewerScreen(filePath, isWebDav, serverId, initialIndex = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, libraryViewModel = libraryViewModel, activity = activity)
         }
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
-            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+            DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, libraryViewModel = libraryViewModel, activity = activity)
         }
         FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
         FileEntry.FileType.PDF -> {
@@ -73,6 +74,7 @@ fun ViewerScreen(
                  onBack = onBack, 
                  isFullScreen = isFullScreen, 
                  onToggleFullScreen = onToggleFullScreen,
+                 libraryViewModel = libraryViewModel,
                  activity = activity
              )
         }

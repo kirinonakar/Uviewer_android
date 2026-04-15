@@ -69,6 +69,7 @@ fun DocumentViewerScreen(
     onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel? = null,
     activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
@@ -107,6 +108,127 @@ fun DocumentViewerScreen(
             c = c.baseContext
         }
         c as? MainActivity
+    }
+
+    androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentLine, tempSliderValue, type) {
+        if (!isFullScreen) {
+            libraryViewModel?.setViewerBottomBarContent {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                    if (!uiState.isLoading) {
+                        Text(
+                            uiState.fileName ?: "", 
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                    val isEpub = type == FileEntry.FileType.EPUB
+                    val isEpubFlat = isEpub
+                    val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
+                    
+                    val sliderValue = if (isEpub && !isEpubFlat) {
+                        val chIdx = uiState.currentChapterIndex
+                        val chLines = uiState.totalLines.coerceAtLeast(1)
+                        chIdx.toFloat() + (currentLine.toFloat() / chLines).coerceIn(0f, 1f)
+                    } else {
+                        currentLine.toFloat()
+                    }
+
+                    val sliderRange = if (isEpub && !isEpubFlat) {
+                        0f..totalCh.toFloat()
+                    } else {
+                        1f..uiState.totalLines.toFloat().coerceAtLeast(1f)
+                    }
+
+                    val progressPercent = if (isEpub && !isEpubFlat) {
+                        ((sliderValue / totalCh) * 100).toInt().coerceIn(0, 100)
+                    } else {
+                        if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines).coerceIn(0, 100) else 0
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            if (isEpub) {
+                                val ch = uiState.currentChapterIndex + 1
+                                "Ch: $ch / $totalCh | Line: $currentLine"
+                            } else {
+                                "Line: $currentLine / ${uiState.totalLines}"
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text("$progressPercent%", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
+                    }
+
+                    val displayValue = if (tempSliderValue >= 0f) tempSliderValue else sliderValue
+
+                    Slider(
+                        value = displayValue,
+                        onValueChange = { tempSliderValue = it },
+                        onValueChangeFinished = {
+                            val finalVal = tempSliderValue
+                            tempSliderValue = -1f 
+                            
+                            if (isEpub && !isEpubFlat) {
+                                val targetCh = finalVal.toInt().coerceIn(0, totalCh - 1)
+                                isNavigating = true
+                                isPageLoading = true
+                                webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
+                                viewModel.jumpToChapter(targetCh)
+                            } else {
+                                val targetLine = finalVal.toInt()
+                                currentLine = targetLine
+                                val targetChunk = (targetLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
+                                if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
+                                    isNavigating = true
+                                    isPageLoading = true
+                                }
+                                viewModel.jumpToLine(targetLine)
+                                if (targetChunk == uiState.currentChunkIndex) {
+                                    val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });"
+                                    webViewRef?.evaluateJavascript(js) {
+                                        webViewRef?.postDelayed({
+                                            isPageLoading = false
+                                            isNavigating = false
+                                        }, 800)
+                                    }
+                                }
+                            }
+                        },
+                        valueRange = sliderRange,
+                        interactionSource = sliderInteractionSource,
+                        thumb = {
+                            SliderDefaults.Thumb(
+                                interactionSource = sliderInteractionSource,
+                                thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                            )
+                        },
+                        track = { sliderState ->
+                            SliderDefaults.Track(
+                                sliderState = sliderState,
+                                modifier = Modifier.height(4.dp),
+                                colors = SliderDefaults.colors(
+                                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                                    inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().height(32.dp)
+                    )
+                }
+            }
+        } else {
+            libraryViewModel?.setViewerBottomBarContent(null)
+        }
+        onDispose {
+            libraryViewModel?.setViewerBottomBarContent(null)
+        }
     }
 
     // Keep screen on while viewing document
@@ -446,130 +568,6 @@ fun DocumentViewerScreen(
                             ) { Text(stringResource(R.string.cancel)) }
                         }
                     )
-                }
-            },
-            bottomBar = {
-                if (!isFullScreen) {
-                    Surface(
-                        modifier = Modifier
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                            .fillMaxWidth(),
-                        shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.background,
-                        tonalElevation = 2.dp,
-                        shadowElevation = 2.dp
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp)) {
-                            if (!uiState.isLoading) {
-                                Text(
-                                    uiState.fileName ?: "", 
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 2,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                            val isEpub = type == FileEntry.FileType.EPUB
-                            val isEpubFlat = isEpub
-                            val totalCh = uiState.epubChapters.size.coerceAtLeast(1)
-                            
-                            // [핵심 1] 글로벌 진행도 계산
-                            val sliderValue = if (isEpub && !isEpubFlat) {
-                                val chIdx = uiState.currentChapterIndex
-                                val chLines = uiState.totalLines.coerceAtLeast(1)
-                                chIdx.toFloat() + (currentLine.toFloat() / chLines).coerceIn(0f, 1f)
-                            } else {
-                                currentLine.toFloat()
-                            }
-
-                            val sliderRange = if (isEpub && !isEpubFlat) {
-                                0f..totalCh.toFloat()
-                            } else {
-                                1f..uiState.totalLines.toFloat().coerceAtLeast(1f)
-                            }
-
-                            val progressPercent = if (isEpub && !isEpubFlat) {
-                                ((sliderValue / totalCh) * 100).toInt().coerceIn(0, 100)
-                            } else {
-                                if (uiState.totalLines > 0) (currentLine * 100 / uiState.totalLines).coerceIn(0, 100) else 0
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    if (isEpub) {
-                                        val ch = uiState.currentChapterIndex + 1
-                                        "Ch: $ch / $totalCh | Line: $currentLine"
-                                    } else {
-                                        "Line: $currentLine / ${uiState.totalLines}"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                                Text("$progressPercent%", style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant))
-                            }
-
-                            val displayValue = if (tempSliderValue >= 0f) tempSliderValue else sliderValue
-
-                            Slider(
-                                value = displayValue,
-                                onValueChange = { tempSliderValue = it },
-                                onValueChangeFinished = {
-                                    val finalVal = tempSliderValue
-                                    tempSliderValue = -1f 
-                                    
-                                    if (isEpub && !isEpubFlat) {
-                                        val targetCh = finalVal.toInt().coerceIn(0, totalCh - 1)
-                                        isNavigating = true
-                                        isPageLoading = true
-                                        webViewRef?.evaluateJavascript("document.body.innerHTML = ''; window.scrollTo(0,0);", null)
-                                        viewModel.jumpToChapter(targetCh)
-                                    } else {
-                                        val targetLine = finalVal.toInt()
-                                        currentLine = targetLine
-                                        val targetChunk = (targetLine - 1) / DocumentViewerViewModel.LINES_PER_CHUNK
-                                        if (targetChunk != uiState.currentChunkIndex || kotlin.math.abs(targetLine - uiState.currentLine) > 50) {
-                                            isNavigating = true
-                                            isPageLoading = true
-                                        }
-                                        viewModel.jumpToLine(targetLine)
-                                        if (targetChunk == uiState.currentChunkIndex) {
-                                            val js = "var el = document.getElementById('line-$currentLine'); if(el) el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });"
-                                            webViewRef?.evaluateJavascript(js) {
-                                                webViewRef?.postDelayed({
-                                                    isPageLoading = false
-                                                    isNavigating = false
-                                                }, 800)
-                                            }
-                                        }
-                                    }
-                                },
-                                valueRange = sliderRange,
-                                interactionSource = sliderInteractionSource,
-                                thumb = {
-                                    SliderDefaults.Thumb(
-                                        interactionSource = sliderInteractionSource,
-                                        thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
-                                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
-                                    )
-                                },
-                                track = { sliderState ->
-                                    SliderDefaults.Track(
-                                        sliderState = sliderState,
-                                        modifier = Modifier.height(4.dp),
-                                        colors = SliderDefaults.colors(
-                                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                                            inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                        )
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth().height(32.dp)
-                            )
-                         }
-                    }
                 }
             },
             snackbarHost = {} // Add snackbar host if needed

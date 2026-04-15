@@ -98,6 +98,7 @@ fun ImageViewerScreen(
     onNavigateToPrev: () -> Unit = {},
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel? = null,
     activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
@@ -107,6 +108,7 @@ fun ImageViewerScreen(
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     var currentPageIndex by remember(uiState.images) { mutableIntStateOf(uiState.initialIndex) }
+    // viewMode is extracted from uiState where needed
 
     // Sync is done after pagerState is created (see below)
 
@@ -239,6 +241,101 @@ fun ImageViewerScreen(
             }
             rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
                 pageCount
+            }
+        }
+
+        androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentPageIndex, viewMode, pageCount) {
+            if (!isFullScreen && uiState.images.size > 1) {
+                libraryViewModel?.setViewerBottomBarContent {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                    ) {
+                        // File Name (Archive Name)
+                        val containerName = uiState.containerName
+                        if (containerName != null) {
+                            Text(
+                                text = containerName,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        
+                        // Image Name
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val currentImgIdx = currentPageIndex.coerceIn(0, uiState.images.size - 1)
+                            val imageName = uiState.images[currentImgIdx].name
+                            
+                            Text(
+                                text = imageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
+                            )
+                            
+                            Spacer(modifier = Modifier.width(8.dp))
+                            
+                            Text(
+                                text = "${currentImgIdx + 1} / ${uiState.images.size} (${((currentImgIdx + 1) * 100 / uiState.images.size)}%)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+                        
+                        val sliderInteractionSource = remember { MutableInteractionSource() }
+                        
+                        // Slider for navigation
+                        Slider(
+                            value = currentPageIndex.toFloat(),
+                            onValueChange = { 
+                                val targetIdx = it.toInt()
+                                if (targetIdx != currentPageIndex) {
+                                    scope.launch {
+                                        val targetPage = when (viewMode) {
+                                            ViewMode.SINGLE -> targetIdx
+                                            ViewMode.DUAL -> targetIdx / 2
+                                            ViewMode.SPLIT -> targetIdx * 2
+                                        }
+                                        pagerState.scrollToPage(targetPage.coerceIn(0, pageCount - 1))
+                                    }
+                                }
+                            },
+                            valueRange = 0f..(uiState.images.size - 1).coerceAtLeast(0).toFloat(),
+                            thumb = {
+                                SliderDefaults.Thumb(
+                                    interactionSource = sliderInteractionSource,
+                                    thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
+                                    colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
+                                )
+                            },
+                            track = { sliderState ->
+                                SliderDefaults.Track(
+                                    sliderState = sliderState,
+                                    modifier = Modifier.height(4.dp),
+                                    colors = SliderDefaults.colors(
+                                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                                        inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                                    )
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().height(32.dp),
+                            interactionSource = sliderInteractionSource
+                        )
+                    }
+                }
+            } else {
+                libraryViewModel?.setViewerBottomBarContent(null)
+            }
+            onDispose {
+                libraryViewModel?.setViewerBottomBarContent(null)
             }
         }
         
@@ -458,103 +555,6 @@ fun ImageViewerScreen(
                                         shape = RoundedCornerShape(20.dp)
                                     ) { Text("Close") }
                                 }
-                            )
-                        }
-                    }
-                }
-            },
-            bottomBar = {
-                if (!isFullScreen && uiState.images.size > 1) {
-                    Surface(
-                        modifier = Modifier
-                            .padding(start = 16.dp, end = 16.dp, bottom = 12.dp)
-                            .fillMaxWidth(),
-                        shape = RoundedCornerShape(28.dp),
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
-                        tonalElevation = 4.dp,
-                        shadowElevation = 4.dp
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 8.dp)
-                        ) {
-                            // File Name (Archive Name)
-                            val containerName = uiState.containerName
-                            if (containerName != null) {
-                                Text(
-                                    text = containerName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                            
-                            // Image Name (2 lines possible)
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                val currentImgIdx = currentPageIndex.coerceIn(0, uiState.images.size - 1)
-                                val imageName = uiState.images[currentImgIdx].name
-                                
-                                Text(
-                                    text = imageName,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                
-                                Spacer(modifier = Modifier.width(8.dp))
-                                
-                                Text(
-                                    text = "${currentImgIdx + 1} / ${uiState.images.size} (${((currentImgIdx + 1) * 100 / uiState.images.size)}%)",
-                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                )
-                            }
-                            
-                            val sliderInteractionSource = remember { MutableInteractionSource() }
-                            
-                            // Slider for navigation
-                            Slider(
-                                value = currentPageIndex.toFloat(),
-                                onValueChange = { 
-                                    val targetIdx = it.toInt()
-                                    if (targetIdx != currentPageIndex) {
-                                        scope.launch {
-                                            val targetPage = when (viewMode) {
-                                                ViewMode.SINGLE -> targetIdx
-                                                ViewMode.DUAL -> targetIdx / 2
-                                                ViewMode.SPLIT -> targetIdx * 2
-                                            }
-                                            pagerState.scrollToPage(targetPage.coerceIn(0, pageCount - 1))
-                                        }
-                                    }
-                                },
-                                valueRange = 0f..(uiState.images.size - 1).coerceAtLeast(0).toFloat(),
-                                thumb = {
-                                    SliderDefaults.Thumb(
-                                        interactionSource = sliderInteractionSource,
-                                        thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
-                                        colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
-                                    )
-                                },
-                                track = { sliderState ->
-                                    SliderDefaults.Track(
-                                        sliderState = sliderState,
-                                        modifier = Modifier.height(4.dp),
-                                        colors = SliderDefaults.colors(
-                                            activeTrackColor = MaterialTheme.colorScheme.primary,
-                                            inactiveTrackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                                        )
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth().height(32.dp),
-                                interactionSource = sliderInteractionSource
                             )
                         }
                     }

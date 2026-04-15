@@ -41,6 +41,8 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import androidx.navigation.NavType
 import androidx.navigation.navArgument
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.HorizontalDivider
 
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Star
@@ -144,6 +146,8 @@ fun MainScreen(
     Scaffold(
         bottomBar = {
             if (!isFullScreen) {
+                val viewerBottomContent by libraryViewModel.viewerBottomBarContent.collectAsState()
+                
                 Surface(
                     modifier = Modifier
                         .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
@@ -153,80 +157,101 @@ fun MainScreen(
                     tonalElevation = 4.dp,
                     shadowElevation = 4.dp
                 ) {
-                    NavigationBar(
-                        windowInsets = WindowInsets(0),
-                        containerColor = Color.Transparent,
-                        modifier = Modifier.height(64.dp),
-                        tonalElevation = 0.dp
-                    ) {
-                        val navBackStackEntry by navController.currentBackStackEntryAsState()
-                        val currentDestination = navBackStackEntry?.destination
-                        items.forEach { screen ->
-                            val title = if (screen is Screen.Resume) "Resume" else when(screen) {
-                                is Screen.Library -> screen.title
-                                is Screen.Favorites -> screen.title
-                                is Screen.Recent -> screen.title
-                                is Screen.Settings -> screen.title
-                                else -> ""
-                            }
-                            NavigationBarItem(
-                                icon = { Icon(screen.icon, contentDescription = title) },
-                                label = null,
-                                selected = currentDestination?.hierarchy?.any { 
-                                    val route = it.route
-                                    if (screen is Screen.Library) {
-                                        route?.startsWith("library") == true
-                                    } else if (screen is Screen.Resume) {
-                                        route?.startsWith("viewer") == true
-                                    } else {
-                                        route == screen.route
-                                    }
-                                } == true,
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                ),
-                            onClick = {
-                                if (screen is Screen.Resume) {
-                                    val recent = libraryUiState.mostRecentFile
-                                    if (recent != null) {
-                                        val encodedPath = android.net.Uri.encode(recent.path, null)
-                                        // Use pageIndex for position. For Media, it might be seek position? 
-                                        // Current ViewerScreen handles position as initialLine or initialIndex.
-                                        val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
-                                        navController.navigate(route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = false
-                                            }
-                                            launchSingleTop = true
+                    Column {
+                        // Viewer-specific content (Slider, etc.)
+                        viewerBottomContent?.invoke()
+                        
+                        if (viewerBottomContent != null) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                                thickness = 0.5.dp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                            )
+                        }
+
+                        NavigationBar(
+                            windowInsets = WindowInsets(0),
+                            containerColor = Color.Transparent,
+                            modifier = Modifier.height(64.dp),
+                            tonalElevation = 0.dp
+                        ) {
+                            val navBackStackEntry by navController.currentBackStackEntryAsState()
+                            val currentDestination = navBackStackEntry?.destination
+                            items.forEach { screen ->
+                                val title = if (screen is Screen.Resume) "Resume" else when(screen) {
+                                    is Screen.Library -> screen.title
+                                    is Screen.Favorites -> screen.title
+                                    is Screen.Recent -> screen.title
+                                    is Screen.Settings -> screen.title
+                                    else -> ""
+                                }
+                                NavigationBarItem(
+                                    selected = currentDestination?.hierarchy?.any { 
+                                        val route = it.route
+                                        if (screen is Screen.Library) {
+                                            route?.startsWith("library") == true
+                                        } else if (screen is Screen.Resume) {
+                                            route?.startsWith("viewer") == true
+                                        } else {
+                                            route == screen.route
                                         }
-                                    }
-                                } else if (screen is Screen.Library) {
-                                    val currentEntry = navBackStackEntry
-                                    val isViewer = currentEntry?.destination?.route?.startsWith("viewer") == true
-                                    
-                                    if (isViewer) {
-                                        val filePath = currentEntry?.arguments?.getString("path")
-                                        val isWebDav = currentEntry?.arguments?.getBoolean("isWebDav") ?: false
-                                        val serverId = currentEntry?.arguments?.getInt("serverId") ?: -1
-                                        
-                                        if (filePath != null) {
-                                            val parentPath = if (isWebDav) {
-                                                val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
-                                                val lastSlash = p.lastIndexOf('/')
-                                                if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
-                                            } else {
-                                                java.io.File(filePath).parent ?: "/"
-                                            }
-                                            val encodedPath = android.net.Uri.encode(parentPath, null)
-                                            val route = "library?path=$encodedPath&serverId=$serverId"
-                                            navController.navigate(route) {
-                                                popUpTo(navController.graph.findStartDestination().id) {
-                                                    saveState = true
+                                    } == true,
+                                    onClick = {
+                                        if (screen is Screen.Resume) {
+                                            val recent = libraryUiState.mostRecentFile
+                                            if (recent != null) {
+                                                val encodedPath = android.net.Uri.encode(recent.path, null)
+                                                val route = "viewer?path=$encodedPath&type=${recent.type}&isWebDav=${recent.isWebDav}&serverId=${recent.serverId ?: -1}&position=${recent.pageIndex}"
+                                                navController.navigate(route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                        saveState = false
+                                                    }
+                                                    launchSingleTop = true
                                                 }
-                                                launchSingleTop = true
-                                                restoreState = false
+                                            }
+                                        } else if (screen is Screen.Library) {
+                                            val currentEntry = navBackStackEntry
+                                            val isViewer = currentEntry?.destination?.route?.startsWith("viewer") == true
+                                            
+                                            if (isViewer) {
+                                                val filePath = currentEntry?.arguments?.getString("path")
+                                                val isWebDav = currentEntry?.arguments?.getBoolean("isWebDav") ?: false
+                                                val serverId = currentEntry?.arguments?.getInt("serverId") ?: -1
+                                                
+                                                if (filePath != null) {
+                                                    val parentPath = if (isWebDav) {
+                                                        val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
+                                                        val lastSlash = p.lastIndexOf('/')
+                                                        if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
+                                                    } else {
+                                                        java.io.File(filePath).parent ?: "/"
+                                                    }
+                                                    val encodedPath = android.net.Uri.encode(parentPath, null)
+                                                    val route = "library?path=$encodedPath&serverId=$serverId"
+                                                    navController.navigate(route) {
+                                                        popUpTo(navController.graph.findStartDestination().id) {
+                                                            saveState = true
+                                                        }
+                                                        launchSingleTop = true
+                                                        restoreState = false
+                                                    }
+                                                } else {
+                                                    navController.navigate(screen.route) {
+                                                        popUpTo(navController.graph.findStartDestination().id) {
+                                                            saveState = true
+                                                        }
+                                                        launchSingleTop = true
+                                                        restoreState = true
+                                                    }
+                                                }
+                                            } else {
+                                                navController.navigate(screen.route) {
+                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                        saveState = true
+                                                    }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
                                             }
                                         } else {
                                             navController.navigate(screen.route) {
@@ -234,41 +259,29 @@ fun MainScreen(
                                                     saveState = true
                                                 }
                                                 launchSingleTop = true
-                                                restoreState = true
+                                                if (screen is Screen.Favorites || screen is Screen.Recent || screen is Screen.Settings) {
+                                                    restoreState = false
+                                                } else {
+                                                    restoreState = true
+                                                }
                                             }
                                         }
-                                    } else {
-                                        navController.navigate(screen.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = true
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = true
-                                        }
-                                    }
-                                } else {
-                                    navController.navigate(screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        
-                                        // Reset state for Favorites/Recent/Settings (User Request)
-                                        if (screen is Screen.Favorites || screen is Screen.Recent || screen is Screen.Settings) {
-                                            restoreState = false
-                                        } else {
-                                            restoreState = true
-                                        }
-                                    }
-                                }
+                                    },
+                                    icon = { Icon(screen.icon, contentDescription = title) },
+                                    label = null,
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                    )
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
         }
-    }
-) { innerPadding ->
+    ) { innerPadding ->
         NavHost(
             navController = navController,
             startDestination = "library",
@@ -362,6 +375,7 @@ fun MainScreen(
                     isWebDav = isWebDav,
                     serverId = serverId,
                     initialPosition = position,
+                    libraryViewModel = libraryViewModel,
                     onBack = { 
                         // Modified to handle WebDAV parent path safely
                         // Use serverId or path prefix to detect WebDAV
