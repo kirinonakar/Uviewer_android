@@ -72,7 +72,7 @@ fun PdfViewerScreen(
     androidx.compose.runtime.DisposableEffect(isFullScreen, pageCount, currentPage) {
         if (!isFullScreen && pageCount > 0) {
             libraryViewModel?.setViewerBottomBarContent {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 1.dp),
                         verticalAlignment = Alignment.CenterVertically,

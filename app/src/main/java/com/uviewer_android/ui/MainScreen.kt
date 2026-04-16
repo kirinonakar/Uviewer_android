@@ -150,9 +150,9 @@ fun MainScreen(
                 
                 Surface(
                     modifier = Modifier
-                        .padding(start = 24.dp, end = 24.dp, bottom = 16.dp)
+                        .padding(start = 8.dp, end = 8.dp, bottom = 16.dp)
                         .navigationBarsPadding(),
-                    shape = RoundedCornerShape(28.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 1.dp,
                     shadowElevation = 1.dp
@@ -163,7 +163,7 @@ fun MainScreen(
                         
                         if (viewerBottomContent != null) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 24.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp),
                                 thickness = 0.5.dp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                             )

@@ -250,7 +250,7 @@ fun ImageViewerScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
                         // File Name (Archive Name)
                         val containerName = uiState.containerName

@@ -113,7 +113,7 @@ fun DocumentViewerScreen(
     androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentLine, tempSliderValue, type) {
         if (!isFullScreen) {
             libraryViewModel?.setViewerBottomBarContent {
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (!uiState.isLoading) {
                         Text(
                             uiState.fileName ?: "", 

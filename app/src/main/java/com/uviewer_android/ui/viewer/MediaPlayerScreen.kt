@@ -623,7 +623,7 @@ fun MediaPlayerScreen(
                             }
                             
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(formatTime(currentPosition), color = Color.White, style = MaterialTheme.typography.labelSmall)
