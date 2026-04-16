@@ -204,7 +204,7 @@ fun DocumentViewerScreen(
                         interactionSource = sliderInteractionSource,
                         thumb = {
                             SliderDefaults.Thumb(
-                                interactionSource = sliderInteractionSource,
+                                interactionSource = remember { MutableInteractionSource() },
                                 thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
                                 colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
                             )

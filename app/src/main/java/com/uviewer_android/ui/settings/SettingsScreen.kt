@@ -202,7 +202,7 @@ fun SettingsScreen(
                             valueRange = 12f..36f,
                             thumb = {
                                 SliderDefaults.Thumb(
-                                    interactionSource = fontSizeInteractionSource,
+                                    interactionSource = remember { MutableInteractionSource() },
                                     thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
                                     colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
                                 )
@@ -276,7 +276,7 @@ fun SettingsScreen(
                             valueRange = 0f..10f,
                             thumb = {
                                 SliderDefaults.Thumb(
-                                    interactionSource = sharpeningInteractionSource,
+                                    interactionSource = remember { MutableInteractionSource() },
                                     thumbSize = androidx.compose.ui.unit.DpSize(16.dp, 16.dp),
                                     colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary)
                                 )
