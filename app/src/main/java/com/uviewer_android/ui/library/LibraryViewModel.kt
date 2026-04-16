@@ -12,6 +12,7 @@ import com.uviewer_android.data.repository.CredentialsManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 
 data class LibraryUiState(
     val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
@@ -46,6 +47,13 @@ class LibraryViewModel(
 
     fun setViewerBottomBarContent(content: (@Composable () -> Unit)?) {
         _viewerBottomBarContent.value = content
+    }
+
+    private val _viewerBottomBarBackgroundColor = MutableStateFlow<Color?>(null)
+    val viewerBottomBarBackgroundColor = _viewerBottomBarBackgroundColor.asStateFlow()
+
+    fun setViewerBottomBarBackgroundColor(color: Color?) {
+        _viewerBottomBarBackgroundColor.value = color
     }
 
     private val _servers = webDavServerDao.getAllServers()

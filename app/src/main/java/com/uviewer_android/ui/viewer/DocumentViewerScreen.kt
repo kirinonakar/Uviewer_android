@@ -110,8 +110,30 @@ fun DocumentViewerScreen(
         c as? MainActivity
     }
 
-    androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentLine, tempSliderValue, type) {
+    val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
+
+    // [추가] 문서 배경색을 Compose Color 객체로 변환
+    val targetDocColor = remember(docBackgroundColor, uiState.customDocBackgroundColor) {
+        val colorHex = when (docBackgroundColor) {
+            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
+            UserPreferencesRepository.DOC_BG_DARK -> "#121212"
+            UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4"
+            UserPreferencesRepository.DOC_BG_CUSTOM -> {
+                val custom = uiState.customDocBackgroundColor
+                if (custom != null && custom.startsWith("#")) custom else "#FFFFFF"
+            }
+            else -> "#FFFFFF"
+        }
+        try {
+            Color(android.graphics.Color.parseColor(colorHex))
+        } catch (e: Exception) {
+            Color.White
+        }
+    }
+
+    androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentLine, tempSliderValue, type, targetDocColor) {
         if (!isFullScreen) {
+            libraryViewModel?.setViewerBottomBarBackgroundColor(targetDocColor)
             libraryViewModel?.setViewerBottomBarContent {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (!uiState.isLoading) {
@@ -225,9 +247,11 @@ fun DocumentViewerScreen(
             }
         } else {
             libraryViewModel?.setViewerBottomBarContent(null)
+            libraryViewModel?.setViewerBottomBarBackgroundColor(null)
         }
         onDispose {
             libraryViewModel?.setViewerBottomBarContent(null)
+            libraryViewModel?.setViewerBottomBarBackgroundColor(null)
         }
     }
 
@@ -256,26 +280,6 @@ fun DocumentViewerScreen(
         }
     }
     val isAppDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
-
-    // [추가] 문서 배경색을 Compose Color 객체로 변환
-    val targetDocColor = remember(docBackgroundColor, uiState.customDocBackgroundColor) {
-        val colorHex = when (docBackgroundColor) {
-            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb"
-            UserPreferencesRepository.DOC_BG_DARK -> "#121212"
-            UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4"
-            UserPreferencesRepository.DOC_BG_CUSTOM -> {
-                val custom = uiState.customDocBackgroundColor
-                if (custom != null && custom.startsWith("#")) custom else "#FFFFFF"
-            }
-            else -> "#FFFFFF"
-        }
-        try {
-            Color(android.graphics.Color.parseColor(colorHex))
-        } catch (e: Exception) {
-            Color.White
-        }
-    }
     
     // [추가] 상태바 아이콘 색상 결정 (배경이 어두우면 아이콘은 밝게)
     val useDarkIcons = remember(targetDocColor, isFullScreen, isAppDark) {
@@ -450,8 +454,7 @@ fun DocumentViewerScreen(
         gesturesEnabled = false
     ) {
         Scaffold(
-            // [핵심 수정] 전체 화면일 때 Scaffold 배경색을 문서 배경색과 일치시킴
-            containerColor = if (isFullScreen) targetDocColor else MaterialTheme.colorScheme.background,
+            containerColor = targetDocColor,
             topBar = {
                 if (!isFullScreen) {
                     Surface(
@@ -567,7 +570,7 @@ fun DocumentViewerScreen(
             },
             snackbarHost = {} // Add snackbar host if needed
         ) { innerPadding ->
-            Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+            Box(modifier = Modifier.fillMaxSize().padding(top = innerPadding.calculateTopPadding())) {
                 if (uiState.error != null) {
                     Column(
                         modifier = Modifier.fillMaxSize(),

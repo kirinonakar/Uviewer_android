@@ -62,6 +62,7 @@ fun MainScreen(
     val libraryUiState by libraryViewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()
     var isFullScreen by remember { androidx.compose.runtime.mutableStateOf(false) }
+    val viewerBottomBarBackgroundColor by libraryViewModel.viewerBottomBarBackgroundColor.collectAsState()
 
     androidx.compose.runtime.LaunchedEffect(initialIntentPath) {
         if (initialIntentPath != null) {
@@ -144,6 +145,7 @@ fun MainScreen(
     )
 
     Scaffold(
+        containerColor = viewerBottomBarBackgroundColor ?: MaterialTheme.colorScheme.background,
         bottomBar = {
             if (!isFullScreen) {
                 val viewerBottomContent by libraryViewModel.viewerBottomBarContent.collectAsState()
