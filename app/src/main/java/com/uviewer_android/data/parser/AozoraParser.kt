@@ -288,7 +288,7 @@ object AozoraParser {
         return titles
     }
 
-    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8, chunkIndex: Int = 0): String {
+    fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8, chunkIndex: Int = 0, language: String = "en"): String {
         val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
         val fontFamily = when(font) {
             "serif" -> "'Sawarabi Mincho', serif"
@@ -300,7 +300,7 @@ object AozoraParser {
         
         return """
             <!DOCTYPE html>
-            <html>
+            <html lang="$language">
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />

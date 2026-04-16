@@ -46,7 +46,8 @@ data class DocumentViewerUiState(
     val appendTrigger: Long = 0L,
     val chapterLineCounts: Map<Int, Int> = emptyMap(),
     val isImageOnlyChapter: Boolean = false,
-    val jsUnlockTrigger: Long = 0L // [추가] 프리로드 취소 시 JS 스크롤 락 강제 해제용
+    val jsUnlockTrigger: Long = 0L, // [추가] 프리로드 취소 시 JS 스크롤 락 강제 해제용
+    val language: String = UserPreferencesRepository.LANG_EN
 )
 
 
@@ -101,7 +102,8 @@ class DocumentViewerViewModel(
                     userPreferencesRepository.customDocBackgroundColor,
                     userPreferencesRepository.customDocTextColor,
                     userPreferencesRepository.sideMargin,
-                    userPreferencesRepository.isVerticalReading
+                    userPreferencesRepository.isVerticalReading,
+                    userPreferencesRepository.language
                 )
             ) { args: Array<Any> ->
                 val size = args[0] as Int
@@ -111,6 +113,7 @@ class DocumentViewerViewModel(
                 val customText = args[4] as String
                 val margin = args[5] as Int
                 val vertical = args[6] as Boolean
+                val lang = args[7] as String
                 
                 _uiState.value = _uiState.value.copy(
                     fontSize = size,
@@ -119,7 +122,8 @@ class DocumentViewerViewModel(
                     customDocBackgroundColor = customBg,
                     customDocTextColor = customText,
                     sideMargin = margin,
-                    isVertical = vertical
+                    isVertical = vertical,
+                    language = lang
                 )
                 if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -625,7 +629,7 @@ class DocumentViewerViewModel(
                 """.trimIndent()
                 """
                     <!DOCTYPE html>
-                    <html>
+                    <html lang="${_uiState.value.language}">
                     <head>
                         <meta charset="utf-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
@@ -667,7 +671,8 @@ class DocumentViewerViewModel(
                         colors.first, 
                         colors.second,
                         _uiState.value.sideMargin,
-                        chunkIndex
+                        chunkIndex,
+                        _uiState.value.language
                     )
                 }
             }
@@ -734,7 +739,8 @@ class DocumentViewerViewModel(
                     colors.first,
                     colors.second,
                     _uiState.value.sideMargin,
-                    chunkIndex
+                    chunkIndex,
+                    _uiState.value.language
                 )
             }
 
