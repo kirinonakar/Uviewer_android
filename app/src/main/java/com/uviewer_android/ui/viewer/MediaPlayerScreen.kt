@@ -274,13 +274,12 @@ fun MediaPlayerScreen(
             if (!isFullScreen) {
                 Column {
                     Surface(
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         color = Color.Black.copy(alpha = 0.7f),
-                        shadowElevation = 3.dp
+                        shadowElevation = 0.dp
                     ) {
                         TopAppBar(
+                            windowInsets = WindowInsets.statusBars,
                             title = { 
                                 Column {
                                     Text(uiState.title ?: uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1) 

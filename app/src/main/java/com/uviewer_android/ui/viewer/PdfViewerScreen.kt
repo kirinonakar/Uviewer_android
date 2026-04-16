@@ -260,14 +260,12 @@ fun PdfViewerScreen(
         topBar = {
             if (!isFullScreen) {
                 Surface(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surface,
-                    shadowElevation = 3.dp
+                    shadowElevation = 0.dp
                 ) {
                     TopAppBar(
-                        windowInsets = WindowInsets(0),
+                        windowInsets = WindowInsets.statusBars,
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = Color.Transparent,
                             scrolledContainerColor = Color.Transparent

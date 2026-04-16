@@ -67,14 +67,12 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             Surface(
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.background,
-                shadowElevation = 3.dp
+                shadowElevation = 0.dp
             ) {
                 TopAppBar(
-                    windowInsets = WindowInsets(0),
+                    windowInsets = WindowInsets.statusBars,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = androidx.compose.ui.graphics.Color.Transparent,
                         scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
