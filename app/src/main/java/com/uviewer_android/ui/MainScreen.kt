@@ -154,8 +154,8 @@ fun MainScreen(
                         .navigationBarsPadding(),
                     shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 4.dp,
-                    shadowElevation = 4.dp
+                    tonalElevation = 1.dp,
+                    shadowElevation = 1.dp
                 ) {
                     Column {
                         // Viewer-specific content (Slider, etc.)
