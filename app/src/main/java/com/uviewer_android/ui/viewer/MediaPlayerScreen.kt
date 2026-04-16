@@ -276,13 +276,9 @@ fun MediaPlayerScreen(
                     Surface(
                         modifier = Modifier
                             .statusBarsPadding()
-                            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                             .fillMaxWidth(),
-                        shape = RoundedCornerShape(28.dp),
                         color = Color.Black.copy(alpha = 0.7f),
-                        tonalElevation = 4.dp,
-                        shadowElevation = 4.dp,
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(alpha = 0.1f))
+                        shadowElevation = 3.dp
                     ) {
                         TopAppBar(
                             title = { 

@@ -42,12 +42,9 @@ fun RecentFilesScreen(
             Surface(
                 modifier = Modifier
                     .statusBarsPadding()
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
                 color = MaterialTheme.colorScheme.background,
-                tonalElevation = 0.dp,
-                shadowElevation = 4.dp
+                shadowElevation = 3.dp
             ) {
                 TopAppBar(
                     windowInsets = WindowInsets(0),
