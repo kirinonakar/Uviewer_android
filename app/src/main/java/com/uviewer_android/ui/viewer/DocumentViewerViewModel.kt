@@ -123,7 +123,7 @@ class DocumentViewerViewModel(
                     customDocTextColor = customText,
                     sideMargin = margin,
                     isVertical = vertical,
-                    language = lang
+                    language = resolveLanguageTag(lang)
                 )
                 if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
@@ -629,7 +629,7 @@ class DocumentViewerViewModel(
                 """.trimIndent()
                 """
                     <!DOCTYPE html>
-                    <html lang="${_uiState.value.language}">
+                    <html lang="${resolveLanguageTag(userPreferencesRepository.language.value)}">
                     <head>
                         <meta charset="utf-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
@@ -672,7 +672,7 @@ class DocumentViewerViewModel(
                         colors.second,
                         _uiState.value.sideMargin,
                         chunkIndex,
-                        _uiState.value.language
+                        resolveLanguageTag(userPreferencesRepository.language.value)
                     )
                 }
             }
@@ -740,7 +740,7 @@ class DocumentViewerViewModel(
                     colors.second,
                     _uiState.value.sideMargin,
                     chunkIndex,
-                    _uiState.value.language
+                    resolveLanguageTag(userPreferencesRepository.language.value)
                 )
             }
 
@@ -756,6 +756,14 @@ class DocumentViewerViewModel(
                 appendTrigger = System.currentTimeMillis(),
                 isImageOnlyChapter = false
             )
+        }
+    }
+
+    private fun resolveLanguageTag(lang: String): String {
+        return if (lang == UserPreferencesRepository.LANG_SYSTEM) {
+            getApplication<Application>().resources.configuration.locales[0].language
+        } else {
+            lang
         }
     }
 
