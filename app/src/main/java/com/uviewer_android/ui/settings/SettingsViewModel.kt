@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 
 class SettingsViewModel(
     application: Application,
@@ -53,8 +55,20 @@ class SettingsViewModel(
     val docBackgroundColor: StateFlow<String> = userPreferencesRepository.docBackgroundColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DOC_BG_WHITE)
 
-    val language: StateFlow<String> = userPreferencesRepository.language
+    val appLanguage: StateFlow<String> = userPreferencesRepository.appLanguage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.LANG_SYSTEM)
+
+    private val _systemLanguage = MutableStateFlow(getCurrentlySetSystemLanguage())
+    val systemLanguage: StateFlow<String> = _systemLanguage.asStateFlow()
+
+    private fun getCurrentlySetSystemLanguage(): String {
+        val locales = AppCompatDelegate.getApplicationLocales()
+        return if (locales.isEmpty) {
+            UserPreferencesRepository.LANG_SYSTEM
+        } else {
+            locales.get(0)?.language ?: UserPreferencesRepository.LANG_SYSTEM
+        }
+    }
 
     val docTextColor: StateFlow<String> = userPreferencesRepository.docTextColor
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "black")
@@ -106,8 +120,18 @@ class SettingsViewModel(
         userPreferencesRepository.setDocBackgroundColor(color)
     }
 
-    fun setLanguage(lang: String) {
-        userPreferencesRepository.setLanguage(lang)
+    fun setAppLanguage(lang: String) {
+        userPreferencesRepository.setAppLanguage(lang)
+    }
+
+    fun setSystemLanguage(lang: String) {
+        val localeList = if (lang == UserPreferencesRepository.LANG_SYSTEM) {
+            LocaleListCompat.getEmptyLocaleList()
+        } else {
+            LocaleListCompat.forLanguageTags(lang)
+        }
+        AppCompatDelegate.setApplicationLocales(localeList)
+        _systemLanguage.value = lang
     }
 
     fun setDocTextColor(color: String) {

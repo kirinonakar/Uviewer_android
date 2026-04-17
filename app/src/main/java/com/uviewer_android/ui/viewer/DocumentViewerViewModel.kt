@@ -103,7 +103,7 @@ class DocumentViewerViewModel(
                     userPreferencesRepository.customDocTextColor,
                     userPreferencesRepository.sideMargin,
                     userPreferencesRepository.isVerticalReading,
-                    userPreferencesRepository.language
+                    userPreferencesRepository.appLanguage
                 )
             ) { args: Array<Any> ->
                 val size = args[0] as Int
@@ -629,7 +629,7 @@ class DocumentViewerViewModel(
                 """.trimIndent()
                 """
                     <!DOCTYPE html>
-                    <html lang="${resolveLanguageTag(userPreferencesRepository.language.value)}">
+                    <html lang="${resolveLanguageTag(userPreferencesRepository.appLanguage.value)}">
                     <head>
                         <meta charset="utf-8">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
@@ -672,7 +672,7 @@ class DocumentViewerViewModel(
                         colors.second,
                         _uiState.value.sideMargin,
                         chunkIndex,
-                        resolveLanguageTag(userPreferencesRepository.language.value)
+                        resolveLanguageTag(userPreferencesRepository.appLanguage.value)
                     )
                 }
             }
@@ -740,7 +740,7 @@ class DocumentViewerViewModel(
                     colors.second,
                     _uiState.value.sideMargin,
                     chunkIndex,
-                    resolveLanguageTag(userPreferencesRepository.language.value)
+                    resolveLanguageTag(userPreferencesRepository.appLanguage.value)
                 )
             }
 
@@ -760,8 +760,20 @@ class DocumentViewerViewModel(
     }
 
     private fun resolveLanguageTag(lang: String): String {
-        return if (lang == UserPreferencesRepository.LANG_SYSTEM) {
+        val systemLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+        val systemLang = if (!systemLocales.isEmpty) {
+            systemLocales.get(0)?.language ?: ""
+        } else {
             getApplication<Application>().resources.configuration.locales[0].language
+        }
+        
+        // Per User's Request: if EITHER system per-app language OR app language is Japanese, show as Japanese locale
+        if (systemLang == UserPreferencesRepository.LANG_JA || lang == UserPreferencesRepository.LANG_JA) {
+            return UserPreferencesRepository.LANG_JA
+        }
+        
+        return if (lang == UserPreferencesRepository.LANG_SYSTEM) {
+            systemLang
         } else {
             lang
         }

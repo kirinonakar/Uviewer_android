@@ -96,12 +96,14 @@
     <string name="clear_cache">Clear</string>
     <string name="cache_limit">Cache capacity limit</string>
 
-    <string name="language">Language</string>
+    <string name="language">App Language</string>
+    <string name="language_system">System Language (Per-app)</string>
     <string name="lang_system">System Default</string>
     <string name="lang_en">English</string>
     <string name="lang_ko">Korean</string>
     <string name="lang_ja">Japanese</string>
     <string name="select_language">Select Language</string>
+    <string name="select_system_language">Select System Language</string>
 
     <!-- Settings: WebDAV -->
     <string name="section_webdav">WebDAV Servers</string>

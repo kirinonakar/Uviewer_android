@@ -40,7 +40,8 @@ fun SettingsScreen(
     val fontSize by viewModel.fontSize.collectAsState()
     val fontFamily by viewModel.fontFamily.collectAsState()
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
-    val language by viewModel.language.collectAsState()
+    val appLanguage by viewModel.appLanguage.collectAsState()
+    val systemLanguage by viewModel.systemLanguage.collectAsState()
     val invertImageControl by viewModel.invertImageControl.collectAsState()
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val customDocBackgroundColor by viewModel.customDocBackgroundColor.collectAsState()
@@ -58,7 +59,8 @@ fun SettingsScreen(
     var showThemeDialog by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
     var showDocBgDialog by remember { mutableStateOf(false) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showAppLanguageDialog by remember { mutableStateOf(false) }
+    var showSystemLanguageDialog by remember { mutableStateOf(false) }
     var showDualPageOrderDialog by remember { mutableStateOf(false) }
     var showImageViewModeDialog by remember { mutableStateOf(false) }
     var showCacheLimitDialog by remember { mutableStateOf(false) }
@@ -102,7 +104,7 @@ fun SettingsScreen(
                         modifier = Modifier.clickable { showThemeDialog = true }
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-                    val languageLabel = when (language) {
+                    val appLanguageLabel = when (appLanguage) {
                         UserPreferencesRepository.LANG_EN -> stringResource(R.string.lang_en)
                         UserPreferencesRepository.LANG_KO -> stringResource(R.string.lang_ko)
                         UserPreferencesRepository.LANG_JA -> stringResource(R.string.lang_ja)
@@ -110,9 +112,22 @@ fun SettingsScreen(
                     }
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.language)) },
-                        supportingContent = { Text(languageLabel) },
+                        supportingContent = { Text(appLanguageLabel) },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        modifier = Modifier.clickable { showLanguageDialog = true }
+                        modifier = Modifier.clickable { showAppLanguageDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val systemLanguageLabel = when (systemLanguage) {
+                        UserPreferencesRepository.LANG_EN -> stringResource(R.string.lang_en)
+                        UserPreferencesRepository.LANG_KO -> stringResource(R.string.lang_ko)
+                        UserPreferencesRepository.LANG_JA -> stringResource(R.string.lang_ja)
+                        else -> stringResource(R.string.lang_system)
+                    }
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.language_system)) },
+                        supportingContent = { Text(systemLanguageLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showSystemLanguageDialog = true }
                     )
                 }
             }
@@ -428,13 +443,26 @@ fun SettingsScreen(
             )
         }
 
-        if (showLanguageDialog) {
+        if (showAppLanguageDialog) {
             LanguageSelectionDialog(
-                currentLanguage = language,
-                onDismiss = { showLanguageDialog = false },
+                title = stringResource(R.string.select_language),
+                currentLanguage = appLanguage,
+                onDismiss = { showAppLanguageDialog = false },
                 onSelect = { lang ->
-                    viewModel.setLanguage(lang)
-                    showLanguageDialog = false
+                    viewModel.setAppLanguage(lang)
+                    showAppLanguageDialog = false
+                }
+            )
+        }
+
+        if (showSystemLanguageDialog) {
+            LanguageSelectionDialog(
+                title = stringResource(R.string.select_system_language),
+                currentLanguage = systemLanguage,
+                onDismiss = { showSystemLanguageDialog = false },
+                onSelect = { lang ->
+                    viewModel.setSystemLanguage(lang)
+                    showSystemLanguageDialog = false
                 }
             )
         }
@@ -563,6 +591,7 @@ fun ImageViewModeSelectionDialog(
 
 @Composable
 fun LanguageSelectionDialog(
+    title: String,
     currentLanguage: String,
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
@@ -570,7 +599,7 @@ fun LanguageSelectionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
-        title = { Text(stringResource(R.string.select_language)) },
+        title = { Text(title) },
         text = {
             Column {
                 ThemeOptionRow(stringResource(R.string.lang_system), UserPreferencesRepository.LANG_SYSTEM, currentLanguage, onSelect)

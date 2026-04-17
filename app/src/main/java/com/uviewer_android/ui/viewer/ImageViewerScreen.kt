@@ -580,20 +580,20 @@ fun ImageViewerScreen(
                                         isTopTap -> {
                                             onToggleFullScreen()
                                         }
-                                        goPrev && !isTopTap -> {
+                                        goPrev -> {
                                             val current = pagerState.currentPage
                                             if (current > 0) {
                                                 pagerState.scrollToPage(current - 1)
                                             }
                                         }
-                                        goNext && !isTopTap -> {
+                                        goNext -> {
                                             val current = pagerState.currentPage
                                             if (current < pageCount - 1) {
                                                 pagerState.scrollToPage(current + 1)
                                             }
                                         }
                                         else -> {
-                                            // Center tap - do nothing or toggle UI if preferred
+                                            onToggleFullScreen()
                                         }
                                     }
                                 }

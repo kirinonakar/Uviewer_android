@@ -35,10 +35,10 @@ class UserPreferencesRepository(context: Context) {
     )
     val docTextColor: StateFlow<String> = _docTextColor.asStateFlow()
 
-    private val _language = MutableStateFlow(
+    private val _appLanguage = MutableStateFlow(
         sharedPreferences.getString("language", "system") ?: "system"
     )
-    val language: StateFlow<String> = _language.asStateFlow()
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
     private val _customDocBackgroundColor = MutableStateFlow(
         sharedPreferences.getString("custom_doc_background_color", "#FFFFFF") ?: "#FFFFFF"
     )
@@ -151,11 +151,11 @@ class UserPreferencesRepository(context: Context) {
         _docTextColor.value = color
     }
 
-    fun setLanguage(lang: String) {
+    fun setAppLanguage(lang: String) {
         sharedPreferences.edit {
             putString("language", lang)
         }
-        _language.value = lang
+        _appLanguage.value = lang
     }
 
     fun setInvertImageControl(invert: Boolean) {

@@ -10,7 +10,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.core.os.LocaleListCompat
 import com.uviewer_android.data.repository.UserPreferencesRepository
 import com.uviewer_android.ui.MainScreen
@@ -48,10 +52,10 @@ class MainActivity : AppCompatActivity() {
         return super.onKeyDown(keyCode, event)
     }
 
-    private var shouldResumeState by androidx.compose.runtime.mutableStateOf(false)
-    private var resumePathState by androidx.compose.runtime.mutableStateOf<String?>(null)
-    private var resumeServerIdState by androidx.compose.runtime.mutableIntStateOf(-1)
-    private var resumeIsWebDavState by androidx.compose.runtime.mutableStateOf(false)
+    private var shouldResumeState by mutableStateOf(false)
+    private var resumePathState by mutableStateOf<String?>(null)
+    private var resumeServerIdState by mutableIntStateOf(-1)
+    private var resumeIsWebDavState by mutableStateOf(false)
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -69,6 +73,8 @@ class MainActivity : AppCompatActivity() {
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
         
+        // Application initialization - edge to edge and other basics
+
         // Disable activity transitions
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
@@ -107,17 +113,24 @@ class MainActivity : AppCompatActivity() {
         setContent {
             val appContainer = (application as UviewerApplication).container
             val themeMode by appContainer.userPreferencesRepository.themeMode.collectAsState()
-            val language by appContainer.userPreferencesRepository.language.collectAsState()
-
-            LaunchedEffect(language) {
-                val localeList = if (language == UserPreferencesRepository.LANG_SYSTEM) {
-                    LocaleListCompat.getEmptyLocaleList()
+            val appLanguage by appContainer.userPreferencesRepository.appLanguage.collectAsState()
+            val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+            val context = androidx.compose.ui.platform.LocalContext.current
+            
+            val localizedContext = remember(appLanguage) {
+                val locale = if (appLanguage == UserPreferencesRepository.LANG_SYSTEM) {
+                    val systemLocales = AppCompatDelegate.getApplicationLocales()
+                    if (!systemLocales.isEmpty) {
+                        systemLocales.get(0)!!
+                    } else {
+                        java.util.Locale.getDefault()
+                    }
                 } else {
-                    LocaleListCompat.forLanguageTags(language)
+                    java.util.Locale(appLanguage)
                 }
-                if (AppCompatDelegate.getApplicationLocales() != localeList) {
-                    AppCompatDelegate.setApplicationLocales(localeList)
-                }
+                val config = android.content.res.Configuration(context.resources.configuration)
+                config.setLocale(locale)
+                context.createConfigurationContext(config)
             }
 
             val darkTheme = when(themeMode) {
@@ -133,21 +146,23 @@ class MainActivity : AppCompatActivity() {
                 insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
 
-            UviewerTheme(darkTheme = darkTheme) {
-                MainScreen(
-                    activity = this@MainActivity, 
-                    initialIntentPath = intentPath, 
-                    shouldResume = shouldResumeState,
-                    resumeSpecificPath = resumePathState,
-                    resumeServerId = resumeServerIdState,
-                    resumeIsWebDav = resumeIsWebDavState,
-                    onHandledResume = { 
-                        shouldResumeState = false 
-                        resumePathState = null
-                        resumeServerIdState = -1
-                        resumeIsWebDavState = false
-                    }
-                )
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides localizedContext) {
+                UviewerTheme(darkTheme = darkTheme) {
+                    MainScreen(
+                        activity = this@MainActivity, 
+                        initialIntentPath = intentPath, 
+                        shouldResume = shouldResumeState,
+                        resumeSpecificPath = resumePathState,
+                        resumeServerId = resumeServerIdState,
+                        resumeIsWebDav = resumeIsWebDavState,
+                        onHandledResume = { 
+                            shouldResumeState = false 
+                            resumePathState = null
+                            resumeServerIdState = -1
+                            resumeIsWebDavState = false
+                        }
+                    )
+                }
             }
         }
     }
