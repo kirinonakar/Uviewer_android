@@ -29,7 +29,7 @@ data class DocumentViewerUiState(
     val isVertical: Boolean = false,
     val fontSize: Int = 18,
     val fontFamily: String = "serif",
-    val docBackgroundColor: String = UserPreferencesRepository.DOC_BG_WHITE,
+    val docBackgroundColor: String = UserPreferencesRepository.DOC_BG_COMFORT,
     val epubChapters: List<com.uviewer_android.data.model.EpubSpineItem> = emptyList(),
     val currentChapterIndex: Int = 0,
     val totalLines: Int = 0,

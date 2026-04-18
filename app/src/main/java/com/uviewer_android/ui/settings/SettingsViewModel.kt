@@ -53,7 +53,7 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "serif")
 
     val docBackgroundColor: StateFlow<String> = userPreferencesRepository.docBackgroundColor
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DOC_BG_WHITE)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.DOC_BG_COMFORT)
 
     val appLanguage: StateFlow<String> = userPreferencesRepository.appLanguage
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), UserPreferencesRepository.LANG_SYSTEM)
@@ -71,7 +71,7 @@ class SettingsViewModel(
     }
 
     val docTextColor: StateFlow<String> = userPreferencesRepository.docTextColor
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "black")
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "comfort")
 
 
     val customDocBackgroundColor: StateFlow<String> = userPreferencesRepository.customDocBackgroundColor

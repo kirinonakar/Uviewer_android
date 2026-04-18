@@ -26,12 +26,12 @@ class UserPreferencesRepository(context: Context) {
 
 
     private val _docBackgroundColor = MutableStateFlow(
-        sharedPreferences.getString("doc_background_color", "white") ?: "white"
+        sharedPreferences.getString("doc_background_color", DOC_BG_COMFORT) ?: DOC_BG_COMFORT
     )
     val docBackgroundColor: StateFlow<String> = _docBackgroundColor.asStateFlow()
 
     private val _docTextColor = MutableStateFlow(
-        sharedPreferences.getString("doc_text_color", "black") ?: "black"
+        sharedPreferences.getString("doc_text_color", "comfort") ?: "comfort"
     )
     val docTextColor: StateFlow<String> = _docTextColor.asStateFlow()
 
