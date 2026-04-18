@@ -205,6 +205,11 @@ object AozoraParser {
             l = l.replace(Regex("［＃中見出し］(.+?)［＃中見出し終わり］"), "<h2 class=\"aozora-title\">$1</h2>")
             l = l.replace(Regex("［＃小見出し］(.+?)［＃小見出し終わり］"), "<h3 class=\"aozora-title\">$1</h3>")
             
+            // Markdown style headers
+            l = l.replace(Regex("^\\s*#\\s+(.*)$"), "<h1>$1</h1>")
+            l = l.replace(Regex("^\\s*##\\s+(.*)$"), "<h2>$1</h2>")
+            l = l.replace(Regex("^\\s*###\\s+(.*)$"), "<h3>$1</h3>")
+            
             // Markdown style bold support
             l = l.replace(Regex("\\*\\*(.*?)\\*\\*"), "<b>$1</b>")
             l = l.replace(Regex("__(.*?)__"), "<b>$1</b>")
@@ -277,12 +282,40 @@ object AozoraParser {
     fun extractTitles(text: String, lineOffset: Int = 0): List<Pair<String, Int>> {
         val titles = mutableListOf<Pair<String, Int>>()
         val lines = text.split(Regex("\\r?\\n|\\r"))
-        val pattern = Regex("［＃[大中小]見出し］(.+?)［＃[大中小]見出し終わり］")
+        
+        // Patterns for both Aozora and Markdown headers
+        // Aozora headers like ［＃大見出し］...［＃大見出し終わり］
+        val aozoraPattern = Regex("［＃([大中小])見出し］(.+?)［＃\\1見出し終わり］")
+        // Markdown headers like # Title, ## Title, ### Title
+        val mdPattern = Regex("^\\s*(#{1,3})\\s+(.+)$")
+        
         val tagStripRegex = Regex("［＃.+?］|《.+?》|[｜｜|]")
+        
         lines.forEachIndexed { index, line ->
-            pattern.find(line)?.let {
-                val cleanTitle = it.groupValues[1].replace(tagStripRegex, "").trim()
-                titles.add(cleanTitle to (index + lineOffset + 1))
+            // Use line directly for accurate start-of-line regex anchors
+            
+            // Check Aozora headers first
+            val aozoraMatch = aozoraPattern.find(line)
+            if (aozoraMatch != null) {
+                val levelType = aozoraMatch.groupValues[1]
+                val level = when(levelType) {
+                    "大" -> 1
+                    "中" -> 2
+                    "小" -> 3
+                    else -> 1
+                }
+                val cleanTitle = aozoraMatch.groupValues[2].replace(tagStripRegex, "").trim()
+                val indentedTitle = if (level > 1) "  ".repeat(level - 1) + cleanTitle else cleanTitle
+                titles.add(indentedTitle to (index + lineOffset + 1))
+            } else {
+                // Check Markdown headers
+                val mdMatch = mdPattern.find(line)
+                if (mdMatch != null) {
+                    val level = mdMatch.groupValues[1].length
+                    val title = mdMatch.groupValues[2].trim()
+                    val indentedTitle = if (level > 1) "  ".repeat(level - 1) + title else title
+                    titles.add(indentedTitle to (index + lineOffset + 1))
+                }
             }
         }
         return titles
