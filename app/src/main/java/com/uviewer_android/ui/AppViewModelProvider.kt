@@ -60,7 +60,8 @@ object AppViewModelProvider {
         initializer {
             val app = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as UviewerApplication)
             com.uviewer_android.ui.favorites.FavoritesViewModel(
-                favoriteDao = app.container.database.favoriteDao()
+                favoriteDao = app.container.database.favoriteDao(),
+                userPreferencesRepository = app.container.userPreferencesRepository
             )
         }
         initializer {

@@ -321,7 +321,7 @@ fun MainScreen(
                 androidx.compose.runtime.LaunchedEffect(Unit) { isFullScreen = false }
                 com.uviewer_android.ui.favorites.FavoritesScreen(
                     onNavigateToViewer = { item ->
-                        if (item.type.equals("FOLDER", ignoreCase = true)) {
+                        if (item.isDirectory) {
                             val encodedPath = android.net.Uri.encode(item.path, null)
                             val route = "library?path=$encodedPath&serverId=${item.serverId ?: -1}"
                             navController.navigate(route)

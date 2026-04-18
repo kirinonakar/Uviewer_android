@@ -1,44 +1,60 @@
 package com.uviewer_android.ui.favorites
 
-import androidx.compose.ui.res.stringResource
-import com.uviewer_android.R
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Public
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material3.*
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.foundation.background
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.uviewer_android.data.FavoriteItem
+import com.uviewer_android.R
+import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
+import com.uviewer_android.ui.common.FileItemRow
+import com.uviewer_android.ui.common.FileItemGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
-    onNavigateToViewer: (FavoriteItem) -> Unit,
+    onNavigateToViewer: (FileEntry) -> Unit,
     viewModel: FavoritesViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
     val favorites by viewModel.favorites.collectAsState()
+    val isGridView by viewModel.isGridView.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf(stringResource(R.string.tab_folders), stringResource(R.string.tab_files))
+    val tabs = listOf(
+        stringResource(R.string.tab_folders), 
+        stringResource(R.string.tab_files),
+        stringResource(R.string.pinned)
+    )
+
+    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+    
+    // Drag and Drop state
+    var draggedItemPath by remember { mutableStateOf<String?>(null) }
+    var dragOffsetY by remember { mutableStateOf(0f) }
+    var currentItemIndex by remember { mutableStateOf<Int?>(null) }
+    var initialNodeOffset by remember { mutableStateOf(0) }
 
     Scaffold(
         topBar = {
@@ -55,7 +71,15 @@ fun FavoritesScreen(
                             containerColor = androidx.compose.ui.graphics.Color.Transparent,
                             scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
                         ),
-                        title = { Text(stringResource(R.string.title_favorites), style = MaterialTheme.typography.titleMedium) }
+                        title = { Text(stringResource(R.string.title_favorites), style = MaterialTheme.typography.titleMedium) },
+                        actions = {
+                            IconButton(onClick = { viewModel.toggleViewMode() }) {
+                                Icon(
+                                    if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.ViewModule,
+                                    contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View"
+                                )
+                            }
+                        }
                     )
                 }
                 
@@ -100,10 +124,10 @@ fun FavoritesScreen(
             }
         }
     ) { innerPadding ->
-        val filteredFavorites = if (selectedTabIndex == 0) {
-            favorites.filter { it.type == "FOLDER" }
-        } else {
-            favorites.filter { it.type != "FOLDER" }
+        val filteredFavorites: List<FileEntry> = when (selectedTabIndex) {
+            0 -> favorites.filter { it.isDirectory }
+            1 -> favorites.filter { !it.isDirectory }
+            else -> favorites.filter { it.isPinned }.sortedBy { it.pinOrder }
         }
 
         if (filteredFavorites.isEmpty()) {
@@ -113,115 +137,173 @@ fun FavoritesScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text(stringResource(R.string.no_favorites))
+                val emptyText = if (selectedTabIndex == 2) stringResource(R.string.no_pinned_files) else stringResource(R.string.no_favorites)
+                Text(emptyText)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                items(filteredFavorites) { item ->
-                    FavoriteItemRow(
-                        item = item,
-                        onClick = { onNavigateToViewer(item) },
-                        onDelete = { viewModel.deleteFavorite(item) },
-                        onTogglePin = { viewModel.togglePin(item) }
-                    )
+            if (isGridView) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(120.dp),
+                    state = gridState,
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    gridItemsIndexed(filteredFavorites, key = { _, item -> item.path }) { index, item ->
+                        val isDragging = draggedItemPath == item.path
+                        val isPinnedTab = selectedTabIndex == 2
+                        
+                        val itemModifier = if (isPinnedTab) {
+                            Modifier
+                                .zIndex(if (isDragging) 10f else 0f)
+                                .pointerInput(item.path) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { 
+                                            draggedItemPath = item.path
+                                            val info = gridState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                            initialNodeOffset = info?.offset?.y ?: 0
+                                            currentItemIndex = info?.index ?: index
+                                            dragOffsetY = 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragOffsetY += dragAmount.y
+                                            
+                                            val info = gridState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                            if (info != null && info.index == currentItemIndex) {
+                                                val visualCenterY = initialNodeOffset + dragOffsetY + info.size.height / 2
+                                                val targetItem = gridState.layoutInfo.visibleItemsInfo.find { 
+                                                    visualCenterY.toInt() in it.offset.y..(it.offset.y + it.size.height)
+                                                }
+                                                if (targetItem != null && targetItem.key != item.path) {
+                                                    currentItemIndex = targetItem.index
+                                                    viewModel.reorderPinnedFavorites(info.index, targetItem.index)
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            draggedItemPath = null
+                                            dragOffsetY = 0f
+                                            currentItemIndex = null
+                                        },
+                                        onDragCancel = {
+                                            draggedItemPath = null
+                                            dragOffsetY = 0f
+                                            currentItemIndex = null
+                                        }
+                                    )
+                                }
+                                .offset {
+                                    if (isDragging) {
+                                        val currentInfo = gridState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                        val adjY = if (currentInfo != null) initialNodeOffset - currentInfo.offset.y else 0
+                                        IntOffset(0, (dragOffsetY + adjY).toInt())
+                                    } else IntOffset.Zero
+                                }
+                                .graphicsLayer {
+                                    if (isDragging) {
+                                        scaleX = 1.05f
+                                        scaleY = 1.05f
+                                        shadowElevation = 8f
+                                    }
+                                }
+                        } else Modifier
+
+                        Box(modifier = itemModifier) {
+                            FileItemGridCard(
+                                file = item,
+                                isFavorite = true,
+                                isPinnedTab = isPinnedTab,
+                                onClick = { onNavigateToViewer(item) },
+                                onToggleFavorite = { viewModel.deleteFavorite(item) },
+                                onTogglePin = { viewModel.togglePin(item) }
+                            )
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    itemsIndexed(filteredFavorites, key = { _, item -> item.path }) { index, item ->
+                        val isDragging = draggedItemPath == item.path
+                        val isPinnedTab = selectedTabIndex == 2
+                        
+                        val itemModifier = if (isPinnedTab) {
+                            Modifier
+                                .zIndex(if (isDragging) 10f else 0f)
+                                .pointerInput(item.path) {
+                                    detectDragGesturesAfterLongPress(
+                                        onDragStart = { 
+                                            draggedItemPath = item.path
+                                            val info = listState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                            initialNodeOffset = info?.offset ?: 0
+                                            currentItemIndex = info?.index ?: index
+                                            dragOffsetY = 0f
+                                        },
+                                        onDrag = { change, dragAmount ->
+                                            change.consume()
+                                            dragOffsetY += dragAmount.y
+                                            
+                                            val info = listState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                            if (info != null && info.index == currentItemIndex) {
+                                                val visualCenterY = initialNodeOffset + dragOffsetY + info.size / 2
+                                                val targetItem = listState.layoutInfo.visibleItemsInfo.find { 
+                                                    visualCenterY.toInt() in it.offset..(it.offset + it.size)
+                                                }
+                                                if (targetItem != null && targetItem.key != item.path) {
+                                                    currentItemIndex = targetItem.index
+                                                    viewModel.reorderPinnedFavorites(info.index, targetItem.index)
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = {
+                                            draggedItemPath = null
+                                            dragOffsetY = 0f
+                                            currentItemIndex = null
+                                        },
+                                        onDragCancel = {
+                                            draggedItemPath = null
+                                            dragOffsetY = 0f
+                                            currentItemIndex = null
+                                        }
+                                    )
+                                }
+                                .offset {
+                                    if (isDragging) {
+                                        val currentInfo = listState.layoutInfo.visibleItemsInfo.find { it.key == item.path }
+                                        val adjY = if (currentInfo != null) initialNodeOffset - currentInfo.offset else 0
+                                        IntOffset(0, (dragOffsetY + adjY).toInt())
+                                    } else IntOffset.Zero
+                                }
+                                .graphicsLayer {
+                                    if (isDragging) {
+                                        scaleX = 1.05f
+                                        scaleY = 1.05f
+                                        shadowElevation = 8f
+                                    }
+                                }
+                        } else Modifier
+
+                        Box(modifier = itemModifier) {
+                            FileItemRow(
+                                file = item,
+                                isFavorite = true,
+                                isPinnedTab = isPinnedTab,
+                                onClick = { onNavigateToViewer(item) },
+                                onToggleFavorite = { viewModel.deleteFavorite(item) },
+                                onTogglePin = { viewModel.togglePin(item) }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
-}
-
-@Composable
-fun FavoriteItemRow(
-    item: FavoriteItem,
-    onClick: () -> Unit,
-    onDelete: () -> Unit,
-    onTogglePin: () -> Unit
-) {
-    var useSmallFont by remember { mutableStateOf(false) }
-    val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
-        .copy(fontWeight = FontWeight.Normal)
-    
-    val headlineContent = @Composable {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (item.isWebDav) {
-                Icon(
-                    imageVector = Icons.Default.Public,
-                    contentDescription = "WebDAV",
-                    modifier = Modifier.size(18.dp).padding(end = 4.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            Text(
-                text = item.title,
-                style = textStyle,
-                onTextLayout = { textLayoutResult ->
-                    if (textLayoutResult.lineCount >= 3) {
-                        useSmallFont = true
-                    }
-                }
-            )
-        }
-    }
-
-    ListItem(
-        headlineContent = headlineContent,
-        supportingContent = { 
-            Column {
-                val progressText = when (item.type) {
-                    "EPUB" -> {
-                        val chapter = (item.position / 1000000) + 1
-                        val line = item.position % 1000000
-                        "Chapter $chapter, Line $line"
-                    }
-                    "PDF" -> if (item.position >= 0) "Page ${item.position + 1}" else null
-                    "TEXT", "DOCUMENT", "HTML" -> if (item.position > 0) "Line ${item.position}" else null
-                    "ZIP" -> {
-                        if (!item.positionTitle.isNullOrEmpty()) {
-                            item.positionTitle
-                        } else if (item.position >= 0) {
-                            "Page ${item.position + 1}"
-                        } else null
-                    }
-                    else -> null
-                }
-                if (progressText != null) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Text(text = progressText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.weight(1f))
-                        Text(text = "${(item.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
-                    }
-                    LinearProgressIndicator(
-                        progress = item.progress,
-                        modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 4.dp),
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                }
-                val parentPath = try {
-                    java.io.File(item.path).parent ?: ""
-                } catch (e: Exception) {
-                    item.path
-                }
-                Text(parentPath)
-            }
-        },
-        trailingContent = {
-            Row {
-                IconButton(onClick = onTogglePin) {
-                    Icon(
-                        imageVector = if (item.isPinned) Icons.Filled.LocationOn else Icons.Outlined.LocationOn,
-                        contentDescription = if (item.isPinned) "Unpin" else "Pin",
-                        tint = if (item.isPinned) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.delete))
-                }
-            }
-        },
-        modifier = Modifier.clickable(onClick = onClick)
-    )
 }

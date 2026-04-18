@@ -91,7 +91,7 @@ fun RecentFileItemRow(
 ) {
     val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
     var useSmallFont by remember { mutableStateOf(false) }
-    val textStyle = (if (useSmallFont) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.titleMedium)
+    val textStyle = (if (useSmallFont) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium)
         .copy(fontWeight = FontWeight.Normal)
     
     ListItem(
@@ -137,17 +137,21 @@ fun RecentFileItemRow(
                 }
                 if (progressText != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                        Text(text = progressText, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                        Text(text = progressText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.weight(1f))
                         Text(text = "${(file.progress * 100).toInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
                     }
                     LinearProgressIndicator(
-                        progress = file.progress,
-                        modifier = Modifier.fillMaxWidth().height(4.dp).padding(vertical = 4.dp),
+                        progress = { file.progress },
+                        modifier = Modifier.fillMaxWidth().height(2.dp).padding(vertical = 2.dp),
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
-                Text(stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed))))
+                Text(
+                    stringResource(R.string.last_accessed, dateFormat.format(Date(file.lastAccessed))),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         modifier = Modifier.clickable(onClick = onClick)

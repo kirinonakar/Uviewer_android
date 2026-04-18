@@ -273,6 +273,14 @@ fun DocumentViewerScreen(
             // Save progress one last time on dispose
             viewModel.updateProgress(currentLine)
 
+            webViewRef?.let {
+                it.stopLoading()
+                it.clearHistory()
+                it.removeAllViews()
+                it.destroy()
+                webViewRef = null
+            }
+
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             lifecycleOwner.lifecycle.removeObserver(observer)
             

@@ -207,7 +207,7 @@ class LibraryViewModel(
                     } else null // Item is no longer pinned in DB
                 }
             } else {
-                favoriteEntries.filter { it.isPinned }.sortedBy { it.pinOrder }
+                favoriteEntries.filter { it.isPinned }.distinctBy { it.path }.sortedBy { it.pinOrder }
             },
             sortOption = sort,
             mostRecentFile = mostRecent
