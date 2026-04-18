@@ -54,6 +54,14 @@ class SharpenTransformation(private val intensity: Int) : coil.transform.Transfo
         if (intensity <= 0) return input
         val width = input.width
         val height = input.height
+
+        // Safety check: Skip sharpening for extremely large images to prevent OOM
+        // 20MP (approx 4500x4500) is a reasonable threshold for most mobile devices
+        if (width * height > 20_000_000) {
+            android.util.Log.w("Sharpen", "Image resolution too high (${width}x${height}), skipping sharpening to prevent OOM")
+            return input
+        }
+
         val pixels = IntArray(width * height)
         input.getPixels(pixels, 0, width, 0, 0, width, height)
         val outputPixels = IntArray(width * height)

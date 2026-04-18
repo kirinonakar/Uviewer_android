@@ -17,6 +17,27 @@ class UviewerApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        
+        // Setup global crash reporting to file
+        val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                val logFile = java.io.File(getExternalFilesDir(null), "crash_logs.txt")
+                java.io.FileOutputStream(logFile, true).use { fos ->
+                    java.io.PrintWriter(fos).use { pw ->
+                        pw.println("\n--- CRASH REPORT ---")
+                        pw.println("Date: ${java.util.Date()}")
+                        pw.println("Thread: ${thread.name}")
+                        pw.println("Throwable: ${throwable.javaClass.name}: ${throwable.message}")
+                        throwable.printStackTrace(pw)
+                        pw.println("---------------------\n")
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            defaultHandler?.uncaughtException(thread, throwable)
+        }
     }
 
     override fun newImageLoader(): ImageLoader {

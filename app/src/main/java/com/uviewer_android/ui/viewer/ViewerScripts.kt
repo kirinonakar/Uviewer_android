@@ -317,108 +317,119 @@ object ViewerScripts {
                  };
 
                  window.getVisualLines = function() {
-                     var w = window.innerWidth;
-                     var h = window.innerHeight;
-                     var textLines = [];
-                     var seenRuby = new Set();
-                     var padding = isVertical ? w * 2 : h * 2;
-                     
-                     var walker = document.createTreeWalker(
-                         document.body,
-                         NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
-                         {
-                             acceptNode: function(node) {
-                                 if (node.nodeType === 1) {
-                                      if (node.classList && node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_ACCEPT;
-                                      if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') return NodeFilter.FILTER_ACCEPT;
-                                      var tag = node.tagName;
-                                      if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
-                                          var r = node.getBoundingClientRect();
-                                          if (!isVertical) {
-                                              if (r.bottom < -padding || r.top > h + padding) return NodeFilter.FILTER_REJECT;
-                                          } else {
-                                              if (r.left > w + padding || r.right < -padding) return NodeFilter.FILTER_REJECT;
+                      var w = window.innerWidth;
+                      var h = window.innerHeight;
+                      var textLines = [];
+                      var seenRuby = new Set();
+                      var padding = isVertical ? w * 0.5 : h * 0.5;
+                      
+                      var chunks = document.querySelectorAll('.content-chunk');
+                      var visibleChunks = Array.from(chunks).filter(function(chunk) {
+                          var r = chunk.getBoundingClientRect();
+                          if (isVertical) return r.right > -padding && r.left < w + padding;
+                          return r.bottom > -padding && r.top < h + padding;
+                      });
+
+                      if (visibleChunks.length === 0) visibleChunks = [document.body];
+
+                      for (var c = 0; c < visibleChunks.length; c++) {
+                          var walker = document.createTreeWalker(
+                              visibleChunks[c],
+                              NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+                              {
+                                  acceptNode: function(node) {
+                                      if (node.nodeType === 1) {
+                                           if (node.classList && node.classList.contains('image-page-wrapper')) return NodeFilter.FILTER_ACCEPT;
+                                           if (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') return NodeFilter.FILTER_ACCEPT;
+                                           var tag = node.tagName;
+                                           if (tag === 'P' || tag === 'DIV' || tag === 'TABLE' || tag === 'SECTION') {
+                                               var r = node.getBoundingClientRect();
+                                               if (!isVertical) {
+                                                   if (r.bottom < -padding || r.top > h + padding) return NodeFilter.FILTER_REJECT;
+                                               } else {
+                                                   if (r.left > w + padding || r.right < -padding) return NodeFilter.FILTER_REJECT;
+                                               }
+                                           }
+                                           return NodeFilter.FILTER_SKIP;
+                                      }
+                                      if (node.nodeType === 3 && node.nodeValue.trim().length > 0) return NodeFilter.FILTER_ACCEPT;
+                                      return NodeFilter.FILTER_SKIP;
+                                  }
+                              }
+                          );
+                      
+                          var node;
+                          while ((node = walker.nextNode())) {
+                              if (node.nodeType === 1 && node.classList && node.classList.contains('image-page-wrapper')) {
+                                  var r = node.getBoundingClientRect();
+                                  textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: true });
+                                  continue;
+                              }
+
+                              var el = node.parentElement;
+                              if (!el) continue;
+                              if (node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') && el.classList.contains('image-page-wrapper')) continue;
+                              
+                              var rubyParent = el.closest('ruby');
+                              if (rubyParent) {
+                                  if (seenRuby.has(rubyParent)) continue;
+                                  seenRuby.add(rubyParent);
+                                  var rubyWalker = document.createTreeWalker(rubyParent, NodeFilter.SHOW_TEXT, null);
+                                  var rNode;
+                                  var rRects = [];
+                                  while ((rNode = rubyWalker.nextNode())) {
+                                      if (rNode.nodeValue.trim().length === 0) continue;
+                                      var range = document.createRange();
+                                      range.selectNodeContents(rNode);
+                                      var rects = range.getClientRects();
+                                      for (var i = 0; i < rects.length; i++) {
+                                          if (rects[i].width > 0 && rects[i].height > 0) rRects.push({
+                                              top: rects[i].top, bottom: rects[i].bottom, left: rects[i].left, right: rects[i].right
+                                          });
+                                      }
+                                  }
+                                  if (rRects.length > 0) {
+                                      var parts = [];
+                                      for (var i = 0; i < rRects.length; i++) {
+                                          var current = rRects[i];
+                                          var added = false;
+                                          for (var j = 0; j < parts.length; j++) {
+                                              var p = parts[j];
+                                              var hOverlap = Math.min(p.right, current.right) - Math.max(p.left, current.left);
+                                              var vOverlap = Math.min(p.bottom, current.bottom) - Math.max(p.top, current.top);
+                                              var isSamePart = false;
+                                              if (!isVertical) {
+                                                  if (hOverlap > -10 && vOverlap > -10) isSamePart = true;
+                                              } else {
+                                                  if (vOverlap > -10 && hOverlap > -10) isSamePart = true;
+                                              }
+                                              if (isSamePart) {
+                                                  p.top = Math.min(p.top, current.top);
+                                                  p.bottom = Math.max(p.bottom, current.bottom);
+                                                  p.left = Math.min(p.left, current.left);
+                                                  p.right = Math.max(p.right, current.right);
+                                                  added = true;
+                                                  break;
+                                              }
+                                          }
+                                          if (!added) {
+                                              parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right, isImageWrapper: false });
                                           }
                                       }
-                                      return NodeFilter.FILTER_SKIP;
-                                 }
-                                 if (node.nodeType === 3 && node.nodeValue.trim().length > 0) return NodeFilter.FILTER_ACCEPT;
-                                 return NodeFilter.FILTER_SKIP;
-                             }
-                         }
-                     );
-                     
-                     var node;
-                     while ((node = walker.nextNode())) {
-                         if (node.nodeType === 1 && node.classList && node.classList.contains('image-page-wrapper')) {
-                             var r = node.getBoundingClientRect();
-                             textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: true });
-                             continue;
-                         }
-
-                         var el = node.parentElement;
-                         if (!el) continue;
-                         if (node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE') && el.classList.contains('image-page-wrapper')) continue;
-                         
-                         var rubyParent = el.closest('ruby');
-                         if (rubyParent) {
-                             if (seenRuby.has(rubyParent)) continue;
-                             seenRuby.add(rubyParent);
-                             var rubyWalker = document.createTreeWalker(rubyParent, NodeFilter.SHOW_TEXT, null);
-                             var rNode;
-                             var rRects = [];
-                             while ((rNode = rubyWalker.nextNode())) {
-                                 if (rNode.nodeValue.trim().length === 0) continue;
-                                 var range = document.createRange();
-                                 range.selectNodeContents(rNode);
-                                 var rects = range.getClientRects();
-                                 for (var i = 0; i < rects.length; i++) {
-                                     if (rects[i].width > 0 && rects[i].height > 0) rRects.push({
-                                         top: rects[i].top, bottom: rects[i].bottom, left: rects[i].left, right: rects[i].right
-                                     });
-                                 }
-                             }
-                             if (rRects.length > 0) {
-                                 var parts = [];
-                                 for (var i = 0; i < rRects.length; i++) {
-                                     var current = rRects[i];
-                                     var added = false;
-                                     for (var j = 0; j < parts.length; j++) {
-                                         var p = parts[j];
-                                         var hOverlap = Math.min(p.right, current.right) - Math.max(p.left, current.left);
-                                         var vOverlap = Math.min(p.bottom, current.bottom) - Math.max(p.top, current.top);
-                                         var isSamePart = false;
-                                         if (!isVertical) {
-                                             if (hOverlap > -10 && vOverlap > -10) isSamePart = true;
-                                         } else {
-                                             if (vOverlap > -10 && hOverlap > -10) isSamePart = true;
-                                         }
-                                         if (isSamePart) {
-                                             p.top = Math.min(p.top, current.top);
-                                             p.bottom = Math.max(p.bottom, current.bottom);
-                                             p.left = Math.min(p.left, current.left);
-                                             p.right = Math.max(p.right, current.right);
-                                             added = true;
-                                             break;
-                                         }
-                                     }
-                                     if (!added) {
-                                         parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right, isImageWrapper: false });
-                                     }
-                                 }
-                                 for (var i = 0; i < parts.length; i++) {
-                                     textLines.push(parts[i]);
-                                 }
-                             }
-                         } else {
-                              var rects; if (node.nodeType === 1) { rects = [node.getBoundingClientRect()]; } else { var range = document.createRange(); range.selectNodeContents(node); rects = range.getClientRects(); }
-                              var isImg = node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE');
-                             for (var i = 0; i < rects.length; i++) {
-                                 var r = rects[i];
-                                 if (r.width > 0 && r.height > 0) { var isBlank = node.nodeType === 1 && node.classList && node.classList.contains("blank-line"); textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg, isBlankLine: isBlank }); }
-                             }
-                         }
-                     }
+                                      for (var i = 0; i < parts.length; i++) {
+                                          textLines.push(parts[i]);
+                                      }
+                                  }
+                              } else {
+                                   var rects; if (node.nodeType === 1) { rects = [node.getBoundingClientRect()]; } else { var range = document.createRange(); range.selectNodeContents(node); rects = range.getClientRects(); }
+                                   var isImg = node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE');
+                                  for (var i = 0; i < rects.length; i++) {
+                                      var r = rects[i];
+                                      if (r.width > 0 && r.height > 0) { var isBlank = node.nodeType === 1 && node.classList && node.classList.contains("blank-line"); textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg, isBlankLine: isBlank }); }
+                                  }
+                              }
+                          }
+                      }
                      
                      if (!isVertical) {
                          textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
@@ -554,12 +565,17 @@ object ViewerScripts {
                   };
 
                  window.updateMask = function() {
-                     var masks = window.calculateMasks();
-                     Android.updateTopMask(masks.top > 0 ? masks.top : 0);
-                     Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
-                     Android.updateLeftMask(masks.left > 0 ? masks.left : 0);
-                     Android.updateRightMask(masks.right > 0 ? masks.right : 0);
-                 };
+                      var masks = window.calculateMasks();
+                      
+                      var now = Date.now();
+                      if (window._lastBridgeCall && (now - window._lastBridgeCall < 50)) return;
+                      window._lastBridgeCall = now;
+
+                      Android.updateTopMask(masks.top > 0 ? masks.top : 0);
+                      Android.updateBottomMask(masks.bottom > 0 ? masks.bottom : 0);
+                      Android.updateLeftMask(masks.left > 0 ? masks.left : 0);
+                      Android.updateRightMask(masks.right > 0 ? masks.right : 0);
+                  };
 
                  window.jumpToBottom = function() {
                      if (isVertical) {

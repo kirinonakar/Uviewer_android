@@ -894,17 +894,39 @@ fun HSLColorPicker(
     var s by remember { mutableFloatStateOf(initialHsl[1]) }
     var l by remember { mutableFloatStateOf(initialHsl[2]) }
 
+    // Sync local state if initialColor changes externally (but not while dragging)
+    LaunchedEffect(initialColor) {
+        val newHsl = hexToHsl(initialColor)
+        if (hslToHex(h, s, l) != initialColor) {
+            h = newHsl[0]
+            s = newHsl[1]
+            l = newHsl[2]
+        }
+    }
+
+    // Debounce the repository update to prevent I/O flood
+    LaunchedEffect(h, s, l) {
+        kotlinx.coroutines.delay(100)
+        onColorChanged(hslToHex(h, s, l))
+    }
+
+    val currentColorHex = remember(h, s, l) { hslToHex(h, s, l) }
+
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(24.dp)
-                .background(Color(android.graphics.Color.parseColor(hslToHex(h, s, l))), MaterialTheme.shapes.small)
+                .background(
+                    try { Color(android.graphics.Color.parseColor(currentColorHex)) } 
+                    catch (e: Exception) { Color.Gray }, 
+                    MaterialTheme.shapes.small
+                )
                 .padding(horizontal = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                hslToHex(h, s, l), 
+                currentColorHex, 
                 style = MaterialTheme.typography.labelSmall,
                 color = if (l > 0.5f) Color.Black else Color.White
             )
@@ -915,7 +937,7 @@ fun HSLColorPicker(
             Text("H", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
             Slider(
                 value = h,
-                onValueChange = { h = it; onColorChanged(hslToHex(h, s, l)) },
+                onValueChange = { h = it },
                 valueRange = 0f..360f,
                 colors = SliderDefaults.colors(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -929,7 +951,7 @@ fun HSLColorPicker(
             Text("S", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
             Slider(
                 value = s,
-                onValueChange = { s = it; onColorChanged(hslToHex(h, s, l)) },
+                onValueChange = { s = it },
                 valueRange = 0f..1f,
                 colors = SliderDefaults.colors(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
@@ -943,7 +965,7 @@ fun HSLColorPicker(
             Text("L", style = MaterialTheme.typography.labelMedium, modifier = Modifier.width(16.dp))
             Slider(
                 value = l,
-                onValueChange = { l = it; onColorChanged(hslToHex(h, s, l)) },
+                onValueChange = { l = it },
                 valueRange = 0f..1f,
                 colors = SliderDefaults.colors(
                     activeTrackColor = MaterialTheme.colorScheme.primary,
