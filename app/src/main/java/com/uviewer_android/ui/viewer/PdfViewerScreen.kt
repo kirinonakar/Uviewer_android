@@ -200,7 +200,9 @@ fun PdfViewerScreen(
                 viewModel.updateProgress(filePath, currentPage, pageCount, isWebDav, serverId)
             }
 
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            try {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } catch (_: Exception) {}
             lifecycleOwner.lifecycle.removeObserver(observer)
             
             currentActivity?.volumeKeyPagingActive = false
@@ -209,28 +211,32 @@ fun PdfViewerScreen(
                 fileDescriptor?.close()
             } catch (e: Exception) {}
 
-            if (window != null) {
-                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-                insetsController.isAppearanceLightStatusBars = isLightAppTheme
-            }
+            try {
+                if (window != null) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    insetsController.isAppearanceLightStatusBars = isLightAppTheme
+                }
+            } catch (_: Exception) {}
         }
     }
 
     LaunchedEffect(useLightStatusBar, isFullScreen) {
-        val window = currentActivity?.window
-        if (window != null) {
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            insetsController.isAppearanceLightStatusBars = useLightStatusBar
-            if (isFullScreen) {
-                // Hide navigation, keep status
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        try {
+            val window = currentActivity?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                insetsController.isAppearanceLightStatusBars = useLightStatusBar
+                if (isFullScreen) {
+                    // Hide navigation, keep status
+                    insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                }
             }
-        }
+        } catch (_: Exception) {}
     }
 
     // Scroll to initial position

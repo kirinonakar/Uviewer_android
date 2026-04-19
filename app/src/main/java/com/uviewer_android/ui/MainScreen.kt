@@ -379,15 +379,28 @@ fun MainScreen(
                     initialPosition = position,
                     libraryViewModel = libraryViewModel,
                     onBack = { 
-                        // Modified to handle WebDAV parent path safely
-                        // Use serverId or path prefix to detect WebDAV
-                        val actualIsWebDav = isWebDav || (serverId != null && serverId != -1) || filePath.startsWith("http://") || filePath.startsWith("https://")
-                        val parent = if (actualIsWebDav) {
-                            val p = if (filePath.endsWith("/")) filePath.dropLast(1) else filePath
-                            val lastSlash = p.lastIndexOf('/')
-                            if (lastSlash == -1) "/" else p.substring(0, lastSlash + 1)
-                        } else {
-                            java.io.File(filePath).parent ?: "/"
+                        // Detect WebDAV by serverId first (most reliable for pinned tab items)
+                        val actualIsWebDav = (serverId != null && serverId != -1) || isWebDav || filePath.startsWith("http://") || filePath.startsWith("https://")
+                        val parent = try {
+                            if (actualIsWebDav) {
+                                // Decode first to avoid double-encoding issues
+                                val decoded = try {
+                                    var p = filePath
+                                    while (p.contains("%")) {
+                                        val next = java.net.URLDecoder.decode(p, "UTF-8")
+                                        if (next == p) break
+                                        p = next
+                                    }
+                                    p
+                                } catch (e: Exception) { filePath }
+                                val p = if (decoded.endsWith("/")) decoded.dropLast(1) else decoded
+                                val lastSlash = p.lastIndexOf('/')
+                                if (lastSlash <= 0) "/" else p.substring(0, lastSlash + 1)
+                            } else {
+                                java.io.File(filePath).parent ?: "/"
+                            }
+                        } catch (e: Exception) {
+                            "/"
                         }
                         val encodedParentPath = android.net.Uri.encode(parent, null)
                         val route = "library?path=$encodedParentPath&serverId=${serverId ?: -1}"

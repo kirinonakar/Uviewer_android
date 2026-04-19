@@ -273,15 +273,20 @@ fun DocumentViewerScreen(
             // Save progress one last time on dispose
             viewModel.updateProgress(currentLine)
 
-            webViewRef?.let {
+            // Set ref to null BEFORE destroy to prevent pending JS callbacks
+            // from accessing a destroyed WebView (DeadObjectException prevention)
+            val wv = webViewRef
+            webViewRef = null
+            wv?.let {
                 it.stopLoading()
                 it.clearHistory()
                 it.removeAllViews()
                 it.destroy()
-                webViewRef = null
             }
 
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            try {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            } catch (_: Exception) {}
             lifecycleOwner.lifecycle.removeObserver(observer)
             
             currentActivity?.volumeKeyPagingActive = false
@@ -300,29 +305,31 @@ fun DocumentViewerScreen(
 
     // [수정] Window 설정 (상태바 색상 강제 적용 + 아이콘 색상)
     LaunchedEffect(isFullScreen, targetDocColor, useDarkIcons) {
-        val window = (context as? android.app.Activity)?.window
-        if (window != null) {
-            val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-            
-            // 상태바 배경색 설정 (Legacy 지원 및 Edge-to-Edge가 아닌 경우 대비)
-            // 전체화면일 땐 문서색, 아닐 땐 투명(Scaffold 배경이 보임)
-            val statusBarColorInt = (if (isFullScreen) targetDocColor else Color.Transparent).toArgb()
-            
-            window.statusBarColor = statusBarColorInt
-            window.navigationBarColor = statusBarColorInt
-            
-            // 아이콘 밝기 설정
-            insetsController.isAppearanceLightStatusBars = useDarkIcons
-            insetsController.isAppearanceLightNavigationBars = useDarkIcons
-            
-            if (isFullScreen) {
-                insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
-                insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            } else {
-                insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+        try {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                
+                // 상태바 배경색 설정 (Legacy 지원 및 Edge-to-Edge가 아닌 경우 대비)
+                // 전체화면일 땐 문서색, 아닐 땐 투명(Scaffold 배경이 보임)
+                val statusBarColorInt = (if (isFullScreen) targetDocColor else Color.Transparent).toArgb()
+                
+                window.statusBarColor = statusBarColorInt
+                window.navigationBarColor = statusBarColorInt
+                
+                // 아이콘 밝기 설정
+                insetsController.isAppearanceLightStatusBars = useDarkIcons
+                insetsController.isAppearanceLightNavigationBars = useDarkIcons
+                
+                if (isFullScreen) {
+                    insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                } else {
+                    insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                }
             }
-        }
+        } catch (_: Exception) {}
     }
     // Update current line from UI state if needed, or maintain local state from scroll
     LaunchedEffect(uiState.currentLine) {

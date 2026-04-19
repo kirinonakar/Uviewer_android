@@ -70,12 +70,13 @@ class WebDavClient(
 
             try {
                 val response = client.newCall(request).execute()
-                if (!response.isSuccessful) {
-                    return@withContext emptyList()
+                response.use {
+                    if (!it.isSuccessful) {
+                        return@withContext emptyList()
+                    }
+                    val body = it.body?.string() ?: return@withContext emptyList()
+                    parseWebDavXml(body)
                 }
-
-                val body = response.body?.string() ?: return@withContext emptyList()
-                parseWebDavXml(body)
             } catch (e: Exception) {
                 emptyList()
             }
@@ -94,11 +95,12 @@ class WebDavClient(
 
             try {
                 val response = client.newCall(request).execute()
-                if (!response.isSuccessful) return@withContext 0L
-
-                val body = response.body?.string() ?: return@withContext 0L
-                val files = parseWebDavXml(body)
-                files.firstOrNull()?.size ?: 0L
+                response.use {
+                    if (!it.isSuccessful) return@withContext 0L
+                    val body = it.body?.string() ?: return@withContext 0L
+                    val files = parseWebDavXml(body)
+                    files.firstOrNull()?.size ?: 0L
+                }
             } catch (e: Exception) {
                 0L
             }
@@ -188,7 +190,7 @@ class WebDavClient(
                 .build()
 
             val response = client.newCall(request).execute()
-            response.isSuccessful
+            response.use { it.isSuccessful }
         } catch (e: IOException) {
             false
         }
@@ -204,9 +206,10 @@ class WebDavClient(
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
-            
-            response.body?.bytes() ?: byteArrayOf()
+            response.use {
+                if (!it.isSuccessful) throw IOException("Failed to download file ($url): ${it.code}")
+                it.body?.bytes() ?: byteArrayOf()
+            }
         }
     }
 
@@ -221,11 +224,12 @@ class WebDavClient(
                 .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful && response.code != 206) {
-                throw IOException("Failed to download range ($url): ${response.code}")
+            response.use {
+                if (!it.isSuccessful && it.code != 206) {
+                    throw IOException("Failed to download range ($url): ${it.code}")
+                }
+                it.body?.bytes() ?: byteArrayOf()
             }
-            
-            response.body?.bytes() ?: byteArrayOf()
         }
     }
 
