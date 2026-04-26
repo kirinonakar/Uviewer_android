@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 data class PdfViewerUiState(
@@ -172,21 +173,37 @@ class PdfViewerViewModel(
                     0.5f 
                 } else 0f
 
-                recentFileDao.insertRecent(
-                    com.uviewer_android.data.RecentFile(
-                        path = path,
-                        title = fileName,
-                        isWebDav = isWebDav,
-                        serverId = serverId,
-                        type = "PDF",
-                        lastAccessed = System.currentTimeMillis(),
-                        pageIndex = page,
-                        progress = progress
-                    )
+                recentFileDao.updatePosition(
+                    path = path,
+                    pageIndex = page,
+                    progress = progress,
+                    title = fileName,
+                    lastAccessed = System.currentTimeMillis()
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun saveProgressBlocking(path: String, page: Int, totalPages: Int) {
+        try {
+            val fileName = File(path).name
+            val progress = if (totalPages > 1) {
+                (page.toFloat() / (totalPages - 1))
+            } else if (page > 0) {
+                0.5f
+            } else 0f
+
+            runBlocking {
+                recentFileDao.updatePosition(
+                    path = path,
+                    pageIndex = page,
+                    progress = progress,
+                    title = fileName,
+                    lastAccessed = System.currentTimeMillis()
+                )
+            }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 }

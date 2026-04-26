@@ -195,9 +195,9 @@ fun PdfViewerScreen(
         
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
-            // Save progress one last time on dispose
+            // Save progress one last time on dispose (blocking to ensure DB write completes)
             if (pageCount > 0) {
-                viewModel.updateProgress(filePath, currentPage, pageCount, isWebDav, serverId)
+                viewModel.saveProgressBlocking(filePath, currentPage, pageCount)
             }
 
             try {

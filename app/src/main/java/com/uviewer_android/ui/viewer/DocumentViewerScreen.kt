@@ -270,8 +270,8 @@ fun DocumentViewerScreen(
         
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
-            // Save progress one last time on dispose
-            viewModel.updateProgress(currentLine)
+            // Save progress one last time on dispose (blocking to ensure DB write completes)
+            viewModel.saveProgressBlocking(currentLine)
 
             // Set ref to null BEFORE destroy to prevent pending JS callbacks
             // from accessing a destroyed WebView (DeadObjectException prevention)

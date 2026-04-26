@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 
 data class ImageViewerUiState(
@@ -498,31 +499,45 @@ enum class ViewMode {
         _uiState.value = _uiState.value.copy(viewMode = nextMode)
     }
 
+    private fun computeImageSaveData(index: Int): kotlin.collections.Map<String, Any?>? {
+        val path = currentPath ?: return null
+        val archiveName = File(path).name
+        val imageName = if (index >= 0 && index < uiState.value.images.size) uiState.value.images[index].name else null
+        val displayTitle = if (imageName != null && archiveName != imageName) "$archiveName - $imageName" else archiveName
+        val total = uiState.value.images.size
+        val progress = if (total > 0) (index.toFloat() / (total - 1).coerceAtLeast(1)) else 0f
+        return mapOf("path" to path, "progress" to progress, "title" to displayTitle, "imageName" to imageName)
+    }
+
     fun updateProgress(index: Int) {
-         val path = currentPath ?: return
+         val data = computeImageSaveData(index) ?: return
          viewModelScope.launch {
              try {
-                 val archiveName = File(path).name
-                 val imageName = if (index >= 0 && index < uiState.value.images.size) uiState.value.images[index].name else null
-                 val displayTitle = if (imageName != null && archiveName != imageName) "$archiveName - $imageName" else archiveName
-                 
-                 val total = uiState.value.images.size
-                 val progress = if (total > 0) (index.toFloat() / (total - 1).coerceAtLeast(1)) else 0f
-
-                 recentFileDao.insertRecent(
-                     com.uviewer_android.data.RecentFile(
-                         path = path,
-                         title = displayTitle,
-                         isWebDav = currentIsWebDav,
-                         serverId = currentServerId,
-                         type = if (currentIsZip) "ZIP" else "IMAGE",
-                         lastAccessed = System.currentTimeMillis(),
-                         pageIndex = index,
-                         positionTitle = imageName,
-                         progress = progress
-                     )
+                 recentFileDao.updatePositionWithTitle(
+                     path = data["path"] as String,
+                     pageIndex = index,
+                     progress = data["progress"] as Float,
+                     title = data["title"] as String,
+                     positionTitle = data["imageName"] as? String,
+                     lastAccessed = System.currentTimeMillis()
                  )
              } catch (e: Exception) { e.printStackTrace() }
          }
+    }
+
+    fun saveProgressBlocking(index: Int) {
+        val data = computeImageSaveData(index) ?: return
+        try {
+            runBlocking {
+                recentFileDao.updatePositionWithTitle(
+                    path = data["path"] as String,
+                    pageIndex = index,
+                    progress = data["progress"] as Float,
+                    title = data["title"] as String,
+                    positionTitle = data["imageName"] as? String,
+                    lastAccessed = System.currentTimeMillis()
+                )
+            }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 }

@@ -41,6 +41,12 @@ interface RecentFileDao {
     @Query("DELETE FROM recent_files")
     suspend fun deleteAll()
 
+    @Query("UPDATE recent_files SET pageIndex = :pageIndex, progress = :progress, title = :title, lastAccessed = :lastAccessed WHERE path = :path")
+    suspend fun updatePosition(path: String, pageIndex: Int, progress: Float, title: String, lastAccessed: Long)
+
+    @Query("UPDATE recent_files SET pageIndex = :pageIndex, progress = :progress, title = :title, positionTitle = :positionTitle, lastAccessed = :lastAccessed WHERE path = :path")
+    suspend fun updatePositionWithTitle(path: String, pageIndex: Int, progress: Float, title: String, positionTitle: String?, lastAccessed: Long)
+
     @Query("DELETE FROM recent_files WHERE path NOT IN (SELECT path FROM recent_files ORDER BY lastAccessed DESC LIMIT 20)")
     suspend fun deleteExcess()
 }

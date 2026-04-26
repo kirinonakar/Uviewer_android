@@ -154,8 +154,8 @@ fun ImageViewerScreen(
         
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
-            // Save progress on exit
-            viewModel.updateProgress(currentPageIndex)
+            // Save progress on exit (blocking to ensure DB write completes)
+            viewModel.saveProgressBlocking(currentPageIndex)
 
             try {
                 window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)

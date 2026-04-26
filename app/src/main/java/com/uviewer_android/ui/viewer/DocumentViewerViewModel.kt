@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.charset.Charset
 
@@ -401,63 +402,82 @@ class DocumentViewerViewModel(
         }
     }
 
+    private fun computeSaveData(line: Int): Triple<Int, Float, String>? {
+        if (currentFilePath.isEmpty()) return null
+        val fileName = File(currentFilePath).name
+        val savePosition = if (currentFileType == FileEntry.FileType.EPUB) {
+            if (epubFlatTextLines != null) {
+                val chIdx = epubChapterStartLines.entries
+                    .filter { it.value <= line }
+                    .maxByOrNull { it.value }?.key ?: 0
+                val lineInChapter = line - (epubChapterStartLines[chIdx] ?: 1) + 1
+                chIdx * 1000000 + lineInChapter
+            } else {
+                _uiState.value.currentChapterIndex * 1000000 + line
+            }
+        } else {
+            line
+        }
+
+        val title = if (currentFileType == FileEntry.FileType.EPUB) {
+            val ch = _uiState.value.currentChapterIndex + 1
+            val total = _uiState.value.totalLines
+            val pct = if (total > 0) (line * 100 / total) else 0
+            "$fileName - ch$ch $pct%"
+        } else {
+            fileName
+        }
+
+        val totalLines = _uiState.value.totalLines
+        val progress = if (currentFileType == FileEntry.FileType.EPUB) {
+            if (epubFlatTextLines != null) {
+                if (totalLines > 0) (line.toFloat() / totalLines) else 0f
+            } else {
+                val totalChapters = _uiState.value.epubChapters.size
+                if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
+            }
+        } else {
+            if (totalLines > 0) (line.toFloat() / totalLines) else 0f
+        }
+
+        return Triple(savePosition, progress, title)
+    }
+
     fun updateProgress(line: Int) {
         if (currentFilePath.isNotEmpty()) {
              viewModelScope.launch {
                  try {
-                     val fileName = File(currentFilePath).name
-                     // EPUB 세로모드(플랫): 플랫 라인에서 챕터 인덱스를 역산하여 저장
-                     val savePosition = if (currentFileType == FileEntry.FileType.EPUB) {
-                         if (epubFlatTextLines != null) {
-                             // 플랫 라인에서 챕터를 역산하여 챕터 상대적 위치로 저장 (기존 호환성 유지)
-                             val chIdx = epubChapterStartLines.entries
-                                 .filter { it.value <= line }
-                                 .maxByOrNull { it.value }?.key ?: 0
-                             val lineInChapter = line - (epubChapterStartLines[chIdx] ?: 1) + 1
-                             chIdx * 1000000 + lineInChapter
-                         } else {
-                             _uiState.value.currentChapterIndex * 1000000 + line
-                         }
-                     } else {
-                         line
-                     }
-                     
-                     val title = if (currentFileType == FileEntry.FileType.EPUB) {
-                         val ch = _uiState.value.currentChapterIndex + 1
-                         val total = _uiState.value.totalLines
-                         val pct = if (total > 0) (line * 100 / total) else 0
-                         "$fileName - ch$ch $pct%"
-                     } else {
-                         fileName
-                     }
-                     
-                     val totalLines = _uiState.value.totalLines
-                     val progress = if (currentFileType == FileEntry.FileType.EPUB) {
-                         if (epubFlatTextLines != null) {
-                             if (totalLines > 0) (line.toFloat() / totalLines) else 0f
-                         } else {
-                             val totalChapters = _uiState.value.epubChapters.size
-                             if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
-                         }
-                     } else {
-                         if (totalLines > 0) (line.toFloat() / totalLines) else 0f
-                     }
-
-                     recentFileDao.insertRecent(
-                        com.uviewer_android.data.RecentFile(
-                            path = currentFilePath,
-                            title = title,
-                            isWebDav = isWebDavContext,
-                            serverId = serverIdContext,
-                            type = currentFileType?.name ?: "TEXT",
-                            lastAccessed = System.currentTimeMillis(),
-                            pageIndex = savePosition,
-                            progress = progress
-                        )
-                    )
+                     val (savePosition, progress, title) = computeSaveData(line) ?: return@launch
+                     recentFileDao.updatePosition(
+                         path = currentFilePath,
+                         pageIndex = savePosition,
+                         progress = progress,
+                         title = title,
+                         lastAccessed = System.currentTimeMillis()
+                     )
                  } catch (e: Exception) { e.printStackTrace() }
              }
         }
+    }
+
+    /**
+     * onDispose에서 호출: ViewModel 소멸 전에 반드시 DB에 기록을 완료해야 하므로
+     * runBlocking을 사용하여 동기적으로 저장합니다.
+     */
+    fun saveProgressBlocking(line: Int) {
+        if (currentFilePath.isEmpty()) return
+        try {
+            val (savePosition, progress, title) = computeSaveData(line) ?: return
+            runBlocking {
+                recentFileDao.updatePosition(
+                    path = currentFilePath,
+                    pageIndex = savePosition,
+                    progress = progress,
+                    title = title,
+                    lastAccessed = System.currentTimeMillis()
+                )
+            }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     fun setCurrentLine(line: Int) {
