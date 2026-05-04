@@ -17,8 +17,8 @@ android {
         applicationId = "com.uviewer_android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 34
-        versionName = "1.3.4"
+        versionCode = 35
+        versionName = "1.3.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -82,6 +82,8 @@ dependencies {
     implementation(libs.commons.io)
     implementation(libs.sevenzipjbinding)
     implementation(libs.jsoup)
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.ext.gfm.tables)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

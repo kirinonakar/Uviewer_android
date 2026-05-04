@@ -22,6 +22,7 @@ folioreader = "0.5.4" # Or alternative
 ksp = "2.0.21-1.0.27"
 sevenzipjbinding = "16.02-2.4"
 appcompat = "1.7.1"
+commonmark = "0.21.0"
 
 [libraries]
 sevenzipjbinding = { group = "com.sorrowblue.sevenzipjbinding", name = "7-Zip-JBinding-4Android", version.ref = "sevenzipjbinding" }
@@ -55,6 +56,8 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 commons-io = { group = "commons-io", name = "commons-io", version.ref = "commonsIo" }
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
+commonmark-ext-gfm-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
