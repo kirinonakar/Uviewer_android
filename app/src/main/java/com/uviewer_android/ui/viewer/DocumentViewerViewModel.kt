@@ -524,8 +524,8 @@ class DocumentViewerViewModel(
             val processed = if (currentFileType == FileEntry.FileType.HTML || currentFilePath.endsWith(".html", ignoreCase = true)) {
                 val colors = getColors()
                 val fontFamily = when(_uiState.value.fontFamily) {
-                    "serif" -> "'Sawarabi Mincho', serif"
-                    "sans-serif" -> "'Sawarabi Gothic', sans-serif"
+                    "serif" -> "serif"
+                    "sans-serif" -> "sans-serif"
                     else -> "serif"
                 }
                 val resetCss = """
@@ -1319,12 +1319,27 @@ class DocumentViewerViewModel(
 
 
     private fun convertMarkdownToHtml(md: String): String {
+        val mathBlocks = mutableListOf<String>()
+        
+        // 1. Protect display math $$ ... $$
+        var processedMd = md.replace(Regex("\\$\\$(.*?)\\$\\$", RegexOption.DOT_MATCHES_ALL)) {
+            val index = mathBlocks.size
+            mathBlocks.add(it.value)
+            "K_MATH_BLOCK_${index}_K"
+        }
+        
+        // 2. Protect inline math $ ... $
+        // Matches $...$ where it's not escaped, doesn't start/end with whitespace, and is on a single line
+        processedMd = processedMd.replace(Regex("(?<!\\\\)\\$(?!\\s)([^\\s$](?:[^$]*?[^\\s$])?)(?<!\\\\)\\$")) {
+            val index = mathBlocks.size
+            mathBlocks.add(it.value)
+            "K_MATH_INLINE_${index}_K"
+        }
+
         val extensions = listOf(org.commonmark.ext.gfm.tables.TablesExtension.create())
         
         // CommonMark 스펙상 구두점 뒤에 한국어 조사(은/는/이/가 등)가 붙으면 우측 경계로 인식하지 못하는 문제 우회
-        // 예: **"테스트"**는 -> **"테스트"** 는 으로 공백을 주어 파싱 성공 유도
-        // 단, 여는 따옴표나 괄호 뒤의 ** 등은 여는 태그이므로 제외함
-        val preprocessedMd = md.replace(Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"), "$1 ")
+        val preprocessedMd = processedMd.replace(Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"), "$1 ")
 
         val parser = org.commonmark.parser.Parser.builder()
             .extensions(extensions)
@@ -1334,10 +1349,20 @@ class DocumentViewerViewModel(
         
         val renderer = org.commonmark.renderer.html.HtmlRenderer.builder()
             .extensions(extensions)
-            .softbreak("<br/>") // Render \n as <br/> just like the old implementation
+            .softbreak("<br/>")
             .build()
             
-        val html = renderer.render(document)
+        var html = renderer.render(document)
+        
+        // 3. Restore math with HTML escaping for safety within the HTML document
+        mathBlocks.forEachIndexed { index, original ->
+            val escaped = original.replace("&", "&amp;")
+                                  .replace("<", "&lt;")
+                                  .replace(">", "&gt;")
+            
+            html = html.replace("K_MATH_BLOCK_${index}_K", escaped)
+                       .replace("K_MATH_INLINE_${index}_K", escaped)
+        }
         
         // 렌더링된 HTML에서 우회용으로 추가했던 공백 제거 (</strong> 는 -> </strong>는)
         return html.replace(Regex("(</(?:strong|em)>) (?=[가-힣])"), "$1")

@@ -140,6 +140,7 @@ object ViewerScripts {
                           setTimeout(function() {
                               window.enforceChunkLimit(true);
                               window.updateMask();
+                              if (typeof renderMath === 'function') { renderMath(); }
                               window.isScrolling = false; 
                           }, 50);
 
@@ -195,6 +196,7 @@ object ViewerScripts {
                                   var finalHeightDiff = document.documentElement.scrollHeight - oldScrollHeight;
                                   window.scrollTo(beforeScrollX, beforeScrollY + finalHeightDiff);
                               }
+                              if (typeof renderMath === 'function') { renderMath(); }
                               window.isScrolling = false; 
                           }, 300);
 
@@ -229,6 +231,7 @@ object ViewerScripts {
                                   el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
                               }
                               window.updateMask();
+                              if (typeof renderMath === 'function') { renderMath(); }
                               window.isScrolling = false;
                               window.detectAndReportLine();
                           }, 50);

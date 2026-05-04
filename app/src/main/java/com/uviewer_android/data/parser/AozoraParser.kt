@@ -324,8 +324,8 @@ object AozoraParser {
     fun wrapInHtml(bodyContent: String, isVertical: Boolean = false, font: String = "serif", fontSize: Int = 16, backgroundColor: String = "#ffffff", textColor: String = "#000000", sideMargin: Int = 8, chunkIndex: Int = 0, language: String = "en"): String {
         val writingMode = if (isVertical) "vertical-rl" else "horizontal-tb"
         val fontFamily = when(font) {
-            "serif" -> "'Sawarabi Mincho', serif"
-            "sans-serif" -> "'Sawarabi Gothic', sans-serif"
+            "serif" -> "serif"
+            "sans-serif" -> "sans-serif"
             else -> "serif"
         }
         
@@ -337,6 +337,9 @@ object AozoraParser {
             <head>
                 <meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+                <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css">
+                <script src="file:///android_asset/katex/katex.min.js"></script>
+                <script src="file:///android_asset/katex/contrib/auto-render.min.js"></script>
                 <script>
                     function jumpToBottom() {
                         setTimeout(function() {
@@ -348,6 +351,31 @@ object AozoraParser {
                             }
                         }, 50); 
                     }
+
+                    function renderMath() {
+                        if (typeof renderMathInElement === 'function') {
+                            renderMathInElement(document.body, {
+                                delimiters: [
+                                    {left: "$$", right: "$$", display: true},
+                                    {left: "$", right: "$", inline: true},
+                                    {left: "\\(", right: "\\)", inline: true},
+                                    {left: "\\[", right: "\\]", display: true}
+                                ],
+                                throwOnError : false
+                            });
+                        }
+                    }
+
+                    window.renderMath = renderMath;
+
+                    window.addEventListener('DOMContentLoaded', function() {
+                        renderMath();
+                        fixRubySpacing();
+                    });
+                    
+                    // Fallback for cases where DOMContentLoaded might have already fired or be unreliable
+                    setTimeout(renderMath, 100);
+                    setTimeout(renderMath, 500);
 
 function fixRubySpacing() {
                         // 1단계: 인접한 모든 루비를 무조건 하나로 병합 (조각난 루비 길이 오작동 방지)
@@ -436,10 +464,8 @@ function fixRubySpacing() {
                             }
                         }
                     }
-                    window.addEventListener('DOMContentLoaded', fixRubySpacing);
                 </script>
                 <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Sawarabi+Mincho&family=Sawarabi+Gothic&display=swap');
                     
                     html {
                         width: 100vw !important;
@@ -463,11 +489,14 @@ function fixRubySpacing() {
                         -webkit-writing-mode: $writingMode;
                         text-orientation: mixed;
                         margin: 0;
-                        padding: 0 !important;
+                        padding-top: ${if (isVertical) "0" else "calc(2.5em + env(safe-area-inset-top, 0px))"} !important;
+                        padding-bottom: ${if (isVertical) "0" else "2em"} !important;
+                        padding-left: ${if (isVertical) "0" else "${marginEm}em"} !important;
+                        padding-right: ${if (isVertical) "0" else "${marginEm}em"} !important;
                         line-height: 1.8;
                         overflow: visible !important;
                         overflow-anchor: none !important;
-                        height: 100vh !important;
+                        height: ${if (isVertical) "100vh" else "auto"} !important;
                         min-height: 100vh !important;
                         width: ${if (isVertical) "auto" else "100%"};
                     }
@@ -488,6 +517,7 @@ function fixRubySpacing() {
                         display: flow-root !important;
                         overflow-anchor: none !important;
                         margin-left: 0 !important;
+                        margin-top: 1em !important;
                     }
 
                     div:has(img), p:has(img) {
@@ -619,6 +649,9 @@ function fixRubySpacing() {
                     .table-container {
                         padding: 0 !important;
                         margin: 1em 0;
+                    }
+                    .content-chunk > *:first-child {
+                        margin-top: 0.5em !important;
                     }
                 </style>
             </head>

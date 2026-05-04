@@ -883,6 +883,28 @@ val style = ViewerScripts.getStyleSheet(
                                        <head>
                                            <meta charset="utf-8">
                                            $viewportTag
+                                           <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css">
+                                           <script src="file:///android_asset/katex/katex.min.js"></script>
+                                           <script src="file:///android_asset/katex/contrib/auto-render.min.js"></script>
+                                           <script>
+                                               function renderMath() {
+                                                   if (typeof renderMathInElement === 'function') {
+                                                       renderMathInElement(document.body, {
+                                                           delimiters: [
+                                                               {left: "$$", right: "$$", display: true},
+                                                               {left: "$", right: "$", inline: true},
+                                                               {left: "\\(", right: "\\)", inline: true},
+                                                               {left: "\\[", right: "\\]", display: true}
+                                                           ],
+                                                           throwOnError : false
+                                                       });
+                                                   }
+                                               }
+                                               window.renderMath = renderMath;
+                                               window.addEventListener('DOMContentLoaded', renderMath);
+                                               setTimeout(renderMath, 100);
+                                               setTimeout(renderMath, 500);
+                                           </script>
                                            $style
                                        </head>
                                        <body>
