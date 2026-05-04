@@ -21,9 +21,10 @@
 ## ✨ Key Features
 
 ### 📚 Document Viewer
-- **Multiple Formats**: Support for `epub`, `aozora` (Aozora Bunko), `txt`, and `pdf`.
+- **Multiple Formats**: Support for `epub`, `aozora` (Aozora Bunko), `txt`, `md` (Markdown), and `pdf`.
 - **Smart Parsing**: Full support for Aozora Bunko format, including Ruby text, vertical writing, and emphasis dots (Bouten).
 - **Auto Encoding Detection**: Automatically detects text encodings like `UTF-8`, `EUC-KR`, `Johab` and `Shift-JIS` to prevent broken characters.
+- **Math Rendering**: Full support for **KaTeX** math expressions (inline and display mode) in Markdown.
 - **Custom Themes**: White, Sepia, Comfort, Dark, and fully customizable background colors and font settings.
 
 ### 🖼️ Image & Manga Viewer
@@ -59,6 +60,7 @@ Uviewer is built with the latest Android development technologies for a robust a
 - **Database**: [Room Persistence Library](https://developer.android.com/training/data-storage/room)
 - **Networking**: [OkHttp](https://square.github.io/okhttp/) & [Jsoup](https://jsoup.org/)
 - **Archive Handling**: [Junrar](https://github.com/junrar/junrar), [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/)
+- **Math Rendering**: [KaTeX](https://katex.org/) via WebView
 
 ---
 
