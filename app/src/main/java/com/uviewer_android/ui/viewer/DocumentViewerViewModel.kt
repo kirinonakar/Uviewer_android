@@ -1321,18 +1321,26 @@ class DocumentViewerViewModel(
     private fun convertMarkdownToHtml(md: String): String {
         val extensions = listOf(org.commonmark.ext.gfm.tables.TablesExtension.create())
         
+        // CommonMark 스펙상 구두점 뒤에 한국어 조사(은/는/이/가 등)가 붙으면 우측 경계로 인식하지 못하는 문제 우회
+        // 예: **"테스트"**는 -> **"테스트"** 는 으로 공백을 주어 파싱 성공 유도
+        // 단, 여는 따옴표나 괄호 뒤의 ** 등은 여는 태그이므로 제외함
+        val preprocessedMd = md.replace(Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"), "$1 ")
+
         val parser = org.commonmark.parser.Parser.builder()
             .extensions(extensions)
             .build()
             
-        val document = parser.parse(md)
+        val document = parser.parse(preprocessedMd)
         
         val renderer = org.commonmark.renderer.html.HtmlRenderer.builder()
             .extensions(extensions)
             .softbreak("<br/>") // Render \n as <br/> just like the old implementation
             .build()
             
-        return renderer.render(document)
+        val html = renderer.render(document)
+        
+        // 렌더링된 HTML에서 우회용으로 추가했던 공백 제거 (</strong> 는 -> </strong>는)
+        return html.replace(Regex("(</(?:strong|em)>) (?=[가-힣])"), "$1")
     }
 
     private suspend fun resolveLocalImages(content: String, parentDir: java.io.File?, serverId: Int?, parentPath: String? = null): String {
