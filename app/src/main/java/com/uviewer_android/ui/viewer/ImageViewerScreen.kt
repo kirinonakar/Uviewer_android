@@ -175,10 +175,17 @@ fun ImageViewerScreen(
 
     LaunchedEffect(useLightStatusBar, isFullScreen) {
         try {
-            val window = (context as? android.app.Activity)?.window
+            val window = currentActivity?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                
+                // Explicitly set bar colors to transparent to show the background
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+
                 insetsController.isAppearanceLightStatusBars = useLightStatusBar
+                insetsController.isAppearanceLightNavigationBars = useLightStatusBar
+                
                 if (isFullScreen) {
                     // Hide navigation, keep status
                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())

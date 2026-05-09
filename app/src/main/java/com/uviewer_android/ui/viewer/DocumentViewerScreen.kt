@@ -306,16 +306,15 @@ fun DocumentViewerScreen(
     // [수정] Window 설정 (상태바 색상 강제 적용 + 아이콘 색상)
     LaunchedEffect(isFullScreen, targetDocColor, useDarkIcons) {
         try {
-            val window = (context as? android.app.Activity)?.window
+            val window = currentActivity?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 
                 // 상태바 배경색 설정 (Legacy 지원 및 Edge-to-Edge가 아닌 경우 대비)
                 // 전체화면일 땐 문서색, 아닐 땐 투명(Scaffold 배경이 보임)
-                val statusBarColorInt = (if (isFullScreen) targetDocColor else Color.Transparent).toArgb()
-                
-                window.statusBarColor = statusBarColorInt
-                window.navigationBarColor = statusBarColorInt
+                // 상태바 배경색을 투명하게 설정하여 Scaffold 배경이 보이도록 함
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                window.navigationBarColor = android.graphics.Color.TRANSPARENT
                 
                 // 아이콘 밝기 설정
                 insetsController.isAppearanceLightStatusBars = useDarkIcons
