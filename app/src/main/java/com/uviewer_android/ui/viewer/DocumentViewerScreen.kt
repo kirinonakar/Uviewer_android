@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.MoreVert
+
 import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -83,6 +85,8 @@ fun DocumentViewerScreen(
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var showEncodingDialog by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+
     var isPageLoading by remember { mutableStateOf(false) }
     var isNavigating by remember { mutableStateOf(false) }
     var bottomMaskHeight by remember { mutableFloatStateOf(0f) }
@@ -497,16 +501,6 @@ fun DocumentViewerScreen(
                                 IconButton(onClick = onNavigateToNext, modifier = Modifier.size(40.dp)) {
                                     Icon(Icons.Default.SkipNext, contentDescription = stringResource(R.string.next_file), modifier = Modifier.size(24.dp))
                                 }
-                                IconButton(onClick = { viewModel.toggleVerticalReading() }, modifier = Modifier.size(40.dp)) {
-                                    Text(
-                                        "V",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
-                                    )
-                                }
-                                IconButton(onClick = { showEncodingDialog = true }, modifier = Modifier.size(40.dp)) {
-                                    Icon(Icons.Default.Translate, contentDescription = "Encoding", modifier = Modifier.size(24.dp))
-                                }
                                 val context = androidx.compose.ui.platform.LocalContext.current
                                 IconButton(onClick = {
                                     val typeStr = if (type == FileEntry.FileType.EPUB) "EPUB" else "TEXT"
@@ -531,9 +525,51 @@ fun DocumentViewerScreen(
                                     }
                                 }
 
-                                IconButton(onClick = { showFontSettingsDialog = true }, modifier = Modifier.size(40.dp)) {
-                                    Icon(Icons.Default.FormatSize, contentDescription = stringResource(R.string.font_settings), modifier = Modifier.size(24.dp))
+                                Box {
+                                    IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(40.dp)) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp))
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMoreMenu,
+                                        onDismissRequest = { showMoreMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.toggle_vertical)) },
+                                            onClick = {
+                                                viewModel.toggleVerticalReading()
+                                                showMoreMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Text(
+                                                    "V",
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = if (uiState.isVertical) Color(0xFF007AFF) else LocalContentColor.current
+                                                )
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.select_encoding)) },
+                                            onClick = {
+                                                showEncodingDialog = true
+                                                showMoreMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Translate, contentDescription = null)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.font_settings)) },
+                                            onClick = {
+                                                showFontSettingsDialog = true
+                                                showMoreMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.FormatSize, contentDescription = null)
+                                            }
+                                        )
+                                    }
                                 }
+
                             }
                         )
                     }
