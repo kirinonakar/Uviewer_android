@@ -29,6 +29,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.WebDavServer
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.ui.AppViewModelProvider
+import com.uviewer_android.ui.theme.SettingsBackground
+import com.uviewer_android.ui.theme.SettingsCard
+import androidx.compose.foundation.isSystemInDarkTheme
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,13 +70,19 @@ fun SettingsScreen(
     var showCacheLimitDialog by remember { mutableStateOf(false) }
 
 
+    val isDark = isSystemInDarkTheme() || themeMode == UserPreferencesRepository.THEME_DARK
+    val backgroundColor = if (isDark) MaterialTheme.colorScheme.background else SettingsBackground
+    val cardColor = if (isDark) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f) else SettingsCard
+
     Scaffold(
+        containerColor = backgroundColor,
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.background,
+                color = backgroundColor,
                 shadowElevation = 0.dp
             ) {
+
                 TopAppBar(
                     windowInsets = WindowInsets.statusBars,
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -91,7 +101,7 @@ fun SettingsScreen(
                 .padding(bottom = 16.dp) // Extra bottom space
         ) {
             item {
-                SettingsGroup(title = stringResource(R.string.section_appearance)) {
+                SettingsGroup(title = stringResource(R.string.section_appearance), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
                     val themeLabel = when (themeMode) {
                         UserPreferencesRepository.THEME_LIGHT -> stringResource(R.string.theme_light)
                         UserPreferencesRepository.THEME_DARK -> stringResource(R.string.theme_dark)
@@ -133,7 +143,7 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.section_reading)) {
+                SettingsGroup(title = stringResource(R.string.section_reading), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
                     val docBgLabel = when (docBackgroundColor) {
                         UserPreferencesRepository.DOC_BG_WHITE -> stringResource(R.string.doc_bg_white)
                         UserPreferencesRepository.DOC_BG_SEPIA -> stringResource(R.string.doc_bg_sepia)
@@ -267,7 +277,7 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.section_image_viewer)) {
+                SettingsGroup(title = stringResource(R.string.section_image_viewer), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.persist_zoom)) },
                         supportingContent = { Text(stringResource(R.string.persist_zoom_desc)) },
@@ -352,7 +362,7 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.section_storage)) {
+                SettingsGroup(title = stringResource(R.string.section_storage), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.app_cache)) },
                         supportingContent = { Text(stringResource(R.string.cache_size_fmt, cacheSize)) },
@@ -376,7 +386,7 @@ fun SettingsScreen(
             }
 
             item {
-                SettingsGroup(title = stringResource(R.string.section_webdav)) {
+                SettingsGroup(title = stringResource(R.string.section_webdav), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.add_server_menu), color = MaterialTheme.colorScheme.primary) },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -741,6 +751,8 @@ fun ServerItemRow(
 @Composable
 fun SettingsGroup(
     title: String,
+    color: Color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+    tonalElevation: androidx.compose.ui.unit.Dp = 1.dp,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -756,9 +768,11 @@ fun SettingsGroup(
         )
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            tonalElevation = 1.dp
+            color = color,
+            tonalElevation = tonalElevation
         ) {
+
+
             Column(
                 modifier = Modifier.padding(vertical = 4.dp),
                 content = content
