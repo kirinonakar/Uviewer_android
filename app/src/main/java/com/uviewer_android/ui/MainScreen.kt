@@ -160,6 +160,11 @@ fun MainScreen(
                     shadowElevation = 1.dp
                 ) {
                     Column {
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                        )
+
                         // Viewer-specific content (Slider, etc.)
                         viewerBottomContent?.invoke()
                         
