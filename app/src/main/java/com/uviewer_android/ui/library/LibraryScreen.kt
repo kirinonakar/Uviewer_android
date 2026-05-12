@@ -106,6 +106,7 @@ fun LibraryScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),

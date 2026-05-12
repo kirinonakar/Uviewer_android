@@ -57,6 +57,7 @@ fun FavoritesScreen(
     var initialNodeOffset by remember { mutableStateOf(0) }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Column(
                 modifier = Modifier.fillMaxWidth()

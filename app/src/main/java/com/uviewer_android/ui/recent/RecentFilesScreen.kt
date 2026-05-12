@@ -38,6 +38,7 @@ fun RecentFilesScreen(
     val recentFiles by viewModel.recentFiles.collectAsState()
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
