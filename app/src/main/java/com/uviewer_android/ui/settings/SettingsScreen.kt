@@ -76,6 +76,7 @@ fun SettingsScreen(
 
     Scaffold(
         containerColor = backgroundColor,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -98,7 +99,6 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(bottom = 16.dp) // Extra bottom space
         ) {
             item {
                 SettingsGroup(title = stringResource(R.string.section_appearance), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
