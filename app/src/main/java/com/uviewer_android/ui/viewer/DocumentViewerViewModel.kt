@@ -51,6 +51,68 @@ data class DocumentViewerUiState(
     val language: String = UserPreferencesRepository.LANG_EN
 )
 
+private class ObsidianHighlight : org.commonmark.node.CustomNode(), org.commonmark.node.Delimited {
+    override fun getOpeningDelimiter(): String = "=="
+    override fun getClosingDelimiter(): String = "=="
+}
+
+private object ObsidianHighlightDelimiterProcessor : org.commonmark.parser.delimiter.DelimiterProcessor {
+    override fun getOpeningCharacter(): Char = '='
+    override fun getClosingCharacter(): Char = '='
+    override fun getMinLength(): Int = 2
+
+    override fun process(
+        openingRun: org.commonmark.parser.delimiter.DelimiterRun,
+        closingRun: org.commonmark.parser.delimiter.DelimiterRun
+    ): Int {
+        if (openingRun.length() < 2 || closingRun.length() < 2) return 0
+
+        val highlight = ObsidianHighlight()
+        var node = openingRun.opener.next
+        while (node != null && node != closingRun.closer) {
+            val next = node.next
+            highlight.appendChild(node)
+            node = next
+        }
+        openingRun.opener.insertAfter(highlight)
+        return 2
+    }
+}
+
+private class ObsidianHighlightHtmlNodeRenderer(
+    private val context: org.commonmark.renderer.html.HtmlNodeRendererContext
+) : org.commonmark.renderer.NodeRenderer {
+    private val html = context.writer
+
+    override fun getNodeTypes(): Set<Class<out org.commonmark.node.Node>> {
+        return setOf(ObsidianHighlight::class.java)
+    }
+
+    override fun render(node: org.commonmark.node.Node) {
+        html.tag("mark", context.extendAttributes(node, "mark", emptyMap()))
+        var child = node.firstChild
+        while (child != null) {
+            val next = child.next
+            context.render(child)
+            child = next
+        }
+        html.tag("/mark")
+    }
+}
+
+private object ObsidianHighlightExtension :
+    org.commonmark.parser.Parser.ParserExtension,
+    org.commonmark.renderer.html.HtmlRenderer.HtmlRendererExtension {
+
+    override fun extend(parserBuilder: org.commonmark.parser.Parser.Builder) {
+        parserBuilder.customDelimiterProcessor(ObsidianHighlightDelimiterProcessor)
+    }
+
+    override fun extend(rendererBuilder: org.commonmark.renderer.html.HtmlRenderer.Builder) {
+        rendererBuilder.nodeRendererFactory { context -> ObsidianHighlightHtmlNodeRenderer(context) }
+    }
+}
+
 
 class DocumentViewerViewModel(
     application: Application,
@@ -1336,7 +1398,10 @@ class DocumentViewerViewModel(
             "K_MATH_INLINE_${index}_K"
         }
 
-        val extensions = listOf(org.commonmark.ext.gfm.tables.TablesExtension.create())
+        val extensions = listOf(
+            org.commonmark.ext.gfm.tables.TablesExtension.create(),
+            ObsidianHighlightExtension
+        )
         
         // CommonMark 스펙상 구두점 뒤에 한국어 조사(은/는/이/가 등)가 붙으면 우측 경계로 인식하지 못하는 문제 우회
         val preprocessedMd = processedMd.replace(Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"), "$1 ")

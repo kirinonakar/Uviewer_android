@@ -906,10 +906,16 @@ object ViewerScripts {
                      margin: 0 auto !important;
                      object-fit: contain !important;
                  }
-                 img[style*="display: none"] {
+                img[style*="display: none"] {
                      margin: 0 !important;
                      height: 0 !important;
                  }
+                mark {
+                    background-color: rgba(255, 221, 87, 0.58) !important;
+                    color: inherit !important;
+                    border-radius: 0.12em !important;
+                    padding: 0 0.08em !important;
+                }
                 /* Table wrapping support */
                 table {
                     width: 100% !important;

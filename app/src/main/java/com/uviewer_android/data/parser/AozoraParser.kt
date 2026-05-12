@@ -586,6 +586,12 @@ function fixRubySpacing() {
                         margin: 0 !important;
                         height: 0 !important;
                     }
+                    mark {
+                        background-color: rgba(255, 221, 87, 0.58) !important;
+                        color: inherit !important;
+                        border-radius: 0.12em !important;
+                        padding: 0 0.08em !important;
+                    }
 
                     h1.aozora-title { font-size: 1.3em; }
                     h2.aozora-title { font-size: 1.15em; }

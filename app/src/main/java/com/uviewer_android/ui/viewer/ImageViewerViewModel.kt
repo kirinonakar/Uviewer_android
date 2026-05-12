@@ -196,10 +196,11 @@ enum class ViewMode {
 
                 // Add to Recent (and retrieve saved index)
                 var savedIndex = 0
+                var savedImageName: String? = null
                 try {
                     val existing = recentFileDao.getFile(filePath)
                     savedIndex = initialIndex ?: (existing?.pageIndex ?: 0)
-                    val savedImageName = existing?.positionTitle
+                    savedImageName = if (initialIndex == null) existing?.positionTitle else null
                     
                     val title = if (filePath.endsWith("/")) filePath.dropLast(1).substringAfterLast("/") else filePath.substringAfterLast("/")
                     recentFileDao.insertRecent(
@@ -211,7 +212,7 @@ enum class ViewMode {
                             type = if (isZip) "ZIP" else "IMAGE",
                             lastAccessed = System.currentTimeMillis(),
                             pageIndex = savedIndex, // Preserve saved index on open
-                            positionTitle = existing?.positionTitle
+                            positionTitle = savedImageName ?: existing?.positionTitle
                         )
                     )
                 } catch (e: Exception) {
@@ -370,7 +371,8 @@ enum class ViewMode {
                             val context = getApplication<Application>()
                             val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                             val zipFile = File(filePath)
-                            val unzipDir = File(cacheDir, "zip_${zipFile.name}_unzipped")
+                            val cacheKey = "${filePath}_${zipFile.lastModified()}_${zipFile.length()}".hashCode().toString(36)
+                            val unzipDir = File(cacheDir, "zip_${cacheKey}_${zipFile.name}_unzipped")
                             
                             if (unzipDir.exists()) {
                                 cacheManager.touch(unzipDir)
@@ -418,7 +420,6 @@ enum class ViewMode {
 
                     // For Zip, use savedIndex. For Folder, find the file index.
                     val normalizedFilePath = filePath.trimEnd('/')
-                    val savedImageName = recentFileDao.getFile(filePath)?.positionTitle
                     val index = if (isZip) {
                          if (savedImageName != null) {
                              val foundIdx = images.indexOfFirst { it.name == savedImageName }

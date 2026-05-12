@@ -115,7 +115,8 @@ fun ImageViewerScreen(
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var currentPageIndex by remember(uiState.images) { mutableIntStateOf(uiState.initialIndex) }
+    var currentPageIndex by remember(filePath) { mutableIntStateOf(initialIndex ?: 0) }
+    var appliedInitialIndex by remember(filePath) { mutableStateOf<Int?>(null) }
     // viewMode is extracted from uiState where needed
 
     // Sync is done after pagerState is created (see below)
@@ -199,7 +200,7 @@ fun ImageViewerScreen(
     }
 
     // Load images on start
-    LaunchedEffect(filePath) {
+    LaunchedEffect(filePath, initialIndex) {
         viewModel.loadImages(filePath, isWebDav, serverId, initialIndex)
     }
 
@@ -262,6 +263,21 @@ fun ImageViewerScreen(
             }
             rememberPagerState(initialPage = initial.coerceIn(0, (pageCount - 1).coerceAtLeast(0))) {
                 pageCount
+            }
+        }
+
+        LaunchedEffect(uiState.initialIndex, uiState.images) {
+            if (uiState.images.isNotEmpty() && appliedInitialIndex != uiState.initialIndex) {
+                val targetIndex = uiState.initialIndex.coerceIn(0, totalImages - 1)
+                val targetPage = when (viewMode) {
+                    ViewMode.SINGLE -> targetIndex
+                    ViewMode.DUAL -> targetIndex / 2
+                    ViewMode.SPLIT -> targetIndex * 2
+                }.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
+
+                currentPageIndex = targetIndex
+                pagerState.scrollToPage(targetPage)
+                appliedInitialIndex = uiState.initialIndex
             }
         }
 
