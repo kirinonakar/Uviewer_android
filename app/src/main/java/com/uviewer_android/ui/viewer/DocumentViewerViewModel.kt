@@ -712,6 +712,13 @@ class DocumentViewerViewModel(
                             white-space: nowrap !important;
                         }
                         /* Hide potentially problematic layout elements */
+                        /* Ensure code blocks wrap properly */
+                        pre, code {
+                            white-space: pre-wrap !important;
+                            word-break: break-all !important;
+                            overflow-wrap: break-word !important;
+                        }
+                        /* Hide potentially problematic layout elements */
                         iframe, script, noscript, style:not([data-app-style]) { display: none !important; }
                     </style>
                     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
@@ -1002,10 +1009,57 @@ class DocumentViewerViewModel(
         )
     }
 
+    fun getCurrentMatchRelativeIndex(): Int {
+        val searchState = _uiState.value.searchState
+        val currentMatch = searchState.currentMatch ?: return -1
+
+        val startLine = loadedStartChunk * LINES_PER_CHUNK + 1
+        val endLine = (loadedEndChunk + 1) * LINES_PER_CHUNK
+
+        val loadedMatches = searchState.matches.filter { it.line in startLine..endLine }
+        return loadedMatches.indexOf(currentMatch)
+    }
+
+    private fun cleanLineForSearch(line: String, fileType: FileEntry.FileType?, filePath: String): String {
+        val cleaned = when {
+            fileType == FileEntry.FileType.HTML || filePath.endsWith(".html", ignoreCase = true) -> {
+                line.replace(Regex("<[^>]*>"), "")
+            }
+            filePath.endsWith(".md", ignoreCase = true) -> {
+                var clean = line.replace(Regex("<[^>]*>"), "")
+                // Replace Markdown links [text](url) with just text
+                clean = clean.replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
+                // Replace Markdown images ![alt](url) with just alt
+                clean = clean.replace(Regex("!\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
+                // Remove formatting characters: *, _, #, `, ~
+                clean.replace(Regex("[*_#`~]"), "")
+            }
+            fileType == FileEntry.FileType.EPUB -> {
+                line.replace(Regex("<[^>]*>"), "")
+            }
+            else -> {
+                val noAozoraNote = line.replace(Regex("［＃[^］]*］"), "")
+                val noRubyStart = noAozoraNote.replace("｜", "")
+                val noRubyPronunciation = noRubyStart.replace("《", "").replace("》", "")
+                noRubyPronunciation
+            }
+        }
+        return cleaned
+            .replace("&nbsp;", " ")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&")
+            .replace("&quot;", "\"")
+            .replace("&apos;", "'")
+    }
+
     private suspend fun findDocumentSearchMatches(query: String): List<ViewerTextSearchMatch> {
+        val fileType = currentFileType
+        val filePath = currentFilePath
         val flatLines = epubFlatTextLines
-        if (currentFileType == FileEntry.FileType.EPUB && flatLines != null) {
-            return ViewerSearchUtils.findMatchesInLines(flatLines, query, firstLineNumber = 1)
+        if (fileType == FileEntry.FileType.EPUB && flatLines != null) {
+            val cleanedLines = flatLines.map { cleanLineForSearch(it, fileType, filePath) }
+            return ViewerSearchUtils.findMatchesInLines(cleanedLines, query, firstLineNumber = 1)
         }
 
         val reader = largeTextReader ?: return emptyList()
@@ -1013,10 +1067,35 @@ class DocumentViewerViewModel(
         val matches = mutableListOf<ViewerTextSearchMatch>()
         val scanSize = 1000
         var startLine = 1
+        var inStyleOrScript = false
+
         while (startLine <= totalLines) {
             val text = reader.readLines(startLine, scanSize)
             val lines = text.split('\n').map { it.trimEnd('\r') }
-            matches.addAll(ViewerSearchUtils.findMatchesInLines(lines, query, startLine))
+
+            val cleanedLines = mutableListOf<String>()
+            for (line in lines) {
+                var cleanLine = line
+                val lower = line.lowercase()
+
+                if (lower.contains("<style") || lower.contains("<script")) {
+                    inStyleOrScript = true
+                }
+
+                if (inStyleOrScript) {
+                    cleanLine = ""
+                } else {
+                    cleanLine = cleanLineForSearch(cleanLine, fileType, filePath)
+                }
+
+                if (lower.contains("</style>") || lower.contains("</script>")) {
+                    inStyleOrScript = false
+                }
+
+                cleanedLines.add(cleanLine)
+            }
+
+            matches.addAll(ViewerSearchUtils.findMatchesInLines(cleanedLines, query, startLine))
             startLine += scanSize
         }
         return matches

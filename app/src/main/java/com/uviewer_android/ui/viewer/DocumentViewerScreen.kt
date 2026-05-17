@@ -118,8 +118,9 @@ fun DocumentViewerScreen(
     val applyDocumentSearchHighlight = {
         val searchState = viewModel.uiState.value.searchState
         if (showSearch && searchState.query.isNotBlank()) {
+            val relativeIndex = viewModel.getCurrentMatchRelativeIndex()
             webViewRef?.evaluateJavascript(
-                ViewerSearchScripts.highlightDocument(searchState.query, searchState.currentMatch),
+                ViewerSearchScripts.highlightDocument(searchState.query, searchState.currentMatch, relativeIndex),
                 null
             )
         }

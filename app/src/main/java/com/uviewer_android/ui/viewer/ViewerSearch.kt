@@ -80,7 +80,7 @@ object ViewerSearchUtils {
 }
 
 object ViewerSearchScripts {
-    fun highlightDocument(query: String, target: ViewerTextSearchMatch?): String {
+    fun highlightDocument(query: String, target: ViewerTextSearchMatch?, relativeIndex: Int = -1): String {
         val queryJson = JSONObject.quote(query)
         val line = target?.line ?: -1
         val occurrence = target?.occurrenceInLine ?: -1
@@ -89,6 +89,7 @@ object ViewerSearchScripts {
                 var query = $queryJson;
                 var targetLine = $line;
                 var targetOccurrence = $occurrence;
+                var targetGlobalIndex = $relativeIndex;
                 var styleId = 'uv-search-style';
                 var oldStyle = document.getElementById(styleId);
                 if (!oldStyle) {
@@ -100,7 +101,55 @@ object ViewerSearchScripts {
                     document.head.appendChild(oldStyle);
                 }
 
-                document.querySelectorAll('.uv-search-highlight').forEach(function(node) {
+                // Fast path for updating active highlight and scrolling when search query is identical
+                var highlights = document.querySelectorAll('.uv-search-highlight');
+                if (window.currentSearchQuery === query && highlights.length > 0) {
+                    document.querySelectorAll('.uv-search-current').forEach(function(node) {
+                        node.classList.remove('uv-search-current');
+                    });
+
+                    var currentNode = null;
+                    if (targetLine >= 0 && targetOccurrence >= 0) {
+                        var count = 0;
+                        for (var i = 0; i < highlights.length; i++) {
+                            var span = highlights[i];
+                            var lineElement = span.closest('[id^="line-"]');
+                            if (lineElement) {
+                                var lineNumber = parseInt(lineElement.id.replace('line-', ''), 10);
+                                if (lineNumber === targetLine) {
+                                    if (count === targetOccurrence) {
+                                        currentNode = span;
+                                        break;
+                                    }
+                                    count++;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!currentNode && targetGlobalIndex >= 0) {
+                        var fallbackIndex = Math.min(Math.max(0, targetGlobalIndex), highlights.length - 1);
+                        currentNode = highlights[fallbackIndex];
+                    }
+
+                    if (currentNode) {
+                        currentNode.classList.add('uv-search-current');
+                        var rect = currentNode.getBoundingClientRect();
+                        var deltaX = rect.left + rect.width / 2 - window.innerWidth / 2;
+                        var deltaY = rect.top + rect.height / 2 - window.innerHeight / 2;
+                        if (typeof window.safeScrollBy === 'function') {
+                            window.safeScrollBy(deltaX, deltaY);
+                        } else {
+                            window.scrollBy(deltaX, deltaY);
+                        }
+                    }
+                    return;
+                }
+
+                // Slow path: Full rebuild of highlights (query has changed or first load)
+                window.currentSearchQuery = query;
+
+                document.querySelectorAll('.uv-search-highlight, .uv-search-current').forEach(function(node) {
                     node.replaceWith(document.createTextNode(node.textContent || ''));
                 });
                 document.body.normalize();
@@ -133,6 +182,7 @@ object ViewerSearchScripts {
                 var nodes = [];
                 while (walker.nextNode()) nodes.push(walker.currentNode);
 
+                var globalIndex = 0;
                 nodes.forEach(function(textNode) {
                     var text = textNode.nodeValue || '';
                     var fragment = document.createDocumentFragment();
@@ -148,16 +198,27 @@ object ViewerSearchScripts {
                         span.className = 'uv-search-highlight';
                         span.textContent = match[0];
 
+                        var isCurrent = false;
                         var lineElement = textNode.parentElement ? textNode.parentElement.closest('[id^="line-"]') : null;
                         if (lineElement) {
                             var lineNumber = parseInt(lineElement.id.replace('line-', ''), 10);
                             var count = lineCounts[lineNumber] || 0;
                             lineCounts[lineNumber] = count + 1;
                             if (lineNumber === targetLine && count === targetOccurrence) {
-                                span.className += ' uv-search-current';
-                                currentNode = span;
+                                isCurrent = true;
                             }
                         }
+
+                        // Always allow global relative index as a robust fallback!
+                        if (!isCurrent && targetGlobalIndex >= 0 && globalIndex === targetGlobalIndex) {
+                            isCurrent = true;
+                        }
+
+                        if (isCurrent) {
+                            span.className += ' uv-search-current';
+                            currentNode = span;
+                        }
+                        globalIndex++;
                         fragment.appendChild(span);
                         lastIndex = match.index + match[0].length;
                     }
@@ -166,6 +227,16 @@ object ViewerSearchScripts {
                     }
                     textNode.replaceWith(fragment);
                 });
+
+                // Clamped relative global index fallback to prevent skipping highlights completely
+                if (!currentNode) {
+                    var highlights = document.querySelectorAll('.uv-search-highlight');
+                    if (highlights.length > 0) {
+                        var fallbackIndex = Math.min(Math.max(0, targetGlobalIndex), highlights.length - 1);
+                        currentNode = highlights[fallbackIndex];
+                        currentNode.className += ' uv-search-current';
+                    }
+                }
 
                 if (currentNode) {
                     var rect = currentNode.getBoundingClientRect();
