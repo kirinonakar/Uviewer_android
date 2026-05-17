@@ -448,7 +448,9 @@ class DocumentViewerViewModel(
                         // Set Base URL for WebDAV to support relative remote images
                         // [Modification] Use local cache dir as base for WebDAV to allow file:// resources
                         val separator = File.separator
-                        var baseUrl: String? = "file:///${file.parentFile.absolutePath.replace(separator, "/")}/"
+                        val baseUrl = file.parentFile?.let { parent ->
+                            "file:///${parent.absolutePath.replace(separator, "/")}/"
+                        }
                         // If it's WebDAV, we still might need the remote URL for some cases, but for images and basic security, file:// base is better.
                         // val remoteBaseUrl = if (isWebDav && serverId != null) { ... } else null
                         
@@ -1077,11 +1079,11 @@ class DocumentViewerViewModel(
                 favoriteDao.updateFavorite(existing.copy(
                     timestamp = System.currentTimeMillis(),
                     isPinned = wasPinned || existing.isPinned,
-                    pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else existing.pinOrder
+                    pinOrder = if (wasPinned) pinnedItem.pinOrder else existing.pinOrder
                 ))
                 // If a DIFFERENT item was pinned, unpin it
-                if (wasPinned && pinnedItem?.id != existing.id) {
-                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
+                if (pinnedItem != null && pinnedItem.id != existing.id) {
+                    favoriteDao.updateFavorite(pinnedItem.copy(isPinned = false, pinOrder = 0))
                 }
             } else {
                 // Rule 2: Same document, different location/position -> Max 3
@@ -1111,14 +1113,14 @@ class DocumentViewerViewModel(
                         type = type,
                         position = savePosition,
                         isPinned = wasPinned, // Transfer pin status
-                        pinOrder = if (wasPinned) (pinnedItem?.pinOrder ?: 0) else 0,
+                        pinOrder = if (wasPinned) pinnedItem.pinOrder else 0,
                         progress = progress,
                         timestamp = System.currentTimeMillis()
                     )
                 )
                 // Unpin the old one if it was different
-                if (wasPinned && (pinnedItem?.path != path || pinnedItem?.position != savePosition)) {
-                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false, pinOrder = 0))
+                if (pinnedItem != null && (pinnedItem.path != path || pinnedItem.position != savePosition)) {
+                    favoriteDao.updateFavorite(pinnedItem.copy(isPinned = false, pinOrder = 0))
                 }
             }
         }

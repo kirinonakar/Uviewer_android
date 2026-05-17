@@ -102,6 +102,57 @@
                 .replace(/[\s\u0000-\u001f\u007f-\u009f\u200b-\u200f\ufeff]/g, '');
         }
 
+        function makeCharRefs(text, rect, itemIndex) {
+            const chars = Array.from(text || '');
+            const refs = [];
+            if (chars.length === 0) return refs;
+
+            const charWidth = rect.width / chars.length;
+            chars.forEach((char, charIndex) => {
+                const normalized = normalizeText(char);
+                if (!normalized) return;
+
+                const normalizedChars = Array.from(normalized);
+                const normalizedCharWidth = charWidth / normalizedChars.length;
+                normalizedChars.forEach((normalizedChar, normalizedIndex) => {
+                    refs.push({
+                        text: normalizedChar,
+                        itemIndex,
+                        rect: {
+                            left: rect.left + (charIndex * charWidth) + (normalizedIndex * normalizedCharWidth),
+                            top: rect.top,
+                            width: normalizedCharWidth,
+                            height: rect.height
+                        }
+                    });
+                });
+            });
+            return refs;
+        }
+
+        function mergeCharRects(charRefs) {
+            const merged = [];
+            charRefs.forEach(ref => {
+                const rect = ref.rect;
+                const last = merged[merged.length - 1];
+                if (last) {
+                    const sameLine = Math.abs(last.top - rect.top) < 2 && Math.abs(last.height - rect.height) < 2;
+                    const gap = rect.left - (last.left + last.width);
+                    if (sameLine && gap <= Math.max(2, rect.width * 0.75)) {
+                        const right = Math.max(last.left + last.width, rect.left + rect.width);
+                        const bottom = Math.max(last.top + last.height, rect.top + rect.height);
+                        last.left = Math.min(last.left, rect.left);
+                        last.top = Math.min(last.top, rect.top);
+                        last.width = right - last.left;
+                        last.height = bottom - last.top;
+                        return;
+                    }
+                }
+                merged.push({ left: rect.left, top: rect.top, width: rect.width, height: rect.height });
+            });
+            return merged;
+        }
+
         function rectKey(rect) {
             return [rect.left, rect.top, rect.width, rect.height].map(v => Math.round(v * 10) / 10).join(':');
         }
@@ -128,11 +179,10 @@
                 };
                 textItems.push({ text: item.str || '', rect: rect });
 
-                const normalized = normalizeText(item.str || '');
-                for (let i = 0; i < normalized.length; i++) {
-                    stream += normalized[i];
-                    charMap.push(itemIndex);
-                }
+                makeCharRefs(item.str || '', rect, itemIndex).forEach(ref => {
+                    stream += ref.text;
+                    charMap.push(ref);
+                });
             });
 
             const pageText = { stream, charMap, textItems };
@@ -194,10 +244,7 @@
                 while (fromIndex <= pageText.stream.length) {
                     const index = pageText.stream.indexOf(needle, fromIndex);
                     if (index < 0) break;
-                    const itemIndexes = new Set(pageText.charMap.slice(index, index + needle.length));
-                    const rects = Array.from(itemIndexes)
-                        .map(itemIndex => pageText.textItems[itemIndex] && pageText.textItems[itemIndex].rect)
-                        .filter(Boolean);
+                    const rects = mergeCharRects(pageText.charMap.slice(index, index + needle.length));
                     const deduped = [];
                     const seen = new Set();
                     rects.forEach(rect => {

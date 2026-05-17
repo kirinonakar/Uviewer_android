@@ -8,7 +8,6 @@ import net.sf.sevenzipjbinding.PropID
 import net.sf.sevenzipjbinding.SevenZip
 import net.sf.sevenzipjbinding.impl.RandomAccessFileInStream
 import java.io.*
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 object ArchiveExtractor {
@@ -109,16 +108,16 @@ object ArchiveExtractor {
     private fun unzip(zipFile: File, targetDir: File) {
         if (!targetDir.exists()) targetDir.mkdirs()
         ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
-            var entry: ZipEntry?
-            while (zis.nextEntry.also { entry = it } != null) {
-                val normalized = entry!!.name.replace('\\', '/').trimStart('/')
+            while (true) {
+                val entry = zis.nextEntry ?: break
+                val normalized = entry.name.replace('\\', '/').trimStart('/')
                 val file = File(targetDir, normalized)
 
                 if (!file.canonicalPath.startsWith(targetDir.canonicalPath + File.separator)) {
                     continue
                 }
 
-                if (entry!!.isDirectory) {
+                if (entry.isDirectory) {
                     file.mkdirs()
                 } else {
                     file.parentFile?.mkdirs()

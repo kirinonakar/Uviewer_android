@@ -185,12 +185,12 @@ fun MainScreen(
                             val navBackStackEntry by navController.currentBackStackEntryAsState()
                             val currentDestination = navBackStackEntry?.destination
                             items.forEach { screen ->
-                                val title = if (screen is Screen.Resume) "Resume" else when(screen) {
+                                val title = when(screen) {
                                     is Screen.Library -> screen.title
                                     is Screen.Favorites -> screen.title
                                     is Screen.Recent -> screen.title
                                     is Screen.Settings -> screen.title
-                                    else -> ""
+                                    is Screen.Resume -> "Resume"
                                 }
                                 NavigationBarItem(
                                     selected = currentDestination?.hierarchy?.any { 
@@ -221,9 +221,9 @@ fun MainScreen(
                                             val isViewer = currentEntry?.destination?.route?.startsWith("viewer") == true
                                             
                                             if (isViewer) {
-                                                val filePath = currentEntry?.arguments?.getString("path")
-                                                val isWebDav = currentEntry?.arguments?.getBoolean("isWebDav") ?: false
-                                                val serverId = currentEntry?.arguments?.getInt("serverId") ?: -1
+                                                val filePath = currentEntry.arguments?.getString("path")
+                                                val isWebDav = currentEntry.arguments?.getBoolean("isWebDav") ?: false
+                                                val serverId = currentEntry.arguments?.getInt("serverId") ?: -1
                                                 
                                                 if (filePath != null) {
                                                     val parentPath = if (isWebDav) {

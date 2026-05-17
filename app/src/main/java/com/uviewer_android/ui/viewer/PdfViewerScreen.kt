@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
@@ -225,8 +225,7 @@ fun PdfViewerScreen(
             val window = currentActivity?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
-                window.statusBarColor = android.graphics.Color.TRANSPARENT
-                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                window.setTransparentSystemBarColors()
                 insetsController.isAppearanceLightStatusBars = useLightStatusBar
                 insetsController.isAppearanceLightNavigationBars = useLightStatusBar
                 if (isFullScreen) {
@@ -302,7 +301,7 @@ fun PdfViewerScreen(
                         title = { Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1) },
                         navigationIcon = {
                             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", modifier = Modifier.size(24.dp))
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", modifier = Modifier.size(24.dp))
                             }
                         },
                         actions = {
@@ -384,8 +383,7 @@ fun PdfViewerScreen(
                                 settings.domStorageEnabled = true
                                 settings.allowFileAccess = true
                                 settings.allowContentAccess = true
-                                settings.allowFileAccessFromFileURLs = true
-                                settings.allowUniversalAccessFromFileURLs = true
+                                settings.allowViewerFileUrlAccess()
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
                                 settings.useWideViewPort = true

@@ -9,7 +9,6 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
-import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
 object EpubParser {
@@ -19,15 +18,15 @@ object EpubParser {
         if (!targetDir.exists()) targetDir.mkdirs()
         
         ZipInputStream(BufferedInputStream(FileInputStream(zipFile))).use { zis ->
-            var entry: ZipEntry?
-            while (zis.nextEntry.also { entry = it } != null) {
-                val file = File(targetDir, entry!!.name)
+            while (true) {
+                val entry = zis.nextEntry ?: break
+                val file = File(targetDir, entry.name)
                 // Vulnerability check: Zip Path Traversal
                 if (!file.canonicalPath.startsWith(targetDir.canonicalPath)) {
-                    throw IOException("Zip Path Traversal Attempt: ${entry!!.name}")
+                    throw IOException("Zip Path Traversal Attempt: ${entry.name}")
                 }
                 
-                if (entry!!.isDirectory) {
+                if (entry.isDirectory) {
                     file.mkdirs()
                 } else {
                     file.parentFile?.mkdirs()
@@ -64,7 +63,6 @@ object EpubParser {
         }
         
         // Metadata
-        val title = opfDoc.select("metadata > dc|title").text() // Namespace handling tricky in Jsoup select without setup?
         // Jsoup select supports namespaces with `|` if configured or just by tag name if unique.
         // Actually Jsoup XML parser preserves namespaces but selector syntax is standard CSS.
         // `dc\:title` or just `title` might work depending.
@@ -196,11 +194,11 @@ object EpubParser {
                 if (baseDir != null) {
                     // img 태그
                     doc.select("img").forEach { img ->
-                        var src = img.attr("src")
+                        val src = img.attr("src")
                         if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
                             // Strip query/fragment
                             val cleanSrc = src.substringBefore("?").substringBefore("#")
-                            val imgFile = if (baseDir != null) resolveFile(baseDir, cleanSrc) else File(cleanSrc)
+                            val imgFile = resolveFile(baseDir, cleanSrc)
                             
                             val encodedPath = imgFile.absolutePath.split(File.separatorChar).joinToString("/") { segment ->
                                 if (segment.isEmpty()) "" 
@@ -215,10 +213,10 @@ object EpubParser {
                     }
                     // SVG image 태그 (xlink:href 및 href 공용)
                     doc.select("image").forEach { img ->
-                        var src = img.attr("xlink:href").ifEmpty { img.attr("href") }
+                        val src = img.attr("xlink:href").ifEmpty { img.attr("href") }
                         if (src.isNotEmpty() && !src.startsWith("http") && !src.startsWith("file://") && !src.startsWith("data:")) {
                             val cleanSrc = src.substringBefore("?").substringBefore("#")
-                            val imgFile = if (baseDir != null) resolveFile(baseDir, cleanSrc) else File(cleanSrc)
+                            val imgFile = resolveFile(baseDir, cleanSrc)
                             val encodedPath = imgFile.absolutePath.split(File.separatorChar).joinToString("/") { segment ->
                                 if (segment.isEmpty()) ""
                                 else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")

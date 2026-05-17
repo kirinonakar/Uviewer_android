@@ -1,6 +1,7 @@
 package com.uviewer_android.ui.viewer
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.Icons
 import android.content.pm.ActivityInfo
@@ -39,7 +40,8 @@ import android.util.Log
 
 import androidx.activity.compose.BackHandler
 
-@OptIn(ExperimentalMaterial3Api::class, UnstableApi::class)
+@androidx.annotation.OptIn(UnstableApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaPlayerScreen(
     filePath: String,
@@ -115,7 +117,7 @@ fun MediaPlayerScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         
-        (currentActivity as? MainActivity)?.volumeKeyPagingActive = false
+        currentActivity?.volumeKeyPagingActive = false
         onDispose {
             window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -291,7 +293,7 @@ fun MediaPlayerScreen(
                             },
                             navigationIcon = {
                                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             },
                             actions = {

@@ -18,6 +18,10 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.FallbackSelect
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.SubtitleParser
 
+@Suppress("DEPRECATION")
+private fun DefaultExtractorsFactory.withTextTrackTranscodingDisabled(): DefaultExtractorsFactory =
+    setTextTrackTranscodingEnabled(false)
+
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
@@ -106,7 +110,7 @@ class PlaybackService : MediaSessionService() {
         // 1. [중요] Extractor 설정: 자막 트랜스코딩(변환)을 끕니다.
         // 이렇게 하면 소스 단계에서 파싱 에러가 발생하지 않고 원본 데이터를 그대로 넘깁니다.
         val extractorsFactory = DefaultExtractorsFactory()
-            .setTextTrackTranscodingEnabled(false)
+            .withTextTrackTranscodingDisabled()
 
         val mediaSourceFactory = DefaultMediaSourceFactory(this, extractorsFactory)
             .setDataSourceFactory(dataSourceFactory)

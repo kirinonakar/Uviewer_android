@@ -30,6 +30,14 @@ data class LibraryUiState(
 
 enum class SortOption { NAME, DATE_ASC, DATE_DESC, SIZE_ASC, SIZE_DESC }
 
+private data class LibraryCombinedSources(
+    val state: LibraryUiState,
+    val favorites: List<FavoriteItem>,
+    val sort: SortOption,
+    val mostRecent: com.uviewer_android.data.RecentFile?,
+    val servers: List<com.uviewer_android.data.WebDavServer>
+)
+
 class LibraryViewModel(
     private val fileRepository: FileRepository,
     private val webDavRepository: WebDavRepository,
@@ -96,20 +104,25 @@ class LibraryViewModel(
     }
 
 
-    val uiState: StateFlow<LibraryUiState> = combine(
+    private val librarySources = combine(
         _state,
         favoriteDao.getAllFavorites(),
         _sortOption,
         recentFileDao.getMostRecentFile().onStart { emit(null) },
-        _servers,
+        _servers
+    ) { state, favorites, sort, mostRecent, servers ->
+        LibraryCombinedSources(state, favorites, sort, mostRecent, servers)
+    }
+
+    val uiState: StateFlow<LibraryUiState> = combine(
+        librarySources,
         _pinnedFilesOverride
-    ) { flows ->
-        val state = flows[0] as LibraryUiState
-        val favorites = flows[1] as List<FavoriteItem>
-        val sort = flows[2] as SortOption
-        val mostRecent = flows[3] as com.uviewer_android.data.RecentFile?
-        val servers = flows[4] as List<com.uviewer_android.data.WebDavServer>
-        val pinnedOverride = flows[5] as List<FileEntry>?
+    ) { sources, pinnedOverride ->
+        val state = sources.state
+        val favorites = sources.favorites
+        val sort = sources.sort
+        val mostRecent = sources.mostRecent
+        val servers = sources.servers
 
         var listToProcess = state.fileList
         
@@ -352,8 +365,8 @@ class LibraryViewModel(
                 )
                 
                 // Unpin the old one if it was different
-                if (wasPinned && pinnedItem?.path != entry.path) {
-                    favoriteDao.updateFavorite(pinnedItem!!.copy(isPinned = false))
+                if (pinnedItem != null && pinnedItem.path != entry.path) {
+                    favoriteDao.updateFavorite(pinnedItem.copy(isPinned = false))
                 }
             }
         }

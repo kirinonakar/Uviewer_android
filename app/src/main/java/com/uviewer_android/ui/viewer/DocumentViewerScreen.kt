@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material.icons.filled.Translate
@@ -134,7 +133,7 @@ fun DocumentViewerScreen(
             UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4"
             UserPreferencesRepository.DOC_BG_CUSTOM -> {
                 val custom = uiState.customDocBackgroundColor
-                if (custom != null && custom.startsWith("#")) custom else "#FFFFFF"
+                if (custom.startsWith("#")) custom else "#FFFFFF"
             }
             else -> "#FFFFFF"
         }
@@ -327,8 +326,7 @@ fun DocumentViewerScreen(
                 // 상태바 배경색 설정 (Legacy 지원 및 Edge-to-Edge가 아닌 경우 대비)
                 // 전체화면일 땐 문서색, 아닐 땐 투명(Scaffold 배경이 보임)
                 // 상태바 배경색을 투명하게 설정하여 Scaffold 배경이 보이도록 함
-                window.statusBarColor = android.graphics.Color.TRANSPARENT
-                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                window.setTransparentSystemBarColors()
                 
                 // 아이콘 밝기 설정
                 insetsController.isAppearanceLightStatusBars = useDarkIcons
@@ -513,7 +511,7 @@ fun DocumentViewerScreen(
                             },
                             navigationIcon = {
                                 IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                                    Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
+                                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
                                 }
                             },
                             actions = {
@@ -834,8 +832,7 @@ fun DocumentViewerScreen(
 
                                 settings.allowFileAccess = true
                                 settings.allowContentAccess = true
-                                settings.allowFileAccessFromFileURLs = true
-                                settings.allowUniversalAccessFromFileURLs = true
+                                settings.allowViewerFileUrlAccess()
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW

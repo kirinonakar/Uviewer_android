@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
                         java.util.Locale.getDefault()
                     }
                 } else {
-                    java.util.Locale(appLanguage)
+                    java.util.Locale.forLanguageTag(appLanguage)
                 }
                 val config = android.content.res.Configuration(context.resources.configuration)
                 config.setLocale(locale)

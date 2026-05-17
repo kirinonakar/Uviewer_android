@@ -15,6 +15,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.gestures.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.material3.*
@@ -181,8 +183,7 @@ fun ImageViewerScreen(
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 
                 // Explicitly set bar colors to transparent to show the background
-                window.statusBarColor = android.graphics.Color.TRANSPARENT
-                window.navigationBarColor = android.graphics.Color.TRANSPARENT
+                window.setTransparentSystemBarColors()
 
                 insetsController.isAppearanceLightStatusBars = useLightStatusBar
                 insetsController.isAppearanceLightNavigationBars = useLightStatusBar
@@ -452,7 +453,7 @@ fun ImageViewerScreen(
                                 }, 
                                 navigationIcon = {
                                     IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
+                                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back), modifier = Modifier.size(24.dp))
                                     }
                                 },
                                 actions = {
@@ -490,7 +491,7 @@ fun ImageViewerScreen(
                                     }
                                     IconButton(onClick = { viewModel.setInvertImageControl(!invertImageControl) }, modifier = Modifier.size(40.dp)) {
                                         Icon(
-                                            if (invertImageControl) Icons.Default.ArrowBack else Icons.Default.ArrowForward,
+                                            if (invertImageControl) Icons.AutoMirrored.Filled.ArrowBack else Icons.AutoMirrored.Filled.ArrowForward,
                                             contentDescription = "Flip Controls",
                                             tint = if (invertImageControl) MaterialTheme.colorScheme.primary else LocalContentColor.current,
                                             modifier = Modifier.size(24.dp)

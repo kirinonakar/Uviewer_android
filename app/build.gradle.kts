@@ -43,6 +43,14 @@ android {
     buildFeatures {
         compose = true
     }
+    packaging {
+        jniLibs {
+            keepDebugSymbols += listOf(
+                "**/lib7-Zip-JBinding.so",
+                "**/libandroidx.graphics.path.so"
+            )
+        }
+    }
 }
 
 dependencies {
