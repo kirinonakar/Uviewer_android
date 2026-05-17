@@ -86,6 +86,7 @@ fun DocumentViewerScreen(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var showEncodingDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
 
     var isPageLoading by remember { mutableStateOf(false) }
     var isNavigating by remember { mutableStateOf(false) }
@@ -115,6 +116,15 @@ fun DocumentViewerScreen(
     }
 
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
+    val applyDocumentSearchHighlight = {
+        val searchState = viewModel.uiState.value.searchState
+        if (showSearch && searchState.query.isNotBlank()) {
+            webViewRef?.evaluateJavascript(
+                ViewerSearchScripts.highlightDocument(searchState.query, searchState.currentMatch),
+                null
+            )
+        }
+    }
 
     // [추가] 문서 배경색을 Compose Color 객체로 변환
     val targetDocColor = remember(docBackgroundColor, uiState.customDocBackgroundColor) {
@@ -392,6 +402,18 @@ fun DocumentViewerScreen(
         }
     }
 
+    LaunchedEffect(uiState.searchState.currentMatch) {
+        val match = uiState.searchState.currentMatch
+        if (showSearch && match != null && !uiState.searchState.isSearching) {
+            currentLine = match.line
+            viewModel.jumpToLine(match.line)
+        }
+    }
+
+    LaunchedEffect(showSearch, uiState.searchState.query, uiState.searchState.currentIndex, uiState.appendTrigger) {
+        applyDocumentSearchHighlight()
+    }
+
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -533,6 +555,12 @@ fun DocumentViewerScreen(
                                         expanded = showMoreMenu,
                                         onDismissRequest = { showMoreMenu = false }
                                     ) {
+                                        SearchDropdownMenuItem(
+                                            onClick = {
+                                                showSearch = true
+                                                showMoreMenu = false
+                                            }
+                                        )
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.toggle_vertical)) },
                                             onClick = {
@@ -636,6 +664,31 @@ fun DocumentViewerScreen(
                     }
                 } else {
                     Column(modifier = Modifier.fillMaxSize()) {
+                        if (showSearch) {
+                            val searchState = uiState.searchState
+                            ViewerSearchBar(
+                                query = searchState.query,
+                                matchText = if (searchState.query.isBlank()) {
+                                    "0 / 0"
+                                } else {
+                                    "${(searchState.currentIndex + 1).coerceAtLeast(0)} / ${searchState.matches.size}"
+                                },
+                                isSearching = searchState.isSearching,
+                                isSupported = true,
+                                onQueryChange = viewModel::updateSearchQuery,
+                                onClear = viewModel::clearSearch,
+                                onPrevious = viewModel::previousSearchMatch,
+                                onNext = viewModel::nextSearchMatch,
+                                onClose = {
+                                    showSearch = false
+                                    viewModel.clearSearch()
+                                    webViewRef?.evaluateJavascript(
+                                        ViewerSearchScripts.highlightDocument("", null),
+                                        null
+                                    )
+                                }
+                            )
+                        }
                         Box(modifier = Modifier.weight(1f)) {
                             AndroidView(
                          modifier = Modifier.fillMaxSize(),
@@ -814,6 +867,7 @@ fun DocumentViewerScreen(
                                          )
                                         
                                         view?.evaluateJavascript(jsScrollLogic) {
+                                            applyDocumentSearchHighlight()
                                             webViewRef?.postDelayed({
                                                 isPageLoading = false
                                                 isNavigating = false

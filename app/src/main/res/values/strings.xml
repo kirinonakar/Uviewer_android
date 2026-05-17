@@ -134,6 +134,14 @@
     <string name="prev_chapter">Previous Chapter</string>
     <string name="next_chapter">Next Chapter</string>
     <string name="table_of_contents">Table of Contents</string>
+    <string name="search">Search</string>
+    <string name="search_hint">Search text</string>
+    <string name="search_clear">Clear search text</string>
+    <string name="search_previous">Previous match</string>
+    <string name="search_next">Next match</string>
+    <string name="close_search">Close search</string>
+    <string name="searching">Searching...</string>
+    <string name="search_pdf_unsupported">PDF search needs Android 15+</string>
     <string name="select_encoding">Select Text Encoding</string>
     <string name="encoding_auto">Auto</string>
     <string name="encoding_sjis">Shift_JIS (Japan)</string>

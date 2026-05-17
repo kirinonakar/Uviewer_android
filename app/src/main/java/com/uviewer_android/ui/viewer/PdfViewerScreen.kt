@@ -13,11 +13,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.uviewer_android.R
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -62,6 +65,9 @@ fun PdfViewerScreen(
     var renderer: PdfRenderer? by remember { mutableStateOf(null) }
     var fileDescriptor: ParcelFileDescriptor? by remember { mutableStateOf(null) }
     var pageCount by remember { mutableIntStateOf(0) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+    var showSearch by rememberSaveable { mutableStateOf(false) }
+    var pdfSearchState by remember { mutableStateOf(PdfSearchState()) }
     
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -252,6 +258,25 @@ fun PdfViewerScreen(
         }
     }
 
+    LaunchedEffect(pdfSearchState.currentMatch) {
+        val match = pdfSearchState.currentMatch
+        if (match != null) {
+            listState.animateScrollToItem(match.pageIndex)
+        }
+    }
+
+    LaunchedEffect(pdfSearchState.query, renderer, pageCount) {
+        val pdfRenderer = renderer ?: return@LaunchedEffect
+        val query = pdfSearchState.query
+        if (query.isBlank() || pageCount <= 0) {
+            pdfSearchState = PdfSearchState(query = query)
+            return@LaunchedEffect
+        }
+        delay(300)
+        pdfSearchState = pdfSearchState.copy(isSearching = true)
+        pdfSearchState = PdfSearchEngine.search(pdfRenderer, pageCount, query)
+    }
+
     // Hardware Volume Button Support
     LaunchedEffect(currentActivity, renderer) {
         if (currentActivity != null && renderer != null) {
@@ -295,36 +320,95 @@ fun PdfViewerScreen(
                             }, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.Default.Bookmark, contentDescription = "Bookmark", modifier = Modifier.size(24.dp))
                             }
+                            Box {
+                                IconButton(onClick = { showMoreMenu = true }, modifier = Modifier.size(40.dp)) {
+                                    Icon(Icons.Default.MoreVert, contentDescription = "More", modifier = Modifier.size(24.dp))
+                                }
+                                DropdownMenu(
+                                    expanded = showMoreMenu,
+                                    onDismissRequest = { showMoreMenu = false }
+                                ) {
+                                    SearchDropdownMenuItem(
+                                        onClick = {
+                                            showSearch = true
+                                            showMoreMenu = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                     )
                 }
             }
         }
     ) { innerPadding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(Color.Transparent)
         ) {
-            if (uiState.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (uiState.error != null) {
-                Column(
-                    modifier = Modifier.align(Alignment.Center),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Error: ${uiState.error}",
-                        color = Color.Red
-                    )
-                    Button(onClick = onBack) {
-                        Text(stringResource(R.string.back))
+            if (showSearch) {
+                ViewerSearchBar(
+                    query = pdfSearchState.query,
+                    matchText = if (pdfSearchState.query.isBlank()) {
+                        "0 / 0"
+                    } else {
+                        "${(pdfSearchState.currentIndex + 1).coerceAtLeast(0)} / ${pdfSearchState.matches.size}"
+                    },
+                    isSearching = pdfSearchState.isSearching,
+                    isSupported = pdfSearchState.isSupported,
+                    onQueryChange = { pdfSearchState = pdfSearchState.copy(query = it) },
+                    onClear = { pdfSearchState = PdfSearchState() },
+                    onPrevious = {
+                        pdfSearchState = pdfSearchState.copy(
+                            currentIndex = ViewerSearchUtils.previousIndex(
+                                pdfSearchState.currentIndex,
+                                pdfSearchState.matches.size
+                            )
+                        )
+                    },
+                    onNext = {
+                        pdfSearchState = pdfSearchState.copy(
+                            currentIndex = ViewerSearchUtils.nextIndex(
+                                pdfSearchState.currentIndex,
+                                pdfSearchState.matches.size
+                            )
+                        )
+                    },
+                    onClose = {
+                        showSearch = false
+                        pdfSearchState = PdfSearchState()
                     }
+                )
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (uiState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                } else if (uiState.error != null) {
+                    Column(
+                        modifier = Modifier.align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Error: ${uiState.error}",
+                            color = Color.Red
+                        )
+                        Button(onClick = onBack) {
+                            Text(stringResource(R.string.back))
+                        }
+                    }
+                } else if (renderer != null) {
+                    PdfList(
+                        renderer = renderer!!,
+                        pageCount = pageCount,
+                        listState = listState,
+                        onToggleFullScreen = onToggleFullScreen,
+                        searchMatches = pdfSearchState.matches,
+                        currentSearchMatch = pdfSearchState.currentMatch
+                    )
                 }
-            } else if (renderer != null) {
-                PdfList(renderer!!, pageCount, listState, onToggleFullScreen)
             }
         }
     }
@@ -335,12 +419,15 @@ fun PdfList(
     renderer: PdfRenderer,
     pageCount: Int,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    onToggleFullScreen: () -> Unit
+    onToggleFullScreen: () -> Unit,
+    searchMatches: List<PdfSearchMatch> = emptyList(),
+    currentSearchMatch: PdfSearchMatch? = null
 ) {
     val scope = rememberCoroutineScope()
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    val matchesByPage = remember(searchMatches) { searchMatches.groupBy { it.pageIndex } }
 
     Box(
         modifier = Modifier
@@ -465,7 +552,12 @@ fun PdfList(
                 )
         ) {
             items(pageCount) { index ->
-                PdfPage(renderer, index)
+                PdfPage(
+                    renderer = renderer,
+                    index = index,
+                    searchMatches = matchesByPage[index].orEmpty(),
+                    currentSearchMatch = currentSearchMatch?.takeIf { it.pageIndex == index }
+                )
                 Spacer(modifier = Modifier.height(4.dp))
             }
         }
@@ -475,9 +567,13 @@ fun PdfList(
 @Composable
 fun PdfPage(
     renderer: PdfRenderer,
-    index: Int
+    index: Int,
+    searchMatches: List<PdfSearchMatch> = emptyList(),
+    currentSearchMatch: PdfSearchMatch? = null
 ) {
     var bitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pageWidth by remember { mutableIntStateOf(0) }
+    var pageHeight by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     // Use the screen width/density to determine bitmap size
     val context = LocalContext.current
@@ -485,7 +581,7 @@ fun PdfPage(
     val screenWidth = displayMetrics.widthPixels
 
     LaunchedEffect(index) {
-        withContext(Dispatchers.IO) {
+        val renderedPage = withContext(Dispatchers.IO) {
             try {
                 synchronized(renderer) {
                     val page = renderer.openPage(index)
@@ -502,11 +598,17 @@ fun PdfPage(
                     val bmp = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888)
                     page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     page.close()
-                    bitmap = bmp
+                    Triple(bmp, width, height)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                null
             }
+        }
+        if (renderedPage != null) {
+            bitmap = renderedPage.first
+            pageWidth = renderedPage.second
+            pageHeight = renderedPage.third
         }
     }
 
@@ -517,12 +619,21 @@ fun PdfPage(
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = "Page ${index + 1}",
-                contentScale = ContentScale.FillWidth,
-                modifier = Modifier.fillMaxWidth().background(Color.White)
-            )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Image(
+                    bitmap = bitmap!!.asImageBitmap(),
+                    contentDescription = "Page ${index + 1}",
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().background(Color.White)
+                )
+                PdfSearchHighlightOverlay(
+                    matches = searchMatches,
+                    currentMatch = currentSearchMatch,
+                    pageWidth = pageWidth,
+                    pageHeight = pageHeight,
+                    modifier = Modifier.matchParentSize()
+                )
+            }
         } else {
              Box(modifier = Modifier.fillMaxWidth().height(200.dp).background(Color.White), contentAlignment = Alignment.Center) {
                  CircularProgressIndicator()

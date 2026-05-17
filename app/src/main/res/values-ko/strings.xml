@@ -93,6 +93,14 @@
     <string name="prev_chapter">이전 장</string>
     <string name="next_chapter">다음 장</string>
     <string name="table_of_contents">목차</string>
+    <string name="search">검색</string>
+    <string name="search_hint">검색어 입력</string>
+    <string name="search_clear">검색어 지우기</string>
+    <string name="search_previous">이전 검색 결과</string>
+    <string name="search_next">다음 검색 결과</string>
+    <string name="close_search">검색 닫기</string>
+    <string name="searching">검색 중...</string>
+    <string name="search_pdf_unsupported">PDF 검색은 Android 15 이상 필요</string>
     <string name="select_encoding">인코딩 선택</string>
     <string name="encoding_auto">자동</string>
     <string name="encoding_sjis">Shift_JIS (일본어)</string>

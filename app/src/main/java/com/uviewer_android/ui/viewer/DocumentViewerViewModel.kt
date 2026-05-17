@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -48,7 +51,8 @@ data class DocumentViewerUiState(
     val chapterLineCounts: Map<Int, Int> = emptyMap(),
     val isImageOnlyChapter: Boolean = false,
     val jsUnlockTrigger: Long = 0L, // [추가] 프리로드 취소 시 JS 스크롤 락 강제 해제용
-    val language: String = UserPreferencesRepository.LANG_EN
+    val language: String = UserPreferencesRepository.LANG_EN,
+    val searchState: ViewerTextSearchState = ViewerTextSearchState()
 )
 
 private class ObsidianHighlight : org.commonmark.node.CustomNode(), org.commonmark.node.Delimited {
@@ -154,6 +158,7 @@ class DocumentViewerViewModel(
     private var epubChapterStartLines: Map<Int, Int> = emptyMap() // chapterIndex -> startLine (1-based)
     private var epubUnzipDir: File? = null
     private var epubBook: com.uviewer_android.data.model.EpubBook? = null
+    private var searchJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -890,7 +895,7 @@ class DocumentViewerViewModel(
 
     fun jumpToLine(line: Int) {
         // EPUB 세로모드(플랫): 일반 텍스트와 동일하게 라인 기반 점프
-        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && _uiState.value.isVertical && epubFlatTextLines != null
+        val isEpubFlat = currentFileType == FileEntry.FileType.EPUB && epubFlatTextLines != null
         if (isEpubFlat) {
             val flatLines = epubFlatTextLines!!
             if (line < 1 || line > flatLines.size) return
@@ -936,6 +941,83 @@ class DocumentViewerViewModel(
         )
         // [수정됨] updateType을 0(전체 리로드)에서 3(내용 교체)으로 변경하여 깜빡임 제거
         loadTextChunk(targetChunk, updateType = 3)
+    }
+
+    fun updateSearchQuery(query: String) {
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _uiState.value = _uiState.value.copy(searchState = ViewerTextSearchState())
+            return
+        }
+
+        val currentLine = _uiState.value.currentLine
+        _uiState.value = _uiState.value.copy(
+            searchState = _uiState.value.searchState.copy(
+                query = query,
+                isSearching = true
+            )
+        )
+
+        searchJob = viewModelScope.launch {
+            delay(250)
+            val matches = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                findDocumentSearchMatches(query)
+            }
+            val startIndex = matches.indexOfFirst { it.line >= currentLine }
+                .let { if (it >= 0) it else if (matches.isNotEmpty()) 0 else -1 }
+
+            _uiState.value = _uiState.value.copy(
+                searchState = ViewerTextSearchState(
+                    query = query,
+                    matches = matches,
+                    currentIndex = startIndex,
+                    isSearching = false
+                )
+            )
+        }
+    }
+
+    fun clearSearch() {
+        searchJob?.cancel()
+        _uiState.value = _uiState.value.copy(searchState = ViewerTextSearchState())
+    }
+
+    fun nextSearchMatch() {
+        val state = _uiState.value.searchState
+        _uiState.value = _uiState.value.copy(
+            searchState = state.copy(
+                currentIndex = ViewerSearchUtils.nextIndex(state.currentIndex, state.matches.size)
+            )
+        )
+    }
+
+    fun previousSearchMatch() {
+        val state = _uiState.value.searchState
+        _uiState.value = _uiState.value.copy(
+            searchState = state.copy(
+                currentIndex = ViewerSearchUtils.previousIndex(state.currentIndex, state.matches.size)
+            )
+        )
+    }
+
+    private suspend fun findDocumentSearchMatches(query: String): List<ViewerTextSearchMatch> {
+        val flatLines = epubFlatTextLines
+        if (currentFileType == FileEntry.FileType.EPUB && flatLines != null) {
+            return ViewerSearchUtils.findMatchesInLines(flatLines, query, firstLineNumber = 1)
+        }
+
+        val reader = largeTextReader ?: return emptyList()
+        val totalLines = reader.getTotalLines()
+        val matches = mutableListOf<ViewerTextSearchMatch>()
+        val scanSize = 1000
+        var startLine = 1
+        while (startLine <= totalLines) {
+            val text = reader.readLines(startLine, scanSize)
+            val lines = text.split('\n').map { it.trimEnd('\r') }
+            matches.addAll(ViewerSearchUtils.findMatchesInLines(lines, query, startLine))
+            startLine += scanSize
+        }
+        return matches
     }
 
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {
