@@ -168,7 +168,14 @@ object ViewerSearchScripts {
                 });
 
                 if (currentNode) {
-                    currentNode.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+                    var rect = currentNode.getBoundingClientRect();
+                    var deltaX = rect.left + rect.width / 2 - window.innerWidth / 2;
+                    var deltaY = rect.top + rect.height / 2 - window.innerHeight / 2;
+                    if (typeof window.safeScrollBy === 'function') {
+                        window.safeScrollBy(deltaX, deltaY);
+                    } else {
+                        window.scrollBy(deltaX, deltaY);
+                    }
                 }
             })();
         """.trimIndent()
