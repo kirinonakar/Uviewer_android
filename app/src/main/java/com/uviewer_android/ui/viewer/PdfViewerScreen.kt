@@ -274,7 +274,12 @@ fun PdfViewerScreen(
         }
         delay(300)
         pdfSearchState = pdfSearchState.copy(isSearching = true)
-        pdfSearchState = PdfSearchEngine.search(pdfRenderer, pageCount, query)
+        pdfSearchState = PdfSearchEngine.search(
+            renderer = pdfRenderer,
+            pageCount = pageCount,
+            query = query,
+            localFilePath = uiState.localFilePath
+        )
     }
 
     // Hardware Volume Button Support

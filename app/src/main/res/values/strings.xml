@@ -141,7 +141,7 @@
     <string name="search_next">Next match</string>
     <string name="close_search">Close search</string>
     <string name="searching">Searching...</string>
-    <string name="search_pdf_unsupported">PDF search needs Android 15+</string>
+    <string name="search_pdf_unsupported">PDF text search is not supported on this device</string>
     <string name="select_encoding">Select Text Encoding</string>
     <string name="encoding_auto">Auto</string>
     <string name="encoding_sjis">Shift_JIS (Japan)</string>

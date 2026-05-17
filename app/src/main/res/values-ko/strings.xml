@@ -100,7 +100,7 @@
     <string name="search_next">다음 검색 결과</string>
     <string name="close_search">검색 닫기</string>
     <string name="searching">검색 중...</string>
-    <string name="search_pdf_unsupported">PDF 검색은 Android 15 이상 필요</string>
+    <string name="search_pdf_unsupported">이 기기에서는 PDF 텍스트 검색을 지원하지 않습니다</string>
     <string name="select_encoding">인코딩 선택</string>
     <string name="encoding_auto">자동</string>
     <string name="encoding_sjis">Shift_JIS (일본어)</string>
