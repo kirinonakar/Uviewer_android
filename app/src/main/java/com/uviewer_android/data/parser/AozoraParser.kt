@@ -659,6 +659,12 @@ function fixRubySpacing() {
                     .content-chunk > *:first-child {
                         margin-top: 0.5em !important;
                     }
+                    /* Ensure Markdown code blocks wrap properly */
+                    pre, code {
+                        white-space: pre-wrap !important;
+                        word-break: break-all !important;
+                        overflow-wrap: break-word !important;
+                    }
                 </style>
             </head>
             <body class="${if (isVertical) "vertical" else ""}">

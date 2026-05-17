@@ -1029,8 +1029,21 @@ class DocumentViewerViewModel(
                 var clean = line.replace(Regex("<[^>]*>"), "")
                 // Replace Markdown links [text](url) with just text
                 clean = clean.replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
-                // Replace Markdown images ![alt](url) with just alt
+                // Replace reference-style links [text][ref] with just text
+                clean = clean.replace(Regex("\\[([^\\]]*)\\]\\[[^\\]]*\\]"), "$1")
+                // Replace Markdown images ![alt](url) with just alt text
                 clean = clean.replace(Regex("!\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
+                // Replace reference-style Markdown images ![alt][ref] with just alt text
+                clean = clean.replace(Regex("!\\[([^\\]]*)\\]\\[[^\\]]*\\]"), "$1")
+
+                // If it is a reference link definition [ref]: http://... completely blank it out (invisible)
+                if (clean.matches(Regex("^\\s*\\[[^\\]]+\\]:\\s*https?://\\S+.*$"))) {
+                    clean = ""
+                } else {
+                    // If it is a footnote definition [^ref]: text, strip the footnote prefix and keep the text
+                    clean = clean.replace(Regex("^\\s*\\[\\^[^\\]]+\\]:\\s*"), "")
+                }
+
                 // Remove formatting characters: *, _, #, `, ~
                 clean.replace(Regex("[*_#`~]"), "")
             }
@@ -1068,21 +1081,37 @@ class DocumentViewerViewModel(
         val scanSize = 1000
         var startLine = 1
         var inStyleOrScript = false
+        var inYamlFrontMatter = false
+        var yamlDashCount = 0
 
         while (startLine <= totalLines) {
             val text = reader.readLines(startLine, scanSize)
             val lines = text.split('\n').map { it.trimEnd('\r') }
 
             val cleanedLines = mutableListOf<String>()
+            var globalLineIndex = startLine
             for (line in lines) {
                 var cleanLine = line
                 val lower = line.lowercase()
+
+                // Track YAML front matter boundaries at the very beginning of the Markdown file
+                if (filePath.endsWith(".md", ignoreCase = true)) {
+                    if (globalLineIndex == 1 && cleanLine.trim() == "---") {
+                        inYamlFrontMatter = true
+                        yamlDashCount = 1
+                        cleanLine = ""
+                    } else if (inYamlFrontMatter && cleanLine.trim() == "---") {
+                        inYamlFrontMatter = false
+                        yamlDashCount = 2
+                        cleanLine = ""
+                    }
+                }
 
                 if (lower.contains("<style") || lower.contains("<script")) {
                     inStyleOrScript = true
                 }
 
-                if (inStyleOrScript) {
+                if (inStyleOrScript || inYamlFrontMatter) {
                     cleanLine = ""
                 } else {
                     cleanLine = cleanLineForSearch(cleanLine, fileType, filePath)
@@ -1093,6 +1122,7 @@ class DocumentViewerViewModel(
                 }
 
                 cleanedLines.add(cleanLine)
+                globalLineIndex++
             }
 
             matches.addAll(ViewerSearchUtils.findMatchesInLines(cleanedLines, query, startLine))

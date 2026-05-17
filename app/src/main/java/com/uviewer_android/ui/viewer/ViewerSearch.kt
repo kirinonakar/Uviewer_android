@@ -97,7 +97,9 @@ object ViewerSearchScripts {
                     oldStyle.id = styleId;
                     oldStyle.textContent =
                         '.uv-search-highlight{background:rgba(255,221,87,.72)!important;color:inherit!important;border-radius:.12em;padding:0 .08em;}' +
-                        '.uv-search-current{background:rgba(255,145,77,.9)!important;outline:2px solid rgba(255,115,0,.55);}';
+                        '.uv-search-current{background:rgba(255,145,77,.9)!important;outline:2px solid rgba(255,115,0,.55);}' +
+                        'img.uv-search-highlight{outline:4px solid rgba(255,221,87,.85)!important;outline-offset:2px!important;}' +
+                        'img.uv-search-current{outline:4px solid rgba(255,145,77,.95)!important;outline-offset:2px!important;}';
                     document.head.appendChild(oldStyle);
                 }
 
@@ -150,7 +152,11 @@ object ViewerSearchScripts {
                 window.currentSearchQuery = query;
 
                 document.querySelectorAll('.uv-search-highlight, .uv-search-current').forEach(function(node) {
-                    node.replaceWith(document.createTextNode(node.textContent || ''));
+                    if (node.tagName === 'IMG') {
+                        node.classList.remove('uv-search-highlight', 'uv-search-current');
+                    } else {
+                        node.replaceWith(document.createTextNode(node.textContent || ''));
+                    }
                 });
                 document.body.normalize();
                 if (!query) return;
@@ -161,20 +167,31 @@ object ViewerSearchScripts {
                 var currentNode = null;
                 var walker = document.createTreeWalker(
                     document.body,
-                    NodeFilter.SHOW_TEXT,
+                    NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT,
                     {
                         acceptNode: function(node) {
-                            if (!node.nodeValue || !regex.test(node.nodeValue)) {
+                            if (node.nodeType === 3) { // Text Node
+                                if (!node.nodeValue || !regex.test(node.nodeValue)) {
+                                    regex.lastIndex = 0;
+                                    return NodeFilter.FILTER_REJECT;
+                                }
                                 regex.lastIndex = 0;
-                                return NodeFilter.FILTER_REJECT;
+                                var parent = node.parentElement;
+                                if (!parent) return NodeFilter.FILTER_REJECT;
+                                if (parent.closest('script,style,textarea,input,.uv-search-highlight')) {
+                                    return NodeFilter.FILTER_REJECT;
+                                }
+                                return NodeFilter.FILTER_ACCEPT;
+                            } else if (node.nodeType === 1 && node.tagName === 'IMG') { // Image Element
+                                var alt = node.getAttribute('alt') || '';
+                                if (!alt || !regex.test(alt)) {
+                                    regex.lastIndex = 0;
+                                    return NodeFilter.FILTER_REJECT;
+                                }
+                                regex.lastIndex = 0;
+                                return NodeFilter.FILTER_ACCEPT;
                             }
-                            regex.lastIndex = 0;
-                            var parent = node.parentElement;
-                            if (!parent) return NodeFilter.FILTER_REJECT;
-                            if (parent.closest('script,style,textarea,input,.uv-search-highlight')) {
-                                return NodeFilter.FILTER_REJECT;
-                            }
-                            return NodeFilter.FILTER_ACCEPT;
+                            return NodeFilter.FILTER_SKIP;
                         }
                     }
                 );
@@ -183,23 +200,12 @@ object ViewerSearchScripts {
                 while (walker.nextNode()) nodes.push(walker.currentNode);
 
                 var globalIndex = 0;
-                nodes.forEach(function(textNode) {
-                    var text = textNode.nodeValue || '';
-                    var fragment = document.createDocumentFragment();
-                    var lastIndex = 0;
-                    regex.lastIndex = 0;
-                    var match;
-                    while ((match = regex.exec(text)) !== null) {
-                        if (match.index > lastIndex) {
-                            fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
-                        }
-
-                        var span = document.createElement('span');
-                        span.className = 'uv-search-highlight';
-                        span.textContent = match[0];
+                nodes.forEach(function(node) {
+                    if (node.nodeType === 1 && node.tagName === 'IMG') { // Image Element
+                        node.classList.add('uv-search-highlight');
 
                         var isCurrent = false;
-                        var lineElement = textNode.parentElement ? textNode.parentElement.closest('[id^="line-"]') : null;
+                        var lineElement = node.parentElement ? node.parentElement.closest('[id^="line-"]') : null;
                         if (lineElement) {
                             var lineNumber = parseInt(lineElement.id.replace('line-', ''), 10);
                             var count = lineCounts[lineNumber] || 0;
@@ -209,23 +215,59 @@ object ViewerSearchScripts {
                             }
                         }
 
-                        // Always allow global relative index as a robust fallback!
                         if (!isCurrent && targetGlobalIndex >= 0 && globalIndex === targetGlobalIndex) {
                             isCurrent = true;
                         }
 
                         if (isCurrent) {
-                            span.className += ' uv-search-current';
-                            currentNode = span;
+                            node.classList.add('uv-search-current');
+                            currentNode = node;
                         }
                         globalIndex++;
-                        fragment.appendChild(span);
-                        lastIndex = match.index + match[0].length;
+                    } else { // Text Node
+                        var text = node.nodeValue || '';
+                        var fragment = document.createDocumentFragment();
+                        var lastIndex = 0;
+                        regex.lastIndex = 0;
+                        var match;
+                        while ((match = regex.exec(text)) !== null) {
+                            if (match.index > lastIndex) {
+                                fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.index)));
+                            }
+
+                            var span = document.createElement('span');
+                            span.className = 'uv-search-highlight';
+                            span.textContent = match[0];
+
+                            var isCurrent = false;
+                            var lineElement = node.parentElement ? node.parentElement.closest('[id^="line-"]') : null;
+                            if (lineElement) {
+                                var lineNumber = parseInt(lineElement.id.replace('line-', ''), 10);
+                                var count = lineCounts[lineNumber] || 0;
+                                lineCounts[lineNumber] = count + 1;
+                                if (lineNumber === targetLine && count === targetOccurrence) {
+                                    isCurrent = true;
+                                }
+                            }
+
+                            if (!isCurrent && targetGlobalIndex >= 0 && globalIndex === targetGlobalIndex) {
+                                isCurrent = true;
+                            }
+
+                            if (isCurrent) {
+                                span.className += ' uv-search-current';
+                                currentNode = span;
+                            }
+
+                            globalIndex++;
+                            fragment.appendChild(span);
+                            lastIndex = match.index + match[0].length;
+                        }
+                        if (lastIndex < text.length) {
+                            fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
+                        }
+                        node.replaceWith(fragment);
                     }
-                    if (lastIndex < text.length) {
-                        fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
-                    }
-                    textNode.replaceWith(fragment);
                 });
 
                 // Clamped relative global index fallback to prevent skipping highlights completely
