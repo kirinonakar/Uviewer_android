@@ -13,6 +13,10 @@ val Pink40 = Color(0xFF7D5260)
 val SettingsBackground = Color(0xFFF1F1F3)
 val SettingsCard = Color(0xFFFCFCFE)
 
+val DialogSkyBlueLight = Color(0xFFF0F7FD) // 흰색에 가까운 아주 연한 하늘색 (Extremely light sky blue)
+val DialogSkyBlueDark = Color(0xFF1B2635)  // 어두운 청회색 (Dark slate/sky blue)
+
+
 
 // Modern Dark/Light Palette
 val PrimaryLight = Color(0xFF0061A4)

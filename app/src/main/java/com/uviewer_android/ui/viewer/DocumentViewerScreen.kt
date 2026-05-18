@@ -603,7 +603,7 @@ fun DocumentViewerScreen(
                 }
                 
                 if (showEncodingDialog) {
-                    AlertDialog(
+                    com.uviewer_android.ui.theme.UviewerAlertDialog(
                         onDismissRequest = { showEncodingDialog = false },
                         shape = RoundedCornerShape(28.dp),
                         title = { Text(stringResource(R.string.select_encoding), style = MaterialTheme.typography.headlineSmall) },
@@ -1091,7 +1091,7 @@ val style = ViewerScripts.getStyleSheet(
 
     if (showGoToLineDialog) {
         var targetLineStr by remember { mutableStateOf(currentLine.toString()) }
-        AlertDialog(
+        com.uviewer_android.ui.theme.UviewerAlertDialog(
             onDismissRequest = { showGoToLineDialog = false },
             title = { Text("Go to Line") },
             text = {
@@ -1152,7 +1152,7 @@ fun FontSettingsDialog(
     val fontFamily: String by viewModel.fontFamily.collectAsState()
     val docBackgroundColor: String by viewModel.docBackgroundColor.collectAsState()
 
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.font_settings)) },
         text = {

@@ -172,7 +172,7 @@ fun SettingsScreen(
                     )
                     
                     if (showCustomColorDialog) {
-                        AlertDialog(
+                        com.uviewer_android.ui.theme.UviewerAlertDialog(
                             onDismissRequest = { showCustomColorDialog = false },
                             shape = RoundedCornerShape(28.dp),
                             title = { Text(stringResource(R.string.manual_color_picker)) },
@@ -526,7 +526,7 @@ fun CacheLimitSelectionDialog(
         5 * 1024 * 1024 * 1024L,
         10 * 1024 * 1024 * 1024L
     )
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.cache_limit)) },
@@ -556,7 +556,7 @@ fun DualPageOrderSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_dual_page_order)) },
@@ -580,7 +580,7 @@ fun ImageViewModeSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (Int) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.image_view_mode)) },
@@ -606,7 +606,7 @@ fun LanguageSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(title) },
@@ -632,7 +632,7 @@ fun DocBgSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_doc_bg)) },
@@ -660,7 +660,7 @@ fun FontSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_font_family)) },
@@ -684,7 +684,7 @@ fun ThemeSelectionDialog(
     onDismiss: () -> Unit,
     onSelect: (String) -> Unit
 ) {
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.select_theme)) },
@@ -793,7 +793,7 @@ fun AddServerDialog(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
-    AlertDialog(
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(28.dp),
         title = { Text(stringResource(R.string.add_server_menu)) },

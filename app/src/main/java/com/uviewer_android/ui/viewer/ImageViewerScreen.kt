@@ -505,7 +505,7 @@ fun ImageViewerScreen(
                         }
                         
                         if (showSettingsDialog) {
-                            AlertDialog(
+                            com.uviewer_android.ui.theme.UviewerAlertDialog(
                                 onDismissRequest = { showSettingsDialog = false },
                                 shape = RoundedCornerShape(28.dp),
                                 title = { Text(stringResource(R.string.section_image_viewer), style = MaterialTheme.typography.headlineSmall) },

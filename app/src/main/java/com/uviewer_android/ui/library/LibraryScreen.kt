@@ -471,7 +471,7 @@ fun LibraryScreen(
                 var pass by remember { mutableStateOf("") }
                 val focusManager = LocalFocusManager.current
 
-                AlertDialog(
+                com.uviewer_android.ui.theme.UviewerAlertDialog(
                     onDismissRequest = { showAddServerDialog = false },
                     shape = RoundedCornerShape(28.dp),
                     title = { Text(stringResource(R.string.add_webdav_server), style = MaterialTheme.typography.headlineSmall) },
