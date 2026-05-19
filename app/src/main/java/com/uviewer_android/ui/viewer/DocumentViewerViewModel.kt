@@ -4,118 +4,20 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.model.FileEntry
-import com.uviewer_android.data.parser.AozoraParser
 import com.uviewer_android.data.parser.EpubParser
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
 import com.uviewer_android.data.repository.UserPreferencesRepository
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.nio.charset.Charset
-
-data class DocumentViewerUiState(
-    val content: String = "",
-    val url: String? = null,
-    val baseUrl: String? = null,
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val isVertical: Boolean = false,
-    val fontSize: Int = 18,
-    val fontFamily: String = "serif",
-    val docBackgroundColor: String = UserPreferencesRepository.DOC_BG_COMFORT,
-    val epubChapters: List<com.uviewer_android.data.model.EpubSpineItem> = emptyList(),
-    val currentChapterIndex: Int = 0,
-    val totalLines: Int = 0,
-    val currentLine: Int = 1,
-    val fileName: String? = null,
-    val currentChunkIndex: Int = 0,
-    val hasMoreContent: Boolean = false,
-    val manualEncoding: String? = null,
-    val customDocBackgroundColor: String = "#FFFFFF",
-    val customDocTextColor: String = "#000000",
-    val sideMargin: Int = 8,
-    val loadProgress: Float = 1f,
-    val contentUpdateType: Int = 0, // 0: Refresh, 1: Append, 2: Prepend
-    val appendTrigger: Long = 0L,
-    val chapterLineCounts: Map<Int, Int> = emptyMap(),
-    val isImageOnlyChapter: Boolean = false,
-    val jsUnlockTrigger: Long = 0L, // [추가] 프리로드 취소 시 JS 스크롤 락 강제 해제용
-    val language: String = UserPreferencesRepository.LANG_EN,
-    val searchState: ViewerTextSearchState = ViewerTextSearchState()
-)
-
-private class ObsidianHighlight : org.commonmark.node.CustomNode(), org.commonmark.node.Delimited {
-    override fun getOpeningDelimiter(): String = "=="
-    override fun getClosingDelimiter(): String = "=="
-}
-
-private object ObsidianHighlightDelimiterProcessor : org.commonmark.parser.delimiter.DelimiterProcessor {
-    override fun getOpeningCharacter(): Char = '='
-    override fun getClosingCharacter(): Char = '='
-    override fun getMinLength(): Int = 2
-
-    override fun process(
-        openingRun: org.commonmark.parser.delimiter.DelimiterRun,
-        closingRun: org.commonmark.parser.delimiter.DelimiterRun
-    ): Int {
-        if (openingRun.length() < 2 || closingRun.length() < 2) return 0
-
-        val highlight = ObsidianHighlight()
-        var node = openingRun.opener.next
-        while (node != null && node != closingRun.closer) {
-            val next = node.next
-            highlight.appendChild(node)
-            node = next
-        }
-        openingRun.opener.insertAfter(highlight)
-        return 2
-    }
-}
-
-private class ObsidianHighlightHtmlNodeRenderer(
-    private val context: org.commonmark.renderer.html.HtmlNodeRendererContext
-) : org.commonmark.renderer.NodeRenderer {
-    private val html = context.writer
-
-    override fun getNodeTypes(): Set<Class<out org.commonmark.node.Node>> {
-        return setOf(ObsidianHighlight::class.java)
-    }
-
-    override fun render(node: org.commonmark.node.Node) {
-        html.tag("mark", context.extendAttributes(node, "mark", emptyMap()))
-        var child = node.firstChild
-        while (child != null) {
-            val next = child.next
-            context.render(child)
-            child = next
-        }
-        html.tag("/mark")
-    }
-}
-
-private object ObsidianHighlightExtension :
-    org.commonmark.parser.Parser.ParserExtension,
-    org.commonmark.renderer.html.HtmlRenderer.HtmlRendererExtension {
-
-    override fun extend(parserBuilder: org.commonmark.parser.Parser.Builder) {
-        parserBuilder.customDelimiterProcessor(ObsidianHighlightDelimiterProcessor)
-    }
-
-    override fun extend(rendererBuilder: org.commonmark.renderer.html.HtmlRenderer.Builder) {
-        rendererBuilder.nodeRendererFactory { context -> ObsidianHighlightHtmlNodeRenderer(context) }
-    }
-}
 
 
 class DocumentViewerViewModel(
@@ -264,37 +166,20 @@ class DocumentViewerViewModel(
 
             try {
                 if (type == FileEntry.FileType.EPUB) {
-                    val epubFile = if (isWebDav && serverId != null) {
-                         val context = getApplication<Application>()
-                         val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
-                         val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                         
-                         if (tempFile.exists()) {
-                             cacheManager.touch(tempFile)
-                         } else {
-                             val fileSize = webDavRepository.getFileSize(serverId, filePath)
-                             cacheManager.ensureCapacity(fileSize)
-                             webDavRepository.downloadFile(serverId, filePath, tempFile)
-                         }
-                         tempFile
-                    } else {
-                        File(filePath)
-                    }
-                    
-                    // Unzip EPUB
-                    val context = getApplication<Application>()
-                    val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
-                    val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
-                    val successFile = File(unzipDir, ".unzip_success")
-                    
-                    if (unzipDir.exists() && successFile.exists()) {
-                        cacheManager.touch(unzipDir)
-                    } else {
-                        cacheManager.ensureCapacity(epubFile.length() * 3) // EPUB usually 2-3x unzipped
-                        if (unzipDir.exists()) unzipDir.deleteRecursively()
-                        unzipDir.mkdirs()
-                        EpubParser.unzip(epubFile, unzipDir)
-                    }
+                    val application = getApplication<Application>()
+                    val epubFile = DocumentFileResolver.resolveReadableFile(
+                        application = application,
+                        filePath = filePath,
+                        isWebDav = isWebDav,
+                        serverId = serverId,
+                        cacheManager = cacheManager,
+                        webDavRepository = webDavRepository
+                    )
+                    val unzipDir = DocumentFileResolver.prepareEpubUnzipDir(
+                        application = application,
+                        epubFile = epubFile,
+                        cacheManager = cacheManager
+                    )
                     val book = EpubParser.parse(unzipDir)
                     epubUnzipDir = unzipDir
                     epubBook = book
@@ -313,47 +198,26 @@ class DocumentViewerViewModel(
                             epubFlatTextLines = flatLines
                             epubChapterStartLines = chapterStarts
 
-                            // savedLine 변환: 기존 챕터*1000000+라인 -> 플랫 라인 번호
-                            val chapterIdx = savedLine / 1000000
-                            val lineInChapter = savedLine % 1000000
-                            val flatStartLine = if (chapterIdx in chapterStarts) {
-                                val chStart = chapterStarts[chapterIdx]!!
-                                val chLinesCount = chapterLineCounts[chapterIdx] ?: 0
-                                // 휴리스틱: lineInChapter가 챕터 길이를 넘어서고 전체 범위 내라면,
-                                // 버그로 인해 글로벌 라인이 저장된 것으로 보고 그대로 사용함.
-                                if (lineInChapter > chLinesCount && lineInChapter >= chStart && lineInChapter <= flatLines.size) {
-                                    lineInChapter
-                                } else {
-                                    (chStart + lineInChapter - 1).coerceIn(1, flatLines.size)
-                                }
-                            } else {
-                                // chapterIdx가 유효하지 않으면 savedLine을 글로벌 라인으로 취급
-                                savedLine.coerceIn(1, flatLines.size)
-                            }
-
-                            val chunkIdx = (flatStartLine - 1) / LINES_PER_CHUNK
-                            
-                            // 챕터 경계를 이용한 TOC 매핑 (epubChapters의 href를 line-N 형식으로 변경)
-                            val tocChapters = book.spine.mapIndexed { idx, item ->
-                                val startLine = chapterStarts[idx] ?: 1
-                                item.copy(href = "line-$startLine")
-                            }
-
-                            val currentChIdx = tocChapters.indexOfLast { 
-                                it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= flatStartLine 
-                            }.coerceAtLeast(0)
+                            val flatPosition = DocumentEpubFlatMapper.mapSavedPosition(
+                                savedLine = savedLine,
+                                flatLines = flatLines,
+                                chapterStarts = chapterStarts,
+                                chapterLineCounts = chapterLineCounts,
+                                spine = book.spine,
+                                linesPerChunk = LINES_PER_CHUNK
+                            )
 
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 _uiState.value = _uiState.value.copy(
                                     totalLines = flatLines.size,
-                                    currentLine = flatStartLine,
-                                    currentChapterIndex = currentChIdx,
-                                    currentChunkIndex = chunkIdx,
-                                    epubChapters = tocChapters
+                                    currentLine = flatPosition.flatStartLine,
+                                    currentChapterIndex = flatPosition.currentChapterIndex,
+                                    currentChunkIndex = flatPosition.chunkIndex,
+                                    epubChapters = flatPosition.tocChapters
                                 )
-                                loadedStartChunk = chunkIdx
-                                loadedEndChunk = chunkIdx
-                                loadEpubFlatChunk(chunkIdx, updateType = 0)
+                                loadedStartChunk = flatPosition.chunkIndex
+                                loadedEndChunk = flatPosition.chunkIndex
+                                loadEpubFlatChunk(flatPosition.chunkIndex, updateType = 0)
                             }
                         } catch (e: Exception) {
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -363,22 +227,14 @@ class DocumentViewerViewModel(
                     }
                 } else {
                     // Text / HTML / CSV
-                    val file = if (isWebDav && serverId != null) {
-                         val context = getApplication<Application>()
-                         val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
-                         val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                         
-                         if (tempFile.exists()) {
-                             cacheManager.touch(tempFile)
-                         } else {
-                             val fileSize = webDavRepository.getFileSize(serverId, filePath)
-                             cacheManager.ensureCapacity(fileSize)
-                             webDavRepository.downloadFile(serverId, filePath, tempFile)
-                         }
-                         tempFile
-                    } else {
-                        File(filePath)
-                    }
+                    val file = DocumentFileResolver.resolveReadableFile(
+                        application = getApplication(),
+                        filePath = filePath,
+                        isWebDav = isWebDav,
+                        serverId = serverId,
+                        cacheManager = cacheManager,
+                        webDavRepository = webDavRepository
+                    )
 
                     val reader = com.uviewer_android.data.utils.LargeTextReader(file)
                     largeTextReader = reader
@@ -390,49 +246,25 @@ class DocumentViewerViewModel(
                     
                     // Background pass to extract titles for TOC - Scan entire file in chunks
                     viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
-                        val allChapters = mutableListOf<com.uviewer_android.data.model.EpubSpineItem>()
-                        val scanChunkSize = 10000
-                        for (startLine in 1..totalLines step scanChunkSize) {
-                            val chunkText = reader.readLines(startLine, scanChunkSize)
-                            val chunkChapters = AozoraParser.extractTitles(chunkText, startLine - 1).map { (title, line) ->
-                                com.uviewer_android.data.model.EpubSpineItem(
-                                    title = title,
-                                    href = "line-$line",
-                                    id = "line-$line"
-                                )
-                            }
-                            allChapters.addAll(chunkChapters)
-                            // Update UI incrementally if list is long
-                            if (allChapters.size % 50 == 0 || startLine + scanChunkSize > totalLines) {
-                                val currentIdx = allChapters.indexOfLast { 
-                                    it.href.startsWith("line-") && (it.href.removePrefix("line-").toIntOrNull() ?: 0) <= _uiState.value.currentLine 
-                                }.coerceAtLeast(0)
+                        DocumentTextTocScanner.scan(
+                            reader = reader,
+                            totalLines = totalLines,
+                            currentLine = { _uiState.value.currentLine },
+                            onUpdate = { chapters, currentIndex ->
                                 _uiState.value = _uiState.value.copy(
-                                    epubChapters = allChapters.toList(),
-                                    currentChapterIndex = currentIdx
+                                    epubChapters = chapters,
+                                    currentChapterIndex = currentIndex
                                 )
                             }
-                        }
+                        )
                     }
 
                     if (type == FileEntry.FileType.CSV || (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv"))) {
                         // For CSV, just load the whole thing or large chunk for table view
                         val contentString = reader.readLines(1, totalLines.coerceAtMost(2000))
-                        val rows = contentString.lines().filter { it.isNotBlank() }
-                        val sb = StringBuilder("<div class='table-container' style='overflow-x: auto; margin: 1em 0; width: 100%;'>")
-                        sb.append("<table style='width: 100%; table-layout: fixed; border-collapse: collapse; margin: 1em 0;'>")
-                        rows.forEach { row ->
-                            sb.append("<tr>")
-                            val cells = row.split(",")
-                            cells.forEach { cell ->
-                                sb.append("<td style='border: 1px solid #888; padding: 8px; white-space: normal; word-wrap: break-word; overflow-wrap: break-word; vertical-align: top;'>${cell.trim()}</td>")
-                            }
-                            sb.append("</tr>")
-                        }
-                        sb.append("</table></div>")
                         
                          _uiState.value = _uiState.value.copy(
-                            content = sb.toString(),
+                            content = DocumentCsvRenderer.render(contentString),
                             isLoading = false,
                             totalLines = totalLines,
                             currentLine = 1,
@@ -447,10 +279,7 @@ class DocumentViewerViewModel(
 
                         // Set Base URL for WebDAV to support relative remote images
                         // [Modification] Use local cache dir as base for WebDAV to allow file:// resources
-                        val separator = File.separator
-                        val baseUrl = file.parentFile?.let { parent ->
-                            "file:///${parent.absolutePath.replace(separator, "/")}/"
-                        }
+                        val baseUrl = DocumentFileResolver.baseUrlFor(file)
                         // If it's WebDAV, we still might need the remote URL for some cases, but for images and basic security, file:// base is better.
                         // val remoteBaseUrl = if (isWebDav && serverId != null) { ... } else null
                         
@@ -471,61 +300,23 @@ class DocumentViewerViewModel(
         }
     }
 
-    private fun computeSaveData(line: Int): Triple<Int, Float, String>? {
-        if (currentFilePath.isEmpty()) return null
-        val fileName = File(currentFilePath).name
-        val savePosition = if (currentFileType == FileEntry.FileType.EPUB) {
-            if (epubFlatTextLines != null) {
-                val chIdx = epubChapterStartLines.entries
-                    .filter { it.value <= line }
-                    .maxByOrNull { it.value }?.key ?: 0
-                val lineInChapter = line - (epubChapterStartLines[chIdx] ?: 1) + 1
-                chIdx * 1000000 + lineInChapter
-            } else {
-                _uiState.value.currentChapterIndex * 1000000 + line
-            }
-        } else {
-            line
-        }
-
-        val title = if (currentFileType == FileEntry.FileType.EPUB) {
-            val ch = _uiState.value.currentChapterIndex + 1
-            val total = _uiState.value.totalLines
-            val pct = if (total > 0) (line * 100 / total) else 0
-            "$fileName - ch$ch $pct%"
-        } else {
-            fileName
-        }
-
-        val totalLines = _uiState.value.totalLines
-        val progress = if (currentFileType == FileEntry.FileType.EPUB) {
-            if (epubFlatTextLines != null) {
-                if (totalLines > 0) (line.toFloat() / totalLines) else 0f
-            } else {
-                val totalChapters = _uiState.value.epubChapters.size
-                if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
-            }
-        } else {
-            if (totalLines > 0) (line.toFloat() / totalLines) else 0f
-        }
-
-        return Triple(savePosition, progress, title)
-    }
-
     fun updateProgress(line: Int) {
-        if (currentFilePath.isNotEmpty()) {
-             viewModelScope.launch {
-                 try {
-                     val (savePosition, progress, title) = computeSaveData(line) ?: return@launch
-                     recentFileDao.updatePosition(
-                         path = currentFilePath,
-                         pageIndex = savePosition,
-                         progress = progress,
-                         title = title,
-                         lastAccessed = System.currentTimeMillis()
-                     )
-                 } catch (e: Exception) { e.printStackTrace() }
-             }
+        val filePath = currentFilePath
+        if (filePath.isEmpty()) return
+        viewModelScope.launch {
+            try {
+                val saveData = DocumentProgressSaver.compute(
+                    line = line,
+                    filePath = filePath,
+                    fileType = currentFileType,
+                    uiState = _uiState.value,
+                    isEpubFlat = epubFlatTextLines != null,
+                    epubChapterStartLines = epubChapterStartLines
+                ) ?: return@launch
+                DocumentProgressSaver.update(recentFileDao, filePath, saveData)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -534,19 +325,21 @@ class DocumentViewerViewModel(
      * runBlocking을 사용하여 동기적으로 저장합니다.
      */
     fun saveProgressBlocking(line: Int) {
-        if (currentFilePath.isEmpty()) return
+        val filePath = currentFilePath
+        if (filePath.isEmpty()) return
         try {
-            val (savePosition, progress, title) = computeSaveData(line) ?: return
-            runBlocking {
-                recentFileDao.updatePosition(
-                    path = currentFilePath,
-                    pageIndex = savePosition,
-                    progress = progress,
-                    title = title,
-                    lastAccessed = System.currentTimeMillis()
-                )
-            }
-        } catch (e: Exception) { e.printStackTrace() }
+            val saveData = DocumentProgressSaver.compute(
+                line = line,
+                filePath = filePath,
+                fileType = currentFileType,
+                uiState = _uiState.value,
+                isEpubFlat = epubFlatTextLines != null,
+                epubChapterStartLines = epubChapterStartLines
+            ) ?: return
+            DocumentProgressSaver.updateBlocking(recentFileDao, filePath, saveData)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun setCurrentLine(line: Int) {
@@ -590,188 +383,20 @@ class DocumentViewerViewModel(
             val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
             val globalLineOffset = startLine - 1
             
-            val processed = if (currentFileType == FileEntry.FileType.HTML || currentFilePath.endsWith(".html", ignoreCase = true)) {
-                val colors = getColors()
-                val fontFamily = when(_uiState.value.fontFamily) {
-                    "serif" -> "serif"
-                    "sans-serif" -> "sans-serif"
-                    else -> "serif"
-                }
-                val resetCss = """
-                    <style>
-                        /* 모든 요소 box-sizing 적용 */
-                        * { 
-                            box-sizing: border-box !important; 
-                        }
-                        
-                        html {
-                            width: 100vw !important;
-                            height: 100vh !important;
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            overflow-x: ${if (_uiState.value.isVertical) "scroll" else "hidden"} !important;
-                            overflow-y: ${if (_uiState.value.isVertical) "hidden" else "scroll"} !important;
-                            overscroll-behavior: none !important;
-                            touch-action: ${if (_uiState.value.isVertical) "pan-x" else "pan-y"} !important;
-                            overflow-anchor: none !important;
-                            
-                            /* [추가] 뷰포트 스크롤 좌표계를 위해 html에도 writing-mode 적용 */
-                            writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                            -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                        }
-                        
-                        body { 
-                            /* 세로쓰기 설정 */
-                            writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                            -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                            
-                            height: 100vh !important;
-                            min-height: 100vh !important;
-                            width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
-                            
-                            margin: 0 !important;
-                            padding: 0 !important;
-                            
-                            overflow: visible !important;
-                            overflow-anchor: none !important;
-                            
-                            background-color: ${colors.first} !important; 
-                            color: ${colors.second} !important; 
-                            font-family: $fontFamily !important;
-                            font-size: ${_uiState.value.fontSize}px !important;
-                            line-height: 1.8 !important;
-                            
-                            /* 안전 영역 설정 (여백은 문단으로 이동) */
-                            padding-top: env(safe-area-inset-top, 0) !important;
-                            padding-bottom: env(safe-area-inset-bottom, 0) !important;
-                            padding-left: 0 !important;
-                            padding-right: 0 !important;
-                            display: block !important;
-                        }
-                        
-                        /* [문제 해결의 핵심] 문단(div, p)의 높이를 100%로 강제해야 함. */
-                        p, div, article, section, h1, h2, h3, h4, h5, h6 {
-                            display: block !important;
-                            height: auto !important;
-                            width: auto !important;
-                            margin-top: 0 !important;
-                            margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
-                            margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
-                            
-                            padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                            padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                            padding-top: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
-                            padding-bottom: ${if (_uiState.value.isVertical) "1.2em" else "0"} !important;
-                            
-                            white-space: normal !important;
-                            overflow-wrap: break-word !important;
-                            box-sizing: border-box !important;
-                            text-align: left !important;
-                        }
-                        .content-chunk {
-                            display: flow-root !important;
-                            overflow-anchor: none !important;
-                        }
-                        
-                        img { 
-                            max-width: 100% !important; 
-                            max-height: 100% !important; 
-                            width: auto !important;
-                            height: auto !important;
-                            display: block !important; 
-                            margin: 1em auto !important; 
-                        }
-                        /* Support for tables in small screens */
-                        table {
-                            width: 100% !important;
-                            table-layout: fixed !important;
-                            border-collapse: collapse !important;
-                            margin: 1em 0 !important;
-                            display: table !important; /* Ensure it's not block to respect table-layout */
-                        }
-                        th, td {
-                            border: 1px solid #888 !important;
-                            padding: 8px !important;
-                            white-space: normal !important;
-                            word-wrap: break-word !important;
-                            overflow-wrap: break-word !important;
-                            vertical-align: top !important;
-                        }
-                        rt {
-                            font-size: 0.5em !important;
-                            text-align: center !important;
-                        }
-                        .ruby-wide {
-                            margin-left: -0.3em !important;
-                            margin-right: -0.3em !important;
-                        }
-                        .ruby-wide span {
-                            display: inline-block !important;
-                            transform: scaleX(0.75) !important;
-                            transform-origin: center bottom !important;
-                            white-space: nowrap !important;
-                        }
-                        /* Hide potentially problematic layout elements */
-                        /* Ensure code blocks wrap properly */
-                        pre, code {
-                            white-space: pre-wrap !important;
-                            word-break: break-all !important;
-                            overflow-wrap: break-word !important;
-                        }
-                        /* Hide potentially problematic layout elements */
-                        iframe, script, noscript, style:not([data-app-style]) { display: none !important; }
-                    </style>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-                """.trimIndent()
-                """
-                    <!DOCTYPE html>
-                    <html lang="${resolveLanguageTag(userPreferencesRepository.appLanguage.value)}">
-                    <head>
-                        <meta charset="utf-8">
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-                        $resetCss
-                    </head>
-                    <body>
-                        $chunkText
-                    </body>
-                    </html>
-                """.trimIndent()
-            } else {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    val imageRootPath = if (!isWebDavContext) {
-                        val separator = File.separator
-                        "file:///${java.io.File(currentFilePath).parentFile?.absolutePath?.replace(separator, "/") ?: ""}"
-                    } else ""
-                    
-                    var htmlBody = if (currentFilePath.endsWith(".md", ignoreCase = true)) {
-                        convertMarkdownToHtml(chunkText)
-                    } else {
-                        AozoraParser.parse(chunkText, globalLineOffset, imageRootPath, _uiState.value.isVertical)
-                    }
-                    
-                    if (!isWebDavContext) {
-                        val parentDir = java.io.File(currentFilePath).parentFile
-                        htmlBody = resolveLocalImages(htmlBody, parentDir, null)
-                    } else if (serverIdContext != null) {
-                        val parentPath = if (currentFilePath.contains("/")) currentFilePath.substringBeforeLast("/") else ""
-                        htmlBody = resolveLocalImages(htmlBody, null, serverIdContext, parentPath)
-                    }
-
-
-                    val colors = getColors()
-                    AozoraParser.wrapInHtml(
-                        htmlBody, 
-                        _uiState.value.isVertical, 
-                        _uiState.value.fontFamily, 
-                        _uiState.value.fontSize, 
-                        colors.first, 
-                        colors.second,
-                        _uiState.value.sideMargin,
-                        chunkIndex,
-                        resolveLanguageTag(userPreferencesRepository.appLanguage.value)
-                    )
-                }
-            }
+            val processed = DocumentChunkRenderer.renderTextChunk(
+                chunkText = chunkText,
+                chunkIndex = chunkIndex,
+                globalLineOffset = globalLineOffset,
+                filePath = currentFilePath,
+                fileType = currentFileType,
+                isWebDavContext = isWebDavContext,
+                serverIdContext = serverIdContext,
+                uiState = _uiState.value,
+                languageTag = resolveLanguageTag(userPreferencesRepository.appLanguage.value),
+                colors = getColors(),
+                application = getApplication(),
+                webDavRepository = webDavRepository
+            )
 
             val isRefreshing = updateType == 0 || updateType == 3
             _uiState.value = _uiState.value.copy(
@@ -808,37 +433,16 @@ class DocumentViewerViewModel(
             val endLine = (startLine + LINES_PER_CHUNK - 1).coerceAtMost(totalLines)
             val globalLineOffset = startLine - 1
 
-            val processed = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                // AozoraParser.parse()는 <를 &lt;로 이스케이프하므로 사용하면 안 됨
-                // extractFlatContent()가 이미 HTML 태그(ruby, img 등)를 생성했으므로
-                // 직접 <div id="line-N">으로 감싸기만 하면 됨
-                val lines = flatLines.subList(startLine - 1, endLine)
-                val htmlBody = lines.mapIndexed { index, line ->
-                    val lineNum = globalLineOffset + index + 1
-                    val trimmed = line.trim()
-                    if (line.isEmpty()) {
-                        "<div id=\"line-$lineNum\" class=\"blank-line\"></div>"
-                    } else if (trimmed.startsWith("<img", ignoreCase = true) || trimmed.startsWith("<svg", ignoreCase = true) || trimmed.startsWith("<image", ignoreCase = true) || trimmed.startsWith("<figure", ignoreCase = true)) {
-                        // 이미지/SVG는 image-page-wrapper로 감싸서 전체 화면 표시
-                        "<div id=\"line-$lineNum\" class=\"image-page-wrapper\">$line</div>"
-                    } else {
-                        "<div id=\"line-$lineNum\">$line</div>"
-                    }
-                }.joinToString("\n")
-
-                val colors = getColors()
-                AozoraParser.wrapInHtml(
-                    htmlBody,
-                    _uiState.value.isVertical,
-                    _uiState.value.fontFamily,
-                    _uiState.value.fontSize,
-                    colors.first,
-                    colors.second,
-                    _uiState.value.sideMargin,
-                    chunkIndex,
-                    resolveLanguageTag(userPreferencesRepository.appLanguage.value)
-                )
-            }
+            val processed = DocumentChunkRenderer.renderEpubFlatChunk(
+                flatLines = flatLines,
+                startLine = startLine,
+                endLine = endLine,
+                globalLineOffset = globalLineOffset,
+                chunkIndex = chunkIndex,
+                uiState = _uiState.value,
+                languageTag = resolveLanguageTag(userPreferencesRepository.appLanguage.value),
+                colors = getColors()
+            )
 
             val isRefreshing = updateType == 0 || updateType == 3
             _uiState.value = _uiState.value.copy(
@@ -856,23 +460,7 @@ class DocumentViewerViewModel(
     }
 
     private fun resolveLanguageTag(lang: String): String {
-        val systemLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
-        val systemLang = if (!systemLocales.isEmpty) {
-            systemLocales.get(0)?.language ?: ""
-        } else {
-            getApplication<Application>().resources.configuration.locales[0].language
-        }
-        
-        // Per User's Request: if EITHER system per-app language OR app language is Japanese, show as Japanese locale
-        if (systemLang == UserPreferencesRepository.LANG_JA || lang == UserPreferencesRepository.LANG_JA) {
-            return UserPreferencesRepository.LANG_JA
-        }
-        
-        return if (lang == UserPreferencesRepository.LANG_SYSTEM) {
-            systemLang
-        } else {
-            lang
-        }
+        return resolveDocumentLanguageTag(getApplication(), lang)
     }
 
     fun nextChunk() {
@@ -1020,218 +608,30 @@ class DocumentViewerViewModel(
         return loadedMatches.indexOf(currentMatch)
     }
 
-    private fun cleanLineForSearch(line: String, fileType: FileEntry.FileType?, filePath: String): String {
-        val cleaned = when {
-            fileType == FileEntry.FileType.HTML || filePath.endsWith(".html", ignoreCase = true) -> {
-                line.replace(Regex("<[^>]*>"), "")
-            }
-            filePath.endsWith(".md", ignoreCase = true) -> {
-                var clean = line.replace(Regex("<[^>]*>"), "")
-                // Replace Markdown links [text](url) with just text
-                clean = clean.replace(Regex("\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
-                // Replace reference-style links [text][ref] with just text
-                clean = clean.replace(Regex("\\[([^\\]]*)\\]\\[[^\\]]*\\]"), "$1")
-                // Replace Markdown images ![alt](url) with just alt text
-                clean = clean.replace(Regex("!\\[([^\\]]*)\\]\\([^)]*\\)"), "$1")
-                // Replace reference-style Markdown images ![alt][ref] with just alt text
-                clean = clean.replace(Regex("!\\[([^\\]]*)\\]\\[[^\\]]*\\]"), "$1")
-
-                // If it is a reference link definition [ref]: http://... completely blank it out (invisible)
-                if (clean.matches(Regex("^\\s*\\[[^\\]]+\\]:\\s*https?://\\S+.*$"))) {
-                    clean = ""
-                } else {
-                    // If it is a footnote definition [^ref]: text, strip the footnote prefix and keep the text
-                    clean = clean.replace(Regex("^\\s*\\[\\^[^\\]]+\\]:\\s*"), "")
-                }
-
-                // Remove formatting characters: *, _, #, `, ~
-                clean.replace(Regex("[*_#`~]"), "")
-            }
-            fileType == FileEntry.FileType.EPUB -> {
-                line.replace(Regex("<[^>]*>"), "")
-            }
-            else -> {
-                val noAozoraNote = line.replace(Regex("［＃[^］]*］"), "")
-                val noRubyStart = noAozoraNote.replace("｜", "")
-                val noRubyPronunciation = noRubyStart.replace("《", "").replace("》", "")
-                noRubyPronunciation
-            }
-        }
-        return cleaned
-            .replace("&nbsp;", " ")
-            .replace("&lt;", "<")
-            .replace("&gt;", ">")
-            .replace("&amp;", "&")
-            .replace("&quot;", "\"")
-            .replace("&apos;", "'")
-    }
-
     private suspend fun findDocumentSearchMatches(query: String): List<ViewerTextSearchMatch> {
-        val fileType = currentFileType
-        val filePath = currentFilePath
-        val flatLines = epubFlatTextLines
-        if (fileType == FileEntry.FileType.EPUB && flatLines != null) {
-            val cleanedLines = flatLines.map { cleanLineForSearch(it, fileType, filePath) }
-            return ViewerSearchUtils.findMatchesInLines(cleanedLines, query, firstLineNumber = 1)
-        }
-
-        val reader = largeTextReader ?: return emptyList()
-        val totalLines = reader.getTotalLines()
-        val matches = mutableListOf<ViewerTextSearchMatch>()
-        val scanSize = 1000
-        var startLine = 1
-        var inStyleOrScript = false
-        var inYamlFrontMatter = false
-        var yamlDashCount = 0
-
-        while (startLine <= totalLines) {
-            val text = reader.readLines(startLine, scanSize)
-            val lines = text.split('\n').map { it.trimEnd('\r') }
-
-            val cleanedLines = mutableListOf<String>()
-            var globalLineIndex = startLine
-            for (line in lines) {
-                var cleanLine = line
-                val lower = line.lowercase()
-
-                // Track YAML front matter boundaries at the very beginning of the Markdown file
-                if (filePath.endsWith(".md", ignoreCase = true)) {
-                    if (globalLineIndex == 1 && cleanLine.trim() == "---") {
-                        inYamlFrontMatter = true
-                        yamlDashCount = 1
-                        cleanLine = ""
-                    } else if (inYamlFrontMatter && cleanLine.trim() == "---") {
-                        inYamlFrontMatter = false
-                        yamlDashCount = 2
-                        cleanLine = ""
-                    }
-                }
-
-                if (lower.contains("<style") || lower.contains("<script")) {
-                    inStyleOrScript = true
-                }
-
-                if (inStyleOrScript || inYamlFrontMatter) {
-                    cleanLine = ""
-                } else {
-                    cleanLine = cleanLineForSearch(cleanLine, fileType, filePath)
-                }
-
-                if (lower.contains("</style>") || lower.contains("</script>")) {
-                    inStyleOrScript = false
-                }
-
-                cleanedLines.add(cleanLine)
-                globalLineIndex++
-            }
-
-            matches.addAll(ViewerSearchUtils.findMatchesInLines(cleanedLines, query, startLine))
-            startLine += scanSize
-        }
-        return matches
+        return DocumentSearchEngine.findMatches(
+            query = query,
+            filePath = currentFilePath,
+            fileType = currentFileType,
+            reader = largeTextReader,
+            epubFlatTextLines = epubFlatTextLines
+        )
     }
 
     fun toggleBookmark(path: String, line: Int, isWebDav: Boolean, serverId: Int?, type: String) {
         viewModelScope.launch {
-            val fileName = File(path).name
-            val savePosition = if (type == "EPUB") {
-                if (epubFlatTextLines != null) {
-                    val chIdx = epubChapterStartLines.entries
-                        .filter { it.value <= line }
-                        .maxByOrNull { it.value }?.key ?: 0
-                    val startLine = epubChapterStartLines[chIdx] ?: 1
-                    val lineInChapter = (line - startLine + 1).coerceAtLeast(1)
-                    chIdx * 1000000 + lineInChapter
-                } else {
-                    _uiState.value.currentChapterIndex * 1000000 + line
-                }
-            } else {
-                line
-            }
-
-            val bookmarkTitle = when (type) {
-                "EPUB" -> {
-                    val ch = _uiState.value.currentChapterIndex + 1
-                    val total = _uiState.value.totalLines
-                    val pct = if (total > 0) (line * 100 / total) else 0
-                    "$fileName - ch$ch $pct%"
-                }
-                "DOCUMENT", "TEXT", "PDF" -> "$fileName - line $line"
-                else -> fileName
-            }
-            
-            // Bookmark (Position)
-            bookmarkDao.insertBookmark(
-                com.uviewer_android.data.Bookmark(
-                    title = bookmarkTitle,
-                    path = path,
-                    isWebDav = isWebDav,
-                    serverId = serverId,
-                    type = type,
-                    position = savePosition,
-                    timestamp = System.currentTimeMillis()
-                )
+            DocumentBookmarkSaver.save(
+                bookmarkDao = bookmarkDao,
+                favoriteDao = favoriteDao,
+                path = path,
+                line = line,
+                isWebDav = isWebDav,
+                serverId = serverId,
+                type = type,
+                uiState = _uiState.value,
+                epubChapterStartLines = epubChapterStartLines,
+                isEpubFlat = epubFlatTextLines != null
             )
-
-            // Add to Favorites (File) with new rules
-            val favorites = favoriteDao.getAllFavorites().first()
-            val existing = favorites.find { it.path == path && it.position == savePosition }
-            
-            // Check if any favorite with the same document is already pinned
-            val pinnedItem = favorites.find { 
-                (it.path == path || it.title == fileName || it.title.startsWith("$fileName - ")) && it.isPinned 
-            }
-            val wasPinned = pinnedItem != null
-
-            if (existing != null) {
-                // Rule 1: Same file and same position -> Move to top
-                favoriteDao.updateFavorite(existing.copy(
-                    timestamp = System.currentTimeMillis(),
-                    isPinned = wasPinned || existing.isPinned,
-                    pinOrder = if (wasPinned) pinnedItem.pinOrder else existing.pinOrder
-                ))
-                // If a DIFFERENT item was pinned, unpin it
-                if (pinnedItem != null && pinnedItem.id != existing.id) {
-                    favoriteDao.updateFavorite(pinnedItem.copy(isPinned = false, pinOrder = 0))
-                }
-            } else {
-                // Rule 2: Same document, different location/position -> Max 3
-                val sameDocFavorites = favorites.filter { 
-                    it.path == path || it.title == fileName || it.title.startsWith("$fileName - ") 
-                }
-                if (sameDocFavorites.size >= 3) {
-                    val oldest = sameDocFavorites.minByOrNull { it.timestamp }
-                    if (oldest != null) {
-                        favoriteDao.deleteFavorite(oldest)
-                    }
-                }
-                val totalLines = _uiState.value.totalLines
-                val progress = if (type == "EPUB") {
-                    val totalChapters = _uiState.value.epubChapters.size
-                    if (totalChapters > 0) (_uiState.value.currentChapterIndex.toFloat() / totalChapters) else 0f
-                } else {
-                    if (totalLines > 0) (line.toFloat() / totalLines) else 0f
-                }
-
-                favoriteDao.insertFavorite(
-                    com.uviewer_android.data.FavoriteItem(
-                        title = bookmarkTitle,
-                        path = path,
-                        isWebDav = isWebDav,
-                        serverId = serverId,
-                        type = type,
-                        position = savePosition,
-                        isPinned = wasPinned, // Transfer pin status
-                        pinOrder = if (wasPinned) pinnedItem.pinOrder else 0,
-                        progress = progress,
-                        timestamp = System.currentTimeMillis()
-                    )
-                )
-                // Unpin the old one if it was different
-                if (pinnedItem != null && (pinnedItem.path != path || pinnedItem.position != savePosition)) {
-                    favoriteDao.updateFavorite(pinnedItem.copy(isPinned = false, pinOrder = 0))
-                }
-            }
         }
     }
 
@@ -1241,165 +641,25 @@ class DocumentViewerViewModel(
             val chapter = chapters[index]
             
             if (currentFileType == FileEntry.FileType.EPUB) {
-                val cleanHref = chapter.href.substringBefore("#")
-                val chapterFile = File(cleanHref)
                 viewModelScope.launch {
                     _uiState.value = _uiState.value.copy(isLoading = true)
                     if (updateType == 0) {
                         loadedStartChapter = index
                         loadedEndChapter = index
                     }
-                    val rawContent = try {
-                         chapterFile.readText()
-                    } catch (e: Exception) {
-                        "Error reading chapter: ${e.message}"
-                    }
-
-                    val colors = getColors()
-                    val fontFamily = when(_uiState.value.fontFamily) {
-                        "serif" -> "'Sawarabi Mincho', serif"
-                        "sans-serif" -> "'Sawarabi Gothic', sans-serif"
-                        else -> "serif"
-                    }
-                    val resetCss = """
-                        <style data-app-style="true">
-                            *:not(ruby):not(rt):not(rp) { 
-                                max-width: 100% !important; 
-                                box-sizing: border-box !important; 
-                                overflow-wrap: break-word !important; 
-                            }
-                            html {
-                                width: 100vw !important;
-                                height: 100vh !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                                overflow-x: ${if (_uiState.value.isVertical) "auto" else "hidden"} !important;
-                                overflow-y: ${if (_uiState.value.isVertical) "hidden" else "auto"} !important;
-                                overflow-anchor: none !important;
-                                writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                                -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                            }
-                            body { 
-                                width: ${if (_uiState.value.isVertical) "auto" else "100%"} !important;
-                                height: 100vh !important;
-                                min-height: 100vh !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                                background-color: ${colors.first} !important;
-                                color: ${colors.second} !important;
-                                font-family: $fontFamily !important;
-                                font-size: ${_uiState.value.fontSize}px !important;
-                                writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                                -webkit-writing-mode: ${if (_uiState.value.isVertical) "vertical-rl" else "horizontal-tb"} !important;
-                                text-orientation: mixed !important;
-                                overflow: visible !important;
-                                overflow-anchor: none !important;
-                                padding-top: env(safe-area-inset-top, 0) !important;
-                                padding-bottom: env(safe-area-inset-bottom, 0) !important;
-                                padding-left: 0 !important;
-                                padding-right: 0 !important;
-                                line-height: 1.8 !important;
-                            }
-                            rt {
-                                font-size: 0.5em !important;
-                                text-align: center !important;
-                            }
-                            .ruby-wide {
-                                margin-left: -0.3em !important;
-                                margin-right: -0.3em !important;
-                            }
-                            .ruby-wide span {
-                                display: inline-block !important;
-                                transform: scaleX(0.75) !important;
-                                transform-origin: center bottom !important;
-                                white-space: nowrap !important;
-                            }
-                            /* Layout ignore fixes */
-                            [style*="width"]:not(ruby):not(rt):not(rp), 
-                            [style*="margin-left"]:not(ruby):not(rt):not(rp), 
-                            [style*="margin-right"]:not(ruby):not(rt):not(rp) {
-                                width: auto !important;
-                                margin-left: 0 !important;
-                                margin-right: 0 !important;
-                            }
-                            /* Table wrapping support */
-                            table {
-                                width: 100% !important;
-                                table-layout: fixed !important;
-                                border-collapse: collapse !important;
-                                margin: 1em 0 !important;
-                            }
-                            p, div, article, section, h1, h2, h3, h4, h5, h6 {
-                                display: block !important;
-                                height: auto !important;
-                                width: auto !important;
-                                margin-top: 0 !important;
-                                margin-bottom: ${if (_uiState.value.isVertical) "0" else "0.5em"} !important;
-                                margin-left: ${if (_uiState.value.isVertical) "1em" else "0"} !important;
-                                padding-left: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                                padding-right: ${if (_uiState.value.isVertical) "1.2em" else "${_uiState.value.sideMargin / 20.0}em"} !important;
-                                white-space: normal !important;
-                                overflow-wrap: break-word !important;
-                                text-align: left !important;
-                            }
-                            .content-chunk {
-                                display: flow-root !important;
-                                overflow-anchor: none !important;
-                            }
-                            /* Remove padding for images to make them edge-to-edge */
-                            div:has(img), p:has(img), div:has(svg), p:has(svg), div:has(figure), p:has(figure), .image-page-wrapper {
-                                padding: 0 !important;
-                                margin: 0 !important;
-                            }
-                            .image-page-wrapper {
-                                width: 100vw !important;
-                                height: 100vh !important;
-                                min-width: 100vw !important;  /* 추가: 축소 방지 */
-                                min-height: 100vh !important; /* 추가: 축소 방지 */
-                                flex-shrink: 0 !important;    /* 추가: flex 레이아웃에서 찌그러짐 방지 */
-                                display: flex !important;
-                                justify-content: center !important;
-                                align-items: center !important;
-                                overflow: hidden !important;
-                                margin: 0 !important;
-                                padding: 0 !important;
-                                box-sizing: border-box !important;
-                                break-inside: avoid !important; /* 대체 속성 */
-                            }
-                            img, svg, figure { 
-                                max-width: 100% !important; 
-                                max-height: 100% !important; 
-                                width: auto !important;
-                                height: auto !important;
-                                display: block !important; 
-                                margin: 0 auto !important; 
-                                object-fit: contain !important;
-                            }
-                            th, td {
-                                border: 1px solid #888 !important;
-                                padding: 8px !important;
-                                white-space: normal !important;
-                                word-wrap: break-word !important;
-                                overflow-wrap: break-word !important;
-                                vertical-align: top !important;
-                            }
-                        </style>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
-                    """.trimIndent()
-
-                    val processedResult = EpubParser.prepareHtmlForViewer(rawContent, resetCss, baseDir = chapterFile.parentFile, idPrefix = "$index-", isVertical = _uiState.value.isVertical)
-                    val processedContent = processedResult.first
-                    val lineCount = processedResult.second
-
-                    val separator = File.separator
-                    val baseUrl = "file:///${chapterFile.parent?.replace(separator, "/")}/"
+                    val chapterContent = DocumentEpubChapterRenderer.render(
+                        chapterHref = chapter.href,
+                        chapterIndex = index,
+                        uiState = _uiState.value,
+                        colors = getColors()
+                    )
                     
                     val newCounts = _uiState.value.chapterLineCounts.toMutableMap()
-                    newCounts[index] = lineCount
+                    newCounts[index] = chapterContent.lineCount
 
                     // [수정됨] 이미지만 있는 챕터 판별: 텍스트 본문(<p>)이 거의 없고 이미지 래퍼가 존재하는 경우
                     // 기존 15라인 이하 기준을 3라인 이하로 엄격하게 줄여 '짧은 텍스트 챕터'가 이미지 챕터로 오인되는 것을 방지
-                    val isImageOnly = lineCount <= 3 && processedContent.contains("image-page-wrapper")
+                    val isImageOnly = chapterContent.isImageOnly
                     
                     // [핵심 추가] 세로쓰기(RTL) 모드에서는 챕터 전환 시 항상 '전체 리로드(Refresh)'를 수행하도록 변경 (사용자 요청)
                     // 복잡한 세로 레이아웃 병합 시 발생하는 스크롤 계산 오류 및 건너뜀 버그를 근본적으로 방지합니다.
@@ -1432,12 +692,12 @@ class DocumentViewerViewModel(
                     val isRefreshing = effectiveUpdateType == 0
                     _uiState.value = _uiState.value.copy(
                         url = null, 
-                        baseUrl = baseUrl,
-                        content = processedContent, 
+                        baseUrl = chapterContent.baseUrl,
+                        content = chapterContent.content,
                         currentChapterIndex = if (isRefreshing) index else _uiState.value.currentChapterIndex,
                         isLoading = false,
-                        currentLine = if (isRefreshing) (if (initialLine == -1) lineCount else initialLine) else _uiState.value.currentLine,
-                        totalLines = if (isRefreshing) lineCount else _uiState.value.totalLines,
+                        currentLine = if (isRefreshing) (if (initialLine == -1) chapterContent.lineCount else initialLine) else _uiState.value.currentLine,
+                        totalLines = if (isRefreshing) chapterContent.lineCount else _uiState.value.totalLines,
                         contentUpdateType = effectiveUpdateType, 
                         appendTrigger = System.currentTimeMillis(),
                         chapterLineCounts = newCounts,
@@ -1563,147 +823,8 @@ class DocumentViewerViewModel(
     }
 
     private fun getColors(): Pair<String, String> {
-        return when (_uiState.value.docBackgroundColor) {
-             UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
-             UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
-             UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4" to "#343426"
-             UserPreferencesRepository.DOC_BG_CUSTOM -> _uiState.value.customDocBackgroundColor to _uiState.value.customDocTextColor
-             else -> "#ffffff" to "#000000"
-        }
-    }
-
-
-    private fun convertMarkdownToHtml(md: String): String {
-        val mathBlocks = mutableListOf<String>()
-        
-        // 1. Protect display math $$ ... $$
-        var processedMd = md.replace(Regex("\\$\\$(.*?)\\$\\$", RegexOption.DOT_MATCHES_ALL)) {
-            val index = mathBlocks.size
-            mathBlocks.add(it.value)
-            "K_MATH_BLOCK_${index}_K"
-        }
-        
-        // 2. Protect inline math $ ... $
-        // Matches $...$ where it's not escaped, doesn't start/end with whitespace, and is on a single line
-        processedMd = processedMd.replace(Regex("(?<!\\\\)\\$(?!\\s)([^\\s$](?:[^$]*?[^\\s$])?)(?<!\\\\)\\$")) {
-            val index = mathBlocks.size
-            mathBlocks.add(it.value)
-            "K_MATH_INLINE_${index}_K"
-        }
-
-        val extensions = listOf(
-            org.commonmark.ext.gfm.tables.TablesExtension.create(),
-            ObsidianHighlightExtension
-        )
-        
-        // CommonMark 스펙상 구두점 뒤에 한국어 조사(은/는/이/가 등)가 붙으면 우측 경계로 인식하지 못하는 문제 우회
-        val preprocessedMd = processedMd.replace(Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"), "$1 ")
-
-        val parser = org.commonmark.parser.Parser.builder()
-            .extensions(extensions)
-            .build()
-            
-        val document = parser.parse(preprocessedMd)
-        
-        val renderer = org.commonmark.renderer.html.HtmlRenderer.builder()
-            .extensions(extensions)
-            .softbreak("<br/>")
-            .build()
-            
-        var html = renderer.render(document)
-        
-        // 3. Restore math with HTML escaping for safety within the HTML document
-        mathBlocks.forEachIndexed { index, original ->
-            val escaped = original.replace("&", "&amp;")
-                                  .replace("<", "&lt;")
-                                  .replace(">", "&gt;")
-            
-            html = html.replace("K_MATH_BLOCK_${index}_K", escaped)
-                       .replace("K_MATH_INLINE_${index}_K", escaped)
-        }
-        
-        // 렌더링된 HTML에서 우회용으로 추가했던 공백 제거 (</strong> 는 -> </strong>는)
-        return html.replace(Regex("(</(?:strong|em)>) (?=[가-힣])"), "$1")
-    }
-
-    private suspend fun resolveLocalImages(content: String, parentDir: java.io.File?, serverId: Int?, parentPath: String? = null): String {
-        var result = content
-        val imgRegex = Regex("<img\\s+[^>]*src=\"([^\"]+)\"[^>]*>")
-        val matches = imgRegex.findAll(content).toList()
-        
-        fun encodeFileName(path: String): String {
-            return try {
-                path.split("/").joinToString("/") { segment ->
-                    if (segment.endsWith(":") && segment.length <= 6) segment
-                    else java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
-                }
-            } catch (e: Exception) { path }
-        }
-
-        for (match in matches) {
-            val originalSrc = match.groups[1]?.value ?: continue
-            if (originalSrc.startsWith("http") || originalSrc.startsWith("data:")) continue
-            
-            if (serverId != null && parentPath != null) {
-                // WebDAV resolution
-                val context = getApplication<Application>()
-                val cacheBase = File(context.getExternalFilesDir("cache") ?: context.cacheDir, "webdav_img_cache/$serverId")
-                if (!cacheBase.exists()) cacheBase.mkdirs()
-                
-                // If it's already an encoded path from AozoraParser, we should decode it first
-                // because webDavRepository and File API expect raw paths.
-                val decodedSrc = try { java.net.URLDecoder.decode(originalSrc, "UTF-8") } catch(e: Exception) { originalSrc }
-                val cleanSrc = decodedSrc.removePrefix("file://").removePrefix("/")
-                val webDavPath = if (parentPath.isEmpty()) cleanSrc else "$parentPath/$cleanSrc"
-                val fileName = java.net.URLEncoder.encode(webDavPath, "UTF-8").takeLast(100)
-                val cachedFile = File(cacheBase, fileName)
-                
-                if (cachedFile.exists()) {
-                    val encoded = encodeFileName("file://${cachedFile.absolutePath}")
-                    result = result.replace(match.value, match.value.replace(originalSrc, encoded))
-                } else {
-                    try {
-                        webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
-                        val encoded = encodeFileName("file://${cachedFile.absolutePath}")
-                        result = result.replace(match.value, match.value.replace(originalSrc, encoded))
-                    } catch (e: Exception) {
-                        // Failed to download from WebDAV. 
-                    }
-                }
-            } else if (parentDir != null) {
-                // Local resolution
-                val decodedSrc = try { java.net.URLDecoder.decode(originalSrc, "UTF-8") } catch(e: Exception) { originalSrc }
-                // Strip file:// if present to check existence via File API
-                val cleanSrc = decodedSrc.removePrefix("file://")
-                var imgFile = java.io.File(parentDir, cleanSrc)
-                
-                if (!imgFile.exists()) {
-                    // Try as absolute path if it looks like one
-                    if (cleanSrc.startsWith("/")) {
-                        val absFile = java.io.File(cleanSrc)
-                        if (absFile.exists()) imgFile = absFile
-                    }
-                }
-
-                if (!imgFile.exists()) {
-                    // Search in subfolders
-                    val searchName = cleanSrc.substringAfterLast("/")
-                    val decodedSearchName = try { java.net.URLDecoder.decode(searchName, "UTF-8") } catch(e: Exception) { searchName }
-                    
-                    val found = parentDir.walkTopDown()
-                        .maxDepth(3)
-                        .find { it.name == searchName || it.name == decodedSearchName }
-                    if (found != null) imgFile = found
-                }
-
-                if (imgFile.exists()) {
-                    val separator = File.separator
-                    val encoded = encodeFileName("file:///${imgFile.absolutePath.replace(separator, "/")}")
-                    result = result.replace(match.value, match.value.replace(originalSrc, encoded))
-                }
-            }
-        }
-        return result
+        return _uiState.value.documentColors()
     }
 
 }
+
