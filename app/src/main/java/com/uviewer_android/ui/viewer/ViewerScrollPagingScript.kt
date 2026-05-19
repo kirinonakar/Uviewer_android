@@ -27,12 +27,61 @@ internal object ViewerScrollPagingScript {
                      }
                  };
 
+                 function scrollVisualLineIntoView(line) {
+                     if (!line) return false;
+                     var el = line.element || null;
+                     if (el && el.scrollIntoView) {
+                         el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                         return true;
+                     }
+
+                     var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
+                     var h = window.innerHeight;
+                     if (isVertical) {
+                         window.scrollBy({ left: line.right - w, behavior: 'instant' });
+                     } else {
+                         window.scrollBy({ top: line.top, behavior: 'instant' });
+                     }
+                     return true;
+                 }
+
+                 function visibleVisualLines(lines, w, h) {
+                     if (isVertical) {
+                         return lines.filter(function(l) { return l.left < w - 2 && l.right > 2; });
+                     }
+                     return lines.filter(function(l) { return l.bottom > 2 && l.top < h - 2; });
+                 }
+
+                 function snapFromImagePage(lines, forward, w, h) {
+                     var visible = visibleVisualLines(lines, w, h);
+                     if (visible.length === 0) return false;
+
+                     var imageLine = forward ? visible[visible.length - 1] : visible[0];
+                     if (!imageLine || !imageLine.isImageWrapper) return false;
+
+                     var idx = lines.indexOf(imageLine);
+                     var target = lines[idx + (forward ? 1 : -1)];
+                     if (!target) return false;
+
+                     if (scrollVisualLineIntoView(target)) {
+                         window.detectAndReportLine();
+                         window.updateMask();
+                         return true;
+                     }
+                     return false;
+                 }
+
                  window.pageDown = function() {
                      window._scrollDir = 1;
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtBottom = false;
                      var lines = window.getVisualLines(); // 1번만 호출하여 재사용
+
+                     if (snapFromImagePage(lines, true, w, h)) {
+                         window._lastScrollX = window.pageXOffset;
+                         return;
+                     }
 
                      if (!isVertical) {
                          if (h + window.pageYOffset >= document.documentElement.scrollHeight - 20) isAtBottom = true;
@@ -126,6 +175,8 @@ internal object ViewerScrollPagingScript {
                      var h = window.innerHeight;
                      var isAtTop = false;
                      var lines = window.getVisualLines(); // 1번만 호출하여 재사용
+
+                     if (snapFromImagePage(lines, false, w, h)) return;
                      
                      if (!isVertical) { 
                          if (window.pageYOffset <= 20) isAtTop = true;

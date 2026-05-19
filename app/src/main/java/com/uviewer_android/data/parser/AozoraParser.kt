@@ -262,6 +262,17 @@ object AozoraParser {
                 styles.add("padding-bottom: ${n}em")
             }
 
+            val trimmedLineContent = lineContent.trim()
+            val isStandaloneImageLine = Regex(
+                "^<(?:img|svg|figure)\\b[\\s\\S]*</?(?:img|svg|figure)?>$",
+                RegexOption.IGNORE_CASE
+            ).matches(trimmedLineContent) ||
+                Regex("^<img\\b[^>]*?/?>$", RegexOption.IGNORE_CASE).matches(trimmedLineContent)
+
+            if (isStandaloneImageLine) {
+                classes.add("image-page-wrapper")
+            }
+
             val classAttr = if (classes.isNotEmpty() || lineContent.isBlank()) {
                 val combinedClasses = if (lineContent.isBlank()) classes + "blank-line" else classes
                 " class=\"${combinedClasses.joinToString(" ")}\""

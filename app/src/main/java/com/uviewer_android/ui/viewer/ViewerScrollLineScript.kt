@@ -92,7 +92,7 @@ internal object ViewerScrollLineScript {
                           while ((node = walker.nextNode())) {
                               if (node.nodeType === 1 && node.classList && node.classList.contains('image-page-wrapper')) {
                                   var r = node.getBoundingClientRect();
-                                  textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: true });
+                                  textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: true, element: node });
                                   continue;
                               }
 
@@ -143,7 +143,7 @@ internal object ViewerScrollLineScript {
                                               }
                                           }
                                           if (!added) {
-                                              parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right, isImageWrapper: false });
+                                              parts.push({ top: current.top, bottom: current.bottom, left: current.left, right: current.right, isImageWrapper: false, element: el.closest('[id^="line-"]') });
                                           }
                                       }
                                       for (var i = 0; i < parts.length; i++) {
@@ -155,7 +155,7 @@ internal object ViewerScrollLineScript {
                                    var isImg = node.nodeType === 1 && (node.tagName === 'IMG' || node.tagName === 'SVG' || node.tagName === 'FIGURE');
                                   for (var i = 0; i < rects.length; i++) {
                                       var r = rects[i];
-                                      if (r.width > 0 && r.height > 0) { var isBlank = node.nodeType === 1 && node.classList && node.classList.contains("blank-line"); textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg, isBlankLine: isBlank }); }
+                                      if (r.width > 0 && r.height > 0) { var isBlank = node.nodeType === 1 && node.classList && node.classList.contains("blank-line"); var lineElement = (node.nodeType === 1 ? node : el).closest('[id^="line-"]'); textLines.push({ top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: isImg, isBlankLine: isBlank, element: lineElement }); }
                                   }
                               }
                           }
@@ -165,7 +165,7 @@ internal object ViewerScrollLineScript {
                          textLines.sort(function(a, b) { var diff = a.top - b.top; return diff !== 0 ? diff : a.left - b.left; });
                          var lines = [];
                          if (textLines.length === 0) return lines;
-                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper };
+                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper, element: textLines[0].element };
                          for (var i = 1; i < textLines.length; i++) {
                              var r = textLines[i];
                              var vOverlap = Math.min(currentLine.bottom, r.bottom) - Math.max(currentLine.top, r.top);
@@ -176,9 +176,10 @@ internal object ViewerScrollLineScript {
                                  currentLine.left = Math.min(currentLine.left, r.left);
                                  currentLine.right = Math.max(currentLine.right, r.right);
                                  currentLine.isImageWrapper = currentLine.isImageWrapper || !!r.isImageWrapper;
+                                 if (!currentLine.element && r.element) currentLine.element = r.element;
                              } else {
                                  lines.push(currentLine);
-                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper };
+                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper, element: r.element };
                              }
                          }
                          lines.push(currentLine);
@@ -187,7 +188,7 @@ internal object ViewerScrollLineScript {
                          textLines.sort(function(a, b) { var diff = b.right - a.right; return diff !== 0 ? diff : a.top - b.top; });
                          var lines = [];
                          if (textLines.length === 0) return lines;
-                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper };
+                         var currentLine = { top: textLines[0].top, bottom: textLines[0].bottom, left: textLines[0].left, right: textLines[0].right, isImageWrapper: !!textLines[0].isImageWrapper, element: textLines[0].element };
                          for (var i = 1; i < textLines.length; i++) {
                              var r = textLines[i];
                              var hOverlap = Math.min(currentLine.right, r.right) - Math.max(currentLine.left, r.left);
@@ -198,9 +199,10 @@ internal object ViewerScrollLineScript {
                                  currentLine.left = Math.min(currentLine.left, r.left);
                                  currentLine.right = Math.max(currentLine.right, r.right);
                                  currentLine.isImageWrapper = currentLine.isImageWrapper || !!r.isImageWrapper;
+                                 if (!currentLine.element && r.element) currentLine.element = r.element;
                              } else {
                                  lines.push(currentLine);
-                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper };
+                                 currentLine = { top: r.top, bottom: r.bottom, left: r.left, right: r.right, isImageWrapper: !!r.isImageWrapper, element: r.element };
                              }
                          }
                          lines.push(currentLine);
