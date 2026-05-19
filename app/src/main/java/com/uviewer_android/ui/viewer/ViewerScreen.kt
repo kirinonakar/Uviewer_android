@@ -44,7 +44,7 @@ fun ViewerScreen(
             "zip", "cbz" -> FileEntry.FileType.ZIP
             "rar", "cbr" -> FileEntry.FileType.RAR
             "7z", "cb7" -> FileEntry.FileType.SEVEN_ZIP
-            "txt", "md", "csv", "log", "aozora" -> FileEntry.FileType.TEXT
+            "txt", "md", "csv", "log", "aozora", "json" -> FileEntry.FileType.TEXT
             "epub" -> FileEntry.FileType.EPUB
             "pdf" -> FileEntry.FileType.PDF
             "mp3", "wav", "m4a", "flac" -> FileEntry.FileType.AUDIO

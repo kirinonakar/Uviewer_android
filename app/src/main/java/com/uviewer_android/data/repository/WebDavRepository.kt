@@ -79,7 +79,8 @@ class WebDavRepository(
                 file.name.endsWith(".gif", true) || file.name.endsWith(".bmp", true) ||
                 file.name.endsWith(".avif", true) -> FileEntry.FileType.IMAGE
                 file.name.endsWith(".txt", true) || file.name.endsWith(".md", true) || 
-                file.name.endsWith(".log", true) || file.name.endsWith(".aozora", true) -> FileEntry.FileType.TEXT
+                file.name.endsWith(".log", true) || file.name.endsWith(".aozora", true) ||
+                file.name.endsWith(".json", true) -> FileEntry.FileType.TEXT
                 file.name.endsWith(".csv", true) -> FileEntry.FileType.CSV
                 file.name.endsWith(".html", true) || file.name.endsWith(".htm", true) || file.name.endsWith(".xhtml", true) -> FileEntry.FileType.HTML
                 file.name.endsWith(".pdf", true) -> FileEntry.FileType.PDF
