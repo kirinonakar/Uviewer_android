@@ -8,8 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -20,6 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -86,6 +87,34 @@ fun RecentFilesScreen(
 }
 
 @Composable
+private fun recentFileIcon(file: RecentFile): ImageVector {
+    val type = file.type
+    return when {
+        type == "FOLDER" -> Icons.Filled.Folder
+        type == "ZIP" || type == "RAR" || type == "SEVEN_ZIP" || type == "IMAGE_ZIP" -> Icons.Filled.Archive
+        type == "IMAGE" || type == "WEBP" -> Icons.Filled.Image
+        type == "AUDIO" -> Icons.Filled.MusicNote
+        type == "VIDEO" -> Icons.Filled.Movie
+        type == "PDF" || type == "EPUB" -> Icons.Filled.Book
+        else -> Icons.Filled.Description
+    }
+}
+
+@Composable
+private fun recentFileColor(file: RecentFile): Color {
+    val type = file.type
+    return when {
+        type == "FOLDER" -> Color(0xFFFFA000)
+        type == "ZIP" || type == "RAR" || type == "SEVEN_ZIP" || type == "IMAGE_ZIP" -> Color(0xFF795548)
+        type == "IMAGE" || type == "WEBP" -> Color(0xFFE91E63)
+        type == "AUDIO" -> Color(0xFF009688)
+        type == "VIDEO" -> Color(0xFF2196F3)
+        type == "PDF" || type == "EPUB" -> Color(0xFFF44336)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
+
+@Composable
 fun RecentFileItemRow(
     file: RecentFile,
     onClick: () -> Unit
@@ -96,6 +125,13 @@ fun RecentFileItemRow(
         .copy(fontWeight = FontWeight.Normal)
     
     ListItem(
+        leadingContent = {
+            Icon(
+                imageVector = recentFileIcon(file),
+                contentDescription = null,
+                tint = recentFileColor(file)
+            )
+        },
         headlineContent = { 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (file.isWebDav) {
