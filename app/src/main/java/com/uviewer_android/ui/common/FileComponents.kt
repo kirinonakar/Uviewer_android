@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -20,6 +21,20 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.R
+
+@Composable
+private fun fileTypeColor(file: FileEntry): Color {
+    return when {
+        file.path.startsWith("server:") -> MaterialTheme.colorScheme.primary
+        file.isDirectory -> Color(0xFFFFA000)
+        file.type == FileEntry.FileType.ZIP || file.type == FileEntry.FileType.RAR || file.type == FileEntry.FileType.SEVEN_ZIP -> Color(0xFF795548)
+        file.type == FileEntry.FileType.IMAGE -> Color(0xFFE91E63)
+        file.type == FileEntry.FileType.AUDIO -> Color(0xFF009688)
+        file.type == FileEntry.FileType.VIDEO -> Color(0xFF2196F3)
+        file.type == FileEntry.FileType.PDF || file.type == FileEntry.FileType.EPUB -> Color(0xFFF44336)
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+}
 
 @Composable
 fun FileItemRow(
@@ -49,7 +64,7 @@ fun FileItemRow(
             Icon(
                 icon,
                 contentDescription = null,
-                tint = if (file.path.startsWith("server:")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = fileTypeColor(file)
             )
         },
         headlineContent = { 
@@ -204,7 +219,7 @@ fun FileItemGridCard(
                         icon,
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
-                        tint = if (file.path.startsWith("server:")) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = fileTypeColor(file)
                     )
                 }
                 
