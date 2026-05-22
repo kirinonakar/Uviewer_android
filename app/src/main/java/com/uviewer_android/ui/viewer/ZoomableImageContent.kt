@@ -206,8 +206,12 @@ fun ZoomableImage(
             
 
 
+            val imageRequest = remember(imageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
+                buildRequest(imageUrl)
+            }
+
             coil.compose.SubcomposeAsyncImage(
-                model = buildRequest(imageUrl),
+                model = imageRequest,
                 contentDescription = null,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                 modifier = Modifier.fillMaxSize()
@@ -445,9 +449,17 @@ fun ZoomableDualImage(
 
 
 
-            if (firstImageUrl != null) {
+            val firstImageRequest = remember(firstImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
+                firstImageUrl?.let { buildRequest(it) }
+            }
+
+            val secondImageRequest = remember(secondImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
+                secondImageUrl?.let { buildRequest(it) }
+            }
+
+            if (firstImageUrl != null && firstImageRequest != null) {
                 coil.compose.SubcomposeAsyncImage(
-                    model = buildRequest(firstImageUrl),
+                    model = firstImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.CenterEnd,
@@ -475,9 +487,9 @@ fun ZoomableDualImage(
                 Spacer(modifier = Modifier.weight(1f))
             }
             
-            if (secondImageUrl != null) {
+            if (secondImageUrl != null && secondImageRequest != null) {
                 coil.compose.SubcomposeAsyncImage(
-                    model = buildRequest(secondImageUrl),
+                    model = secondImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.CenterStart,
