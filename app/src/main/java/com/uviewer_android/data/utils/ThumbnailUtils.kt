@@ -10,7 +10,7 @@ import java.util.zip.ZipFile
 object ThumbnailUtils {
     private val semaphore = Semaphore(2)
 
-    suspend fun getFirstImageFromZip(file: File, maxWidth: Int = 200): Bitmap? {
+    suspend fun getFirstImageFromZip(file: File, maxWidth: Int = 512): Bitmap? {
         return semaphore.withPermit {
             try {
                 ZipFile(file).use { zip ->

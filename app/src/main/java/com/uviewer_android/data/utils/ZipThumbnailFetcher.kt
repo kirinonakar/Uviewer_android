@@ -15,7 +15,7 @@ class ZipThumbnailFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
-        val bitmap = ThumbnailUtils.getFirstImageFromZip(file, 200) ?: return null
+        val bitmap = ThumbnailUtils.getFirstImageFromZip(file, 512) ?: return null
         return DrawableResult(
             drawable = BitmapDrawable(options.context.resources, bitmap),
             isSampled = true,
