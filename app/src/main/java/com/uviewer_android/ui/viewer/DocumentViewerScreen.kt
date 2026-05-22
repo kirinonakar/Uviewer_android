@@ -93,6 +93,7 @@ fun DocumentViewerScreen(
     var isPageLoading by pageLoadingState
     val navigatingState = remember { mutableStateOf(false) }
     var isNavigating by navigatingState
+    var isScrollRestoring by remember { mutableStateOf(false) }
     
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
@@ -209,6 +210,7 @@ fun DocumentViewerScreen(
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    isScrollRestoring = true
                     // Restore WebView scroll position on foreground
                     val targetLine = currentLine
                     val totalLines = uiState.totalLines
@@ -216,6 +218,7 @@ fun DocumentViewerScreen(
                     webViewRef?.let { wv ->
                         val js = """
                             (function() {
+                                window.isSystemScrolling = true;
                                 var targetLine = $targetLine;
                                 var totalLines = $totalLines;
                                 var isVertical = $isVertical;
@@ -238,12 +241,20 @@ fun DocumentViewerScreen(
                                 setTimeout(doScroll, 100);
                                 setTimeout(doScroll, 200);
                                 setTimeout(doScroll, 500);
+                                setTimeout(function() {
+                                    window.isSystemScrolling = false;
+                                }, 800);
                             })();
                         """.trimIndent()
                         wv.evaluateJavascript(js, null)
                     }
+                    scope.launch {
+                        kotlinx.coroutines.delay(800)
+                        isScrollRestoring = false
+                    }
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    isScrollRestoring = true
                     // Save progress immediately when backgrounding/pausing
                     viewModel.updateProgress(currentLine)
                 }
@@ -638,7 +649,8 @@ fun DocumentViewerScreen(
                             navigatingState = navigatingState,
                             isInteractingWithSlider = isInteractingWithSlider,
                             onToggleFullScreen = onToggleFullScreen,
-                            applyDocumentSearchHighlight = applyDocumentSearchHighlight
+                            applyDocumentSearchHighlight = applyDocumentSearchHighlight,
+                            isScrollRestoring = { isScrollRestoring }
                         )
             }
         }

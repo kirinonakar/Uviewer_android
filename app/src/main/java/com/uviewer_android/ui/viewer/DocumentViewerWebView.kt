@@ -38,7 +38,8 @@ fun DocumentViewerWebView(
     navigatingState: MutableState<Boolean>,
     isInteractingWithSlider: Boolean,
     onToggleFullScreen: () -> Unit,
-    applyDocumentSearchHighlight: () -> Unit
+    applyDocumentSearchHighlight: () -> Unit,
+    isScrollRestoring: () -> Boolean
 ) {
     var webViewRef by webViewRefState
     var currentLine by currentLineState
@@ -63,7 +64,7 @@ fun DocumentViewerWebView(
                                     @android.webkit.JavascriptInterface
                                     fun onLineChangedStr(lineStr: String) {
                                         post {
-                                            if (isPageLoading || isInteractingWithSlider) return@post
+                                            if (isPageLoading || isInteractingWithSlider || isScrollRestoring()) return@post
                                             
                                             val ln = lineStr.toIntOrNull() ?: return@post
                                             if (ln != currentLine) {
@@ -75,7 +76,7 @@ fun DocumentViewerWebView(
                                     @android.webkit.JavascriptInterface
                                     fun autoLoadNext() {
                                         post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating || isScrollRestoring()) {
                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
                                                 return@post
                                             }
@@ -98,7 +99,7 @@ fun DocumentViewerWebView(
                                      @android.webkit.JavascriptInterface
                                      fun autoLoadPrev() {
                                          post {
-                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                             if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating || isScrollRestoring()) {
                                                   webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
                                                   return@post
                                              }
@@ -121,7 +122,7 @@ fun DocumentViewerWebView(
                                     @android.webkit.JavascriptInterface
                                     fun autoLoadNextBg() {
                                         post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating || isScrollRestoring()) {
                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
                                                 return@post
                                             }
@@ -143,7 +144,7 @@ fun DocumentViewerWebView(
                                     @android.webkit.JavascriptInterface
                                     fun autoLoadPrevBg() {
                                         post {
-                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating) {
+                                            if (isPageLoading || viewModel.uiState.value.isLoading || isInteractingWithSlider || isNavigating || isScrollRestoring()) {
                                                 webViewRef?.evaluateJavascript("window.isScrolling = false;", null)
                                                 return@post
                                             }
