@@ -206,8 +206,48 @@ fun DocumentViewerScreen(
     DisposableEffect(currentActivity, lifecycleOwner) {
         val window = currentActivity?.window
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
-            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    // Restore WebView scroll position on foreground
+                    val targetLine = currentLine
+                    val totalLines = uiState.totalLines
+                    val isVertical = uiState.isVertical
+                    webViewRef?.let { wv ->
+                        val js = """
+                            (function() {
+                                var targetLine = $targetLine;
+                                var totalLines = $totalLines;
+                                var isVertical = $isVertical;
+                                function doScroll() {
+                                    if (targetLine === totalLines && totalLines > 1) {
+                                        if (typeof jumpToBottom === 'function') { jumpToBottom(); }
+                                        else {
+                                            if (isVertical) window.scrollTo(-1000000, 0);
+                                            else window.scrollTo(0, 1000000);
+                                        }
+                                    } else {
+                                        var el = document.getElementById('line-' + targetLine);
+                                        if (el) {
+                                            el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
+                                        }
+                                    }
+                                }
+                                doScroll();
+                                setTimeout(doScroll, 50);
+                                setTimeout(doScroll, 100);
+                                setTimeout(doScroll, 200);
+                                setTimeout(doScroll, 500);
+                            })();
+                        """.trimIndent()
+                        wv.evaluateJavascript(js, null)
+                    }
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    // Save progress immediately when backgrounding/pausing
+                    viewModel.updateProgress(currentLine)
+                }
+                else -> {}
             }
         }
         
