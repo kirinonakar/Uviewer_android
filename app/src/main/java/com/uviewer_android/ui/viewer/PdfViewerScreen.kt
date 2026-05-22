@@ -112,6 +112,7 @@ fun PdfViewerScreen(
     val currentPageForUi by remember { derivedStateOf { currentPage.coerceAtLeast(0) } }
 
     DisposableEffect(isFullScreen, pageCount, currentPageForUi) {
+        libraryViewModel?.setViewerBottomBarBackgroundColor(Color.Black)
         if (!isFullScreen && pageCount > 0) {
             libraryViewModel?.setViewerBottomBarContent {
                 Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
@@ -171,6 +172,7 @@ fun PdfViewerScreen(
         }
         onDispose {
             libraryViewModel?.setViewerBottomBarContent(null)
+            libraryViewModel?.setViewerBottomBarBackgroundColor(null)
         }
     }
 
@@ -227,7 +229,7 @@ fun PdfViewerScreen(
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 window.setTransparentSystemBarColors()
                 insetsController.isAppearanceLightStatusBars = useLightStatusBar
-                insetsController.isAppearanceLightNavigationBars = useLightStatusBar
+                insetsController.isAppearanceLightNavigationBars = false // Navigation bar is on a black background
                 if (isFullScreen) {
                     insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.navigationBars())
                     insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
@@ -284,7 +286,8 @@ fun PdfViewerScreen(
     }
 
     Scaffold(
-        containerColor = if (isFullScreen) Color.Black else MaterialTheme.colorScheme.background,
+        containerColor = Color.Black,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             if (!isFullScreen) {
                 Surface(

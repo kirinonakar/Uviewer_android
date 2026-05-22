@@ -52,6 +52,7 @@ fun MediaPlayerScreen(
     onBack: () -> Unit,
     isFullScreen: Boolean = false,
     onToggleFullScreen: () -> Unit = {},
+    libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel? = null,
     activity: com.uviewer_android.MainActivity? = null
 ) {
     BackHandler { onBack() }
@@ -72,10 +73,13 @@ fun MediaPlayerScreen(
     // For Audio: Keep status bar visible
     val systemInDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
     DisposableEffect(isFullScreen, fileType) {
+        libraryViewModel?.setViewerBottomBarBackgroundColor(Color.Black)
         val window = currentActivity?.window
         if (window != null) {
             val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+            window.setTransparentSystemBarColors()
             insetsController.isAppearanceLightStatusBars = false // White icons on dark background
+            insetsController.isAppearanceLightNavigationBars = false // Navigation bar is on a black background
             
             if (fileType == FileEntry.FileType.VIDEO) {
                  if (isFullScreen) {
@@ -91,11 +95,13 @@ fun MediaPlayerScreen(
             }
         }
         onDispose {
+            libraryViewModel?.setViewerBottomBarBackgroundColor(null)
             val window = currentActivity?.window
             if (window != null) {
                 val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
                 insetsController.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
                 insetsController.isAppearanceLightStatusBars = !systemInDarkTheme
+                insetsController.isAppearanceLightNavigationBars = !systemInDarkTheme
             }
         }
     }
@@ -272,6 +278,7 @@ fun MediaPlayerScreen(
 
     Scaffold(
         containerColor = Color.Black,
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             if (!isFullScreen) {
                 Column {

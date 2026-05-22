@@ -64,7 +64,7 @@ fun ViewerScreen(
         FileEntry.FileType.TEXT, FileEntry.FileType.EPUB, FileEntry.FileType.HTML, FileEntry.FileType.CSV -> {
             DocumentViewerScreen(filePath, resolvedType, isWebDav, serverId, initialLine = initialPosition, onBack = onBack, onNavigateToNext = onNavigateToNext, onNavigateToPrev = onNavigateToPrev, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, libraryViewModel = libraryViewModel, activity = activity)
         }
-        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, activity = activity)
+        FileEntry.FileType.AUDIO, FileEntry.FileType.VIDEO -> MediaPlayerScreen(filePath, resolvedType, isWebDav, serverId, onBack = onBack, isFullScreen = isFullScreen, onToggleFullScreen = onToggleFullScreen, libraryViewModel = libraryViewModel, activity = activity)
         FileEntry.FileType.PDF -> {
              PdfViewerScreen(
                  filePath = filePath, 

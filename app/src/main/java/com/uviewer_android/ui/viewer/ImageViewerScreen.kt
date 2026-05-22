@@ -138,7 +138,7 @@ fun ImageViewerScreen(
                 window.setTransparentSystemBarColors()
 
                 insetsController.isAppearanceLightStatusBars = useLightStatusBar
-                insetsController.isAppearanceLightNavigationBars = useLightStatusBar
+                insetsController.isAppearanceLightNavigationBars = false // Navigation bar is on a black background
                 
                 if (isFullScreen) {
                     // Hide navigation, keep status
@@ -235,6 +235,7 @@ fun ImageViewerScreen(
         }
 
         androidx.compose.runtime.DisposableEffect(isFullScreen, uiState, currentPageIndex, viewMode, pageCount) {
+            libraryViewModel?.setViewerBottomBarBackgroundColor(Color.Black)
             if (!isFullScreen && uiState.images.size > 1) {
                 libraryViewModel?.setViewerBottomBarContent {
                     Column(
@@ -326,6 +327,7 @@ fun ImageViewerScreen(
             }
             onDispose {
                 libraryViewModel?.setViewerBottomBarContent(null)
+                libraryViewModel?.setViewerBottomBarBackgroundColor(null)
             }
         }
         
@@ -356,7 +358,8 @@ fun ImageViewerScreen(
         }
 
         Scaffold(
-            containerColor = if (isFullScreen) Color.Black else MaterialTheme.colorScheme.background,
+            containerColor = Color.Black,
+            contentWindowInsets = WindowInsets(0),
             topBar = {
                 if (!isFullScreen) {
                     val containerName = uiState.containerName
