@@ -127,15 +127,25 @@ fun LibraryScreen(
                         } else if (uiState.currentPath == "WebDAV") {
                             stringResource(R.string.remote)
                         } else {
-                            // Extract parent or current folder name
-                            val file = java.io.File(uiState.currentPath)
                             if (uiState.selectedTabIndex == 1 && uiState.currentPath == "/") {
                                  "Root"
                             } else {
-                                 file.name.ifEmpty { uiState.currentPath }
+                                 uiState.currentPath
                             }
                         }
-                        Text(title, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) 
+                        val isPath = title.contains("/") || title.contains("\\")
+                        val isLong = title.length > 20
+                        val displayText = if (isPath && isLong) {
+                            java.io.File(title).name.ifEmpty { title }
+                        } else {
+                            title
+                        }
+                        Text(
+                            text = displayText,
+                            style = if (isPath && isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
+                            maxLines = if (isPath && isLong) 2 else 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     },
                     navigationIcon = {
                         val showBack = uiState.selectedTabIndex != 2 && 

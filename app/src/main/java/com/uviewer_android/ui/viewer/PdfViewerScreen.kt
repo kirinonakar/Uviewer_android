@@ -301,7 +301,21 @@ fun PdfViewerScreen(
                             containerColor = Color.Transparent,
                             scrolledContainerColor = Color.Transparent
                         ),
-                        title = { Text(fileName, style = MaterialTheme.typography.titleMedium, maxLines = 1) },
+                        title = { 
+                            val isPath = filePath.contains("/") || filePath.contains("\\")
+                            val isLong = filePath.length > 20
+                            val displayText = if (isPath && isLong) {
+                                java.io.File(filePath).name.ifEmpty { filePath }
+                            } else {
+                                filePath
+                            }
+                            Text(
+                                text = displayText,
+                                style = if (isPath && isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
+                                maxLines = if (isPath && isLong) 2 else 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        },
                         navigationIcon = {
                             IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", modifier = Modifier.size(24.dp))

@@ -38,6 +38,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import android.widget.Toast
 import android.util.Log
 
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.activity.compose.BackHandler
 
 @androidx.annotation.OptIn(UnstableApi::class)
@@ -291,7 +292,25 @@ fun MediaPlayerScreen(
                             windowInsets = WindowInsets.statusBars,
                             title = { 
                                 Column {
-                                    Text(uiState.title ?: uiState.currentPath?.substringAfterLast('/') ?: "", color = Color.White, style = MaterialTheme.typography.bodyMedium, maxLines = 1) 
+                                    val pathText = uiState.title ?: uiState.currentPath ?: ""
+                                    val isPath = pathText.contains("/") || pathText.contains("\\")
+                                    val isLong = pathText.length > 20
+                                    val displayText = if (isPath && isLong) {
+                                        val clean = if (pathText.endsWith("/")) pathText.dropLast(1) else pathText
+                                        val slashIdx = clean.lastIndexOf('/')
+                                        val backslashIdx = clean.lastIndexOf('\\')
+                                        val maxIdx = maxOf(slashIdx, backslashIdx)
+                                        if (maxIdx != -1) clean.substring(maxIdx + 1) else clean
+                                    } else {
+                                        pathText
+                                    }
+                                    Text(
+                                        text = displayText,
+                                        color = Color.White,
+                                        style = if (isPath && isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                                        maxLines = if (isPath && isLong) 2 else 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                     if (!uiState.artist.isNullOrBlank() || !uiState.album.isNullOrBlank()) {
                                         val meta = listOfNotNull(uiState.artist, uiState.album).joinToString(" - ")
                                         Text(meta, color = Color.LightGray, style = MaterialTheme.typography.labelSmall, maxLines = 1)
