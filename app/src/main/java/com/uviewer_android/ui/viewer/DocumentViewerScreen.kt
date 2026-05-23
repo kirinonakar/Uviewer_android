@@ -79,8 +79,9 @@ fun DocumentViewerScreen(
     val scope = rememberCoroutineScope()
     
     // showControls replaced by !isFullScreen
-    val currentLineState = rememberSaveable { mutableIntStateOf(initialLine ?: 1) }
+    val currentLineState = rememberSaveable(filePath) { mutableIntStateOf(initialLine ?: 1) }
     var currentLine by currentLineState
+    var hasLoaded by rememberSaveable(filePath) { mutableStateOf(false) }
     var showGoToLineDialog by remember { mutableStateOf(false) }
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     val webViewRefState = remember { mutableStateOf<WebView?>(null) }
@@ -101,8 +102,10 @@ fun DocumentViewerScreen(
     val isInteractingWithSlider = isSliderDragged || isSliderPressed
     var tempSliderValue by remember { mutableFloatStateOf(-1f) }
 
-    LaunchedEffect(filePath, initialLine) {
-        viewModel.loadDocument(filePath, type, isWebDav, serverId, initialLine)
+    LaunchedEffect(filePath) {
+        val lineToLoad = if (hasLoaded) currentLine else initialLine
+        viewModel.loadDocument(filePath, type, isWebDav, serverId, lineToLoad)
+        hasLoaded = true
     }
 
     val context = LocalContext.current

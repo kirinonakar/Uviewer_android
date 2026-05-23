@@ -23,6 +23,7 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -69,8 +70,9 @@ fun ImageViewerScreen(
     val dualPageOrder by viewModel.dualPageOrder.collectAsState()
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
-    var currentPageIndex by remember(filePath) { mutableIntStateOf(initialIndex ?: 0) }
-    var appliedInitialIndex by remember(filePath) { mutableStateOf<Int?>(null) }
+    var currentPageIndex by rememberSaveable(filePath) { mutableIntStateOf(initialIndex ?: 0) }
+    var appliedInitialIndex by rememberSaveable(filePath) { mutableStateOf<Int?>(null) }
+    var hasLoaded by rememberSaveable(filePath) { mutableStateOf(false) }
     // viewMode is extracted from uiState where needed
 
     // Sync is done after pagerState is created (see below)
@@ -153,8 +155,10 @@ fun ImageViewerScreen(
     }
 
     // Load images on start
-    LaunchedEffect(filePath, initialIndex) {
-        viewModel.loadImages(filePath, isWebDav, serverId, initialIndex)
+    LaunchedEffect(filePath) {
+        val indexToLoad = if (hasLoaded) currentPageIndex else initialIndex
+        viewModel.loadImages(filePath, isWebDav, serverId, indexToLoad)
+        hasLoaded = true
     }
 
     if (uiState.isLoading) {

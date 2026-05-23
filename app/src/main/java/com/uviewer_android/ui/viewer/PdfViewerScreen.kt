@@ -96,7 +96,8 @@ fun PdfViewerScreen(
     var searchCurrent by remember { mutableIntStateOf(0) }
     var searchTotal by remember { mutableIntStateOf(0) }
     var pageCount by remember { mutableIntStateOf(0) }
-    var currentPage by rememberSaveable { mutableIntStateOf(initialPage ?: 0) }
+    var currentPage by rememberSaveable(filePath) { mutableIntStateOf(initialPage ?: 0) }
+    var hasLoaded by rememberSaveable(filePath) { mutableStateOf(false) }
     var webViewReady by remember { mutableStateOf(false) }
 
     val currentActivity = activity ?: (context as? MainActivity) ?: remember(context) {
@@ -177,7 +178,9 @@ fun PdfViewerScreen(
     }
 
     LaunchedEffect(filePath) {
-        viewModel.loadPdf(filePath, isWebDav, serverId, initialPage)
+        val pageToLoad = if (hasLoaded) currentPage else initialPage
+        viewModel.loadPdf(filePath, isWebDav, serverId, pageToLoad)
+        hasLoaded = true
     }
 
     LaunchedEffect(currentPage, pageCount, uiState.localFilePath) {
