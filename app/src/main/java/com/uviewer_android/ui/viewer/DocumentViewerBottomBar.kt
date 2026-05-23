@@ -32,9 +32,9 @@ fun DocumentViewerBottomBar(
     onSliderValueChangeFinished: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        if (!uiState.isLoading) {
+        if (!uiState.fileName.isNullOrEmpty()) {
             Text(
-                uiState.fileName ?: "",
+                uiState.fileName,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
