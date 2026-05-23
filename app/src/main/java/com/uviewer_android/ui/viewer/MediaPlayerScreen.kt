@@ -293,9 +293,7 @@ fun MediaPlayerScreen(
                             title = { 
                                 Column {
                                     val pathText = uiState.title ?: uiState.currentPath ?: ""
-                                    val isPath = pathText.contains("/") || pathText.contains("\\")
-                                    val isLong = pathText.length > 20
-                                    val displayText = if (isPath && isLong) {
+                                    val lastSegment = if (pathText.contains("/") || pathText.contains("\\")) {
                                         val clean = if (pathText.endsWith("/")) pathText.dropLast(1) else pathText
                                         val slashIdx = clean.lastIndexOf('/')
                                         val backslashIdx = clean.lastIndexOf('\\')
@@ -304,11 +302,12 @@ fun MediaPlayerScreen(
                                     } else {
                                         pathText
                                     }
+                                    val isLong = lastSegment.length > 20
                                     Text(
-                                        text = displayText,
+                                        text = lastSegment,
                                         color = Color.White,
-                                        style = if (isPath && isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
-                                        maxLines = if (isPath && isLong) 2 else 1,
+                                        style = if (isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                                        maxLines = if (isLong) 2 else 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                     if (!uiState.artist.isNullOrBlank() || !uiState.album.isNullOrBlank()) {

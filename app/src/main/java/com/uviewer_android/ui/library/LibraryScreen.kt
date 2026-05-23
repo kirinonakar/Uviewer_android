@@ -133,17 +133,16 @@ fun LibraryScreen(
                                  uiState.currentPath
                             }
                         }
-                        val isPath = title.contains("/") || title.contains("\\")
-                        val isLong = title.length > 20
-                        val displayText = if (isPath && isLong) {
+                        val lastSegment = if (title.contains("/") || title.contains("\\")) {
                             java.io.File(title).name.ifEmpty { title }
                         } else {
                             title
                         }
+                        val isLong = lastSegment.length > 20
                         Text(
-                            text = displayText,
-                            style = if (isPath && isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
-                            maxLines = if (isPath && isLong) 2 else 1,
+                            text = lastSegment,
+                            style = if (isLong) MaterialTheme.typography.bodySmall else MaterialTheme.typography.titleMedium,
+                            maxLines = if (isLong) 2 else 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     },
