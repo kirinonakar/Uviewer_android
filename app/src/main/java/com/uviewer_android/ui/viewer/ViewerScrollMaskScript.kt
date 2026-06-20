@@ -35,17 +35,6 @@ internal object ViewerScrollMaskScript {
                               if (img.top < masks.top) masks.top = Math.max(0, Math.floor(img.top));
                               if (img.bottom > h - masks.bottom) masks.bottom = Math.max(0, Math.floor(h - img.bottom));
                           });
-
-                          var fullText = textVisible.filter(function(l) { return l.top >= -0.1 && l.bottom <= h + 0.1; });
-                          if (fullText.length > 0) {
-                              var minTVal = h, maxBVal = 0;
-                              fullText.forEach(function(l) {
-                                  if (l.top < minTVal) minTVal = l.top;
-                                  if (l.bottom > maxBVal) maxBVal = l.bottom;
-                              });
-                              if (masks.top > minTVal) masks.top = Math.max(0, Math.floor(minTVal));
-                              if (masks.bottom > (h - maxBVal)) masks.bottom = Math.max(0, Math.floor(h - maxBVal));
-                          }
                        } else {
                            var visible = lines.filter(function(l) { return l.right > 0.05 && l.left < w - 0.05; });
                            if (visible.length === 0) return masks;
@@ -89,11 +78,11 @@ internal object ViewerScrollMaskScript {
                        return masks;
                   };
 
-                 window.updateMask = function() {
+                 window.updateMask = function(force) {
                       var masks = window.calculateMasks();
                       
                       var now = Date.now();
-                      if (window._lastBridgeCall && (now - window._lastBridgeCall < 50)) return;
+                      if (!force && window._lastBridgeCall && (now - window._lastBridgeCall < 50)) return;
                       window._lastBridgeCall = now;
 
                       Android.updateTopMask(masks.top > 0 ? masks.top : 0);

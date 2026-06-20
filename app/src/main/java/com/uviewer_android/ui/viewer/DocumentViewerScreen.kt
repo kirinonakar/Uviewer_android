@@ -95,6 +95,8 @@ fun DocumentViewerScreen(
     val navigatingState = remember { mutableStateOf(false) }
     var isNavigating by navigatingState
     var isScrollRestoring by remember { mutableStateOf(false) }
+    var savedViewerScrollState by rememberSaveable(filePath) { mutableStateOf<String?>(null) }
+    val latestCurrentLine by rememberUpdatedState(currentLine)
     
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
@@ -118,6 +120,71 @@ fun DocumentViewerScreen(
         c as? MainActivity
     }
 
+    fun captureViewerScrollState(wv: WebView) {
+        val js = """
+            (function() {
+                if (typeof window.captureViewerScrollState === 'function') {
+                    return window.captureViewerScrollState();
+                }
+                return JSON.stringify({ x: window.pageXOffset || 0, y: window.pageYOffset || 0 });
+            })();
+        """.trimIndent()
+        wv.evaluateJavascript(js) { encoded ->
+            val decoded = decodeJavascriptString(encoded)
+            if (!decoded.isNullOrBlank() && decoded != "null") {
+                savedViewerScrollState = decoded
+            }
+        }
+    }
+
+    fun restoreViewerScrollState(wv: WebView) {
+        val stateLiteral = savedViewerScrollState?.let { org.json.JSONObject.quote(it) } ?: "null"
+        val js = """
+            (function() {
+                var rawState = $stateLiteral;
+                var restored = false;
+                window.isSystemScrolling = true;
+                window._scrollDir = 0;
+
+                if (typeof window.restoreViewerScrollState === 'function') {
+                    restored = window.restoreViewerScrollState(rawState);
+                }
+
+                if (!restored && rawState) {
+                    try {
+                        var state = JSON.parse(rawState);
+                        var targetX = Number(state.x) || 0;
+                        var targetY = Number(state.y) || 0;
+                        function applyRestore() {
+                            window.scrollTo(targetX, targetY);
+                            if (typeof window.updateMask === 'function') window.updateMask(true);
+                        }
+                        applyRestore();
+                        setTimeout(applyRestore, 50);
+                        setTimeout(applyRestore, 120);
+                        setTimeout(applyRestore, 250);
+                        setTimeout(applyRestore, 500);
+                        setTimeout(function() {
+                            window.isSystemScrolling = false;
+                            if (typeof window.captureViewerScrollState === 'function') window.captureViewerScrollState();
+                            if (typeof window.updateMask === 'function') window.updateMask(true);
+                        }, 650);
+                        restored = true;
+                    } catch (e) {
+                        restored = false;
+                    }
+                }
+
+                if (!restored) {
+                    window.isSystemScrolling = false;
+                    if (typeof window.updateMask === 'function') {
+                        setTimeout(function() { window.updateMask(true); }, 50);
+                    }
+                }
+            })();
+        """.trimIndent()
+        wv.evaluateJavascript(js, null)
+    }
     val docBackgroundColor by viewModel.docBackgroundColor.collectAsState()
     val applyDocumentSearchHighlight = {
         val searchState = viewModel.uiState.value.searchState
@@ -213,53 +280,23 @@ fun DocumentViewerScreen(
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                    isScrollRestoring = true
-                    // Restore WebView scroll position on foreground
-                    val targetLine = currentLine
-                    val totalLines = uiState.totalLines
-                    val isVertical = uiState.isVertical
-                    webViewRef?.let { wv ->
-                        val js = """
-                            (function() {
-                                window.isSystemScrolling = true;
-                                var targetLine = $targetLine;
-                                var totalLines = $totalLines;
-                                var isVertical = $isVertical;
-                                function doScroll() {
-                                    if (targetLine === totalLines && totalLines > 1) {
-                                        if (typeof jumpToBottom === 'function') { jumpToBottom(); }
-                                        else {
-                                            if (isVertical) window.scrollTo(-1000000, 0);
-                                            else window.scrollTo(0, 1000000);
-                                        }
-                                    } else {
-                                        var el = document.getElementById('line-' + targetLine);
-                                        if (el) {
-                                            el.scrollIntoView({ behavior: 'instant', block: 'start', inline: 'start' });
-                                        }
-                                    }
-                                }
-                                doScroll();
-                                setTimeout(doScroll, 50);
-                                setTimeout(doScroll, 100);
-                                setTimeout(doScroll, 200);
-                                setTimeout(doScroll, 500);
-                                setTimeout(function() {
-                                    window.isSystemScrolling = false;
-                                }, 800);
-                            })();
-                        """.trimIndent()
-                        wv.evaluateJavascript(js, null)
-                    }
-                    scope.launch {
-                        kotlinx.coroutines.delay(800)
+                    val wv = webViewRef
+                    if (wv != null) {
+                        isScrollRestoring = true
+                        restoreViewerScrollState(wv)
+                        scope.launch {
+                            kotlinx.coroutines.delay(900)
+                            isScrollRestoring = false
+                        }
+                    } else {
                         isScrollRestoring = false
                     }
                 }
                 androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
                     isScrollRestoring = true
-                    // Save progress immediately when backgrounding/pausing
-                    viewModel.updateProgress(currentLine)
+                    webViewRef?.let { captureViewerScrollState(it) }
+                    // Save progress immediately when backgrounding/pausing.
+                    viewModel.updateProgress(latestCurrentLine)
                 }
                 else -> {}
             }
@@ -271,7 +308,7 @@ fun DocumentViewerScreen(
         currentActivity?.volumeKeyPagingActive = true
         onDispose {
             // Save progress one last time on dispose (blocking to ensure DB write completes)
-            viewModel.saveProgressBlocking(currentLine)
+            viewModel.saveProgressBlocking(latestCurrentLine)
 
             // Set ref to null BEFORE destroy to prevent pending JS callbacks
             // from accessing a destroyed WebView (DeadObjectException prevention)
@@ -698,3 +735,12 @@ fun DocumentViewerScreen(
     }
 }
 
+
+private fun decodeJavascriptString(encoded: String?): String? {
+    if (encoded.isNullOrBlank() || encoded == "null") return null
+    return try {
+        org.json.JSONArray("[$encoded]").optString(0).takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        encoded.trim().trim('"').takeIf { it.isNotBlank() }
+    }
+}
