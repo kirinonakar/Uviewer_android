@@ -151,7 +151,8 @@ class WebDavClient(
                             "getcontentlength" -> if (inResponse) currentSize = parser.nextText().toLongOrNull() ?: 0L
                             "getlastmodified" -> {
                                 if (inResponse) {
-                                    currentLastModified = 0L 
+                                    val dateStr = parser.nextText()
+                                    currentLastModified = parseWebDavDate(dateStr)
                                 }
                             }
                             "collection" -> if (inResponse) currentIsDirectory = true
@@ -261,5 +262,22 @@ class WebDavClient(
                 }
             }
         }
+    }
+
+    internal fun parseWebDavDate(dateStr: String?): Long {
+        if (dateStr.isNullOrBlank()) return 0L
+        try {
+            return java.time.ZonedDateTime.parse(dateStr, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                .toInstant()
+                .toEpochMilli()
+        } catch (e: Exception) {
+            // Ignore
+        }
+        try {
+            return java.time.Instant.parse(dateStr).toEpochMilli()
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return 0L
     }
 }

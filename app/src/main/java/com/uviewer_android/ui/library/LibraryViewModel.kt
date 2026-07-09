@@ -6,6 +6,7 @@ import com.uviewer_android.data.FavoriteDao
 import com.uviewer_android.data.FavoriteItem
 import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
+import com.uviewer_android.data.model.SortOption
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
 import com.uviewer_android.data.repository.CredentialsManager
@@ -27,8 +28,6 @@ data class LibraryUiState(
     val sortOption: SortOption = SortOption.NAME,
     val isGridView: Boolean = false
 )
-
-enum class SortOption { NAME, DATE_ASC, DATE_DESC, SIZE_ASC, SIZE_DESC }
 
 private data class LibraryCombinedSources(
     val state: LibraryUiState,
@@ -67,7 +66,13 @@ class LibraryViewModel(
     private val _servers = webDavServerDao.getAllServers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _sortOption = MutableStateFlow(SortOption.NAME)
+    private val _sortOption = MutableStateFlow(
+        try {
+            SortOption.valueOf(userPreferencesRepository.getLibrarySortOption())
+        } catch (e: Exception) {
+            SortOption.NAME
+        }
+    )
     private val _pinnedFilesOverride = MutableStateFlow<List<FileEntry>?>(null)
 
     init {
@@ -146,10 +151,10 @@ class LibraryViewModel(
         
         val sortedList = when (sort) {
             SortOption.NAME -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            SortOption.DATE_ASC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.lastModified }))
-            SortOption.DATE_DESC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { -it.lastModified }))
-            SortOption.SIZE_ASC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.size }))
-            SortOption.SIZE_DESC -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { -it.size }))
+            SortOption.DATE_ASC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { it.lastModified }, { it.name.lowercase() }))
+            SortOption.DATE_DESC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { -it.lastModified }, { it.name.lowercase() }))
+            SortOption.SIZE_ASC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { it.size }, { it.name.lowercase() }))
+            SortOption.SIZE_DESC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { -it.size }, { it.name.lowercase() }))
         }
         
         // Create FileEntry list from Favorites (including isPinned status)
@@ -233,6 +238,7 @@ class LibraryViewModel(
 
     fun setSortOption(option: SortOption) {
         _sortOption.value = option
+        userPreferencesRepository.setLibrarySortOption(option.name)
     }
 
     fun toggleViewMode() {

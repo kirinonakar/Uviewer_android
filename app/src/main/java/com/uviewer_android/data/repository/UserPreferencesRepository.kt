@@ -261,6 +261,14 @@ class UserPreferencesRepository(context: Context) {
     }
     fun getLibraryViewMode(): Boolean = getSafeBoolean("library_view_mode", false)
 
+    fun getLibrarySortOption(): String {
+        return sharedPreferences.getString("library_sort_option", "NAME") ?: "NAME"
+    }
+
+    fun setLibrarySortOption(option: String) {
+        sharedPreferences.edit().putString("library_sort_option", option).apply()
+    }
+
     private fun getSafeBoolean(key: String, defaultValue: Boolean): Boolean {
         return try {
             sharedPreferences.getBoolean(key, defaultValue)

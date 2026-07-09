@@ -37,6 +37,7 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
+import com.uviewer_android.data.model.SortOption
 import com.uviewer_android.ui.AppViewModelProvider
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
