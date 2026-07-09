@@ -128,5 +128,74 @@ class EncodingDetectorTest {
         val name = EncodingDetector.detectEncodingName(sample)
         assertEquals("Big5", name)
     }
+
+    private fun countGbkOnlySequences(bytes: ByteArray): Int {
+        var count = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            if (i + 3 < len) {
+                val b2 = bytes[i + 1].toInt() and 0xFF
+                val b3 = bytes[i + 2].toInt() and 0xFF
+                val b4 = bytes[i + 3].toInt() and 0xFF
+                if (b1 in 0x81..0xFE && b2 in 0x30..0x39 && b3 in 0x81..0xFE && b4 in 0x30..0x39) {
+                    i += 4
+                    continue
+                }
+            }
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            if (b1 in 0x81..0xFE && b2 in 0x40..0xFE && b2 != 0x7F) {
+                val isValidBig5 = b1 in 0xA1..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)
+                if (!isValidBig5) {
+                    count++
+                }
+                i += 2
+                continue
+            }
+            i++
+        }
+        return count
+    }
+
+    private fun countBig5TrailIn40to7E(bytes: ByteArray): Int {
+        var count = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            if (b1 in 0xA1..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)) {
+                if (b2 in 0x40..0x7E) {
+                    count++
+                }
+                i += 2
+                continue
+            }
+            i++
+        }
+        return count
+    }
+
+    @Test
+    fun testDetectTestBig5File() {
+        val file = java.io.File("d:\\ASUNA\\Tools\\Android\\Uviewer_android\\testbig5.txt")
+        val bytes = file.readBytes()
+        val gbkOnly = countGbkOnlySequences(bytes)
+        val big5Trail = countBig5TrailIn40to7E(bytes)
+        val name = EncodingDetector.detectEncodingName(bytes)
+        System.err.println("DEBUG KOTLIN: name=$name gbkOnly=$gbkOnly big5Trail=$big5Trail bytesLength=${bytes.size}")
+        assertEquals("Big5", name)
+    }
 }
 

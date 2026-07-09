@@ -51,29 +51,32 @@ object EncodingDetector {
             if (maxScore == eucKrScore) return "EUC-KR"
             if (maxScore == sjisScore) return "Shift_JIS"
 
-            val gbkFamilyScoreIsWinning = maxScore == gbkScore || maxScore == gb18030Score
-            val chineseScoreIsWinning = gbkFamilyScoreIsWinning || maxScore == big5Score
-            if (chineseScoreIsWinning &&
-                shouldPreferJohabOverChineseScores(bytes.size, johabScore, johabMarkerPairCount, gbkScore, gb18030Score, big5Score)) {
+            if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
+
+            val gbkOnly = countGbkOnlySequences(bytes)
+            val big5Trail = countBig5TrailIn40to7E(bytes)
+
+            if (gbkOnly == 0) {
+                return if (big5Trail > 0) "Big5" else "GBK"
+            }
+
+            if (shouldPreferJohabOverChineseScores(bytes.size, johabScore, johabMarkerPairCount, gbkScore, gb18030Score, big5Score)) {
                 return "JO-HAB"
             }
 
-            if (chineseScoreIsWinning &&
-                shouldPreferEucKrOverChineseScores(bytes, eucKrScore)) {
+            val gbkFamilyScoreIsWinning = maxScore == gbkScore || maxScore == gb18030Score
+            val chineseScoreIsWinning = gbkFamilyScoreIsWinning || maxScore == big5Score
+            if (chineseScoreIsWinning && shouldPreferEucKrOverChineseScores(bytes, eucKrScore)) {
                 return "EUC-KR"
             }
 
             if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
-            if (gbkFamilyScoreIsWinning || maxScore == big5Score) {
-                val gbkOnly = countGbkOnlySequences(bytes)
-                val big5Trail = countBig5TrailIn40to7E(bytes)
-                if (gbkOnly > 0) {
-                    return "GBK"
-                } else if (big5Trail > 0) {
-                    return "Big5"
-                } else {
-                    return "GBK"
-                }
+            if (gbkOnly > 0) {
+                return "GBK"
+            } else if (big5Trail > 0) {
+                return "Big5"
+            } else {
+                return "GBK"
             }
             if (maxScore == johabScore) return "JO-HAB"
         }
