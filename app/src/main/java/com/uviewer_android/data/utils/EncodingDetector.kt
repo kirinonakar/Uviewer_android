@@ -64,8 +64,17 @@ object EncodingDetector {
             }
 
             if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
-            if (maxScore == gbkScore) return "GBK"
-            if (maxScore == big5Score) return "Big5"
+            if (gbkFamilyScoreIsWinning || maxScore == big5Score) {
+                val gbkOnly = countGbkOnlySequences(bytes)
+                val big5Trail = countBig5TrailIn40to7E(bytes)
+                if (gbkOnly > 0) {
+                    return "GBK"
+                } else if (big5Trail > 0) {
+                    return "Big5"
+                } else {
+                    return "GBK"
+                }
+            }
             if (maxScore == johabScore) return "JO-HAB"
         }
 
@@ -243,14 +252,14 @@ object EncodingDetector {
             if (b in 0x84..0xD3) {
                 // Check for Johab-ONLY second byte ranges: 0x5B-0x60, 0x7B-0x7E
                 if ((b2 in 0x5B..0x60) || (b2 in 0x7B..0x7E)) {
-                    score += 3
+                    score += 6
                     i += 2
                     continue
                 }
                 
                 // Normal Johab second byte: 0x41-0x7E or 0x81-0xFE
                 if ((b2 in 0x41..0x7E) || (b2 in 0x81..0xFE)) {
-                    score += 1
+                    score += 2
                     i += 2
                     continue
                 }
@@ -334,9 +343,9 @@ object EncodingDetector {
                 if (validSecond) {
                     // 0x82, 0x83 are Hiragana and Katakana - VERY strong signal for Japanese
                     if (b == 0x82 || b == 0x83) {
-                        score += 5
+                        score += 10
                     } else {
-                        score += 1
+                        score += 2
                     }
                     i += 2
                     continue
@@ -424,7 +433,8 @@ object EncodingDetector {
             
             if (i + 1 >= len) break
             val b2 = bytes[i + 1].toInt() and 0xFF
-            if (b1 in 0xB0..0xF7 && b2 in 0xA1..0xFE) {
+            // Full GB18030 2-byte range (same as GBK)
+            if (b1 in 0x81..0xFE && b2 in 0x40..0xFE && b2 != 0x7F) {
                 score += 2
                 i += 2
                 continue
@@ -450,7 +460,8 @@ object EncodingDetector {
             if (i + 1 >= len) break
             val b2 = bytes[i + 1].toInt() and 0xFF
             
-            if (b1 in 0xB0..0xF7 && b2 in 0xA1..0xFE) {
+            // Full GBK range: lead 0x81..0xFE, trail 0x40..0xFE (excluding 0x7F)
+            if (b1 in 0x81..0xFE && b2 in 0x40..0xFE && b2 != 0x7F) {
                 score += 2
                 i += 2
                 continue
@@ -473,7 +484,8 @@ object EncodingDetector {
             if (i + 1 >= len) break
             val b2 = bytes[i + 1].toInt() and 0xFF
             
-            if (b1 in 0xA4..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)) {
+            // Full Big5 range including symbols: lead 0xA1..0xF9, trail 0x40..0x7E or 0xA1..0xFE
+            if (b1 in 0xA1..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)) {
                 score += 2
                 i += 2
                 continue
@@ -481,6 +493,69 @@ object EncodingDetector {
             i++
         }
         return score
+    }
+
+    private fun countGbkOnlySequences(bytes: ByteArray): Int {
+        var count = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            
+            // Skip 4-byte sequences for GB18030 so they don't count as 2-byte GBK-only:
+            if (i + 3 < len) {
+                val b2 = bytes[i + 1].toInt() and 0xFF
+                val b3 = bytes[i + 2].toInt() and 0xFF
+                val b4 = bytes[i + 3].toInt() and 0xFF
+                if (b1 in 0x81..0xFE && b2 in 0x30..0x39 && b3 in 0x81..0xFE && b4 in 0x30..0x39) {
+                    i += 4
+                    continue
+                }
+            }
+            
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            
+            if (b1 in 0x81..0xFE && b2 in 0x40..0xFE && b2 != 0x7F) {
+                val isValidBig5 = b1 in 0xA1..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)
+                if (!isValidBig5) {
+                    count++
+                }
+                i += 2
+                continue
+            }
+            i++
+        }
+        return count
+    }
+
+    private fun countBig5TrailIn40to7E(bytes: ByteArray): Int {
+        var count = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            
+            if (b1 in 0xA1..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)) {
+                if (b2 in 0x40..0x7E) {
+                    count++
+                }
+                i += 2
+                continue
+            }
+            i++
+        }
+        return count
     }
 
     fun getCharset(name: String?): Charset {

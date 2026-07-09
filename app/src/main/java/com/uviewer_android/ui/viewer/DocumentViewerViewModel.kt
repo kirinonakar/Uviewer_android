@@ -818,7 +818,8 @@ class DocumentViewerViewModel(
         _uiState.value = _uiState.value.copy(manualEncoding = encoding)
         // Reload
         if (currentFilePath.isNotEmpty() && currentFileType != null) {
-            loadDocument(currentFilePath, currentFileType!!, isWebDav, serverId)
+            val currentLine = _uiState.value.currentLine
+            loadDocument(currentFilePath, currentFileType!!, isWebDav, serverId, initialLine = currentLine)
         }
     }
 

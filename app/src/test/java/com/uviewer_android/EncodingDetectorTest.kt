@@ -106,4 +106,27 @@ class EncodingDetectorTest {
         val name = EncodingDetector.detectEncodingName(sample)
         assertEquals("JO-HAB", name)
     }
+
+    @Test
+    fun testDetectGbkExtension() {
+        // "兀" (U+5140) in GBK is 0xFE, 0x50 (falls in GBK extension range, invalid in Big5 and Shift_JIS)
+        val sample = byteArrayOf(
+            0xFE.toByte(), 0x50.toByte()
+        )
+        val name = EncodingDetector.detectEncodingName(sample)
+        assertEquals("GBK", name)
+    }
+
+    @Test
+    fun testDetectBig5Differentiation() {
+        // "一" (U+4E00) in Big5 is A4 40 (trail byte 0x40 is in 0x40..0x7E range)
+        // "好" (U+597D) in Big5 is A6 6E (trail byte 0x6E is in 0x40..0x7E range)
+        val sample = byteArrayOf(
+            0xA4.toByte(), 0x40.toByte(),
+            0xA6.toByte(), 0x6E.toByte()
+        )
+        val name = EncodingDetector.detectEncodingName(sample)
+        assertEquals("Big5", name)
+    }
 }
+
