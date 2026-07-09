@@ -53,24 +53,24 @@ object EncodingDetector {
 
             if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
 
+            val gbkFamilyScoreIsWinning = maxScore == gbkScore || maxScore == gb18030Score
+            val chineseScoreIsWinning = gbkFamilyScoreIsWinning || maxScore == big5Score
+
+            if (chineseScoreIsWinning && shouldPreferEucKrOverChineseScores(bytes, eucKrScore)) {
+                return "EUC-KR"
+            }
+
             val gbkOnly = countGbkOnlySequences(bytes)
             val big5Trail = countBig5TrailIn40to7E(bytes)
 
-            if (gbkOnly == 0) {
-                return if (big5Trail > 0) "Big5" else "GBK"
+            if (gbkOnly == 0 && big5Trail > 0) {
+                return "Big5"
             }
 
             if (shouldPreferJohabOverChineseScores(bytes.size, johabScore, johabMarkerPairCount, gbkScore, gb18030Score, big5Score)) {
                 return "JO-HAB"
             }
 
-            val gbkFamilyScoreIsWinning = maxScore == gbkScore || maxScore == gb18030Score
-            val chineseScoreIsWinning = gbkFamilyScoreIsWinning || maxScore == big5Score
-            if (chineseScoreIsWinning && shouldPreferEucKrOverChineseScores(bytes, eucKrScore)) {
-                return "EUC-KR"
-            }
-
-            if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
             if (gbkOnly > 0) {
                 return "GBK"
             } else if (big5Trail > 0) {
@@ -78,7 +78,6 @@ object EncodingDetector {
             } else {
                 return "GBK"
             }
-            if (maxScore == johabScore) return "JO-HAB"
         }
 
         if (johabScore > 0 || johabMarkerPairCount >= 2) return "JO-HAB"

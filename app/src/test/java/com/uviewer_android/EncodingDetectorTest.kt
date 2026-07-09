@@ -133,7 +133,8 @@ class EncodingDetectorTest {
     fun testDetectAshleyFile() {
         val file = java.io.File("d:\\ASUNA\\Tools\\Android\\Uviewer_android\\아슈레이 완결.txt")
         val bytes = file.readBytes()
-        val name = EncodingDetector.detectEncodingName(bytes)
+        val sample = bytes.take(65536).toByteArray()
+        val name = EncodingDetector.detectEncodingName(sample)
         assertEquals("EUC-KR", name)
     }
 }
