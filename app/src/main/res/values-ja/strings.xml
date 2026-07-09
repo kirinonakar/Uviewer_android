@@ -97,6 +97,10 @@
     <string name="encoding_euckr">EUC-KR (韓国語)</string>
     <string name="encoding_johab">Johab (韓国語)</string>
     <string name="encoding_w1252">Windows-1252</string>
+    <string name="encoding_jis">JIS (日本語)</string>
+    <string name="encoding_gb18030">GB18030 (簡体字中国語)</string>
+    <string name="encoding_gbk">GBK (簡体字中国語)</string>
+    <string name="encoding_big5">Big5 (繁体字中国語)</string>
     <string name="sharpening_amount">シャープネスの強さ</string>
     <string name="sharpening_amount_fmt">シャープネスの強さ: %d</string>
     <string name="sharpening_amount_desc">シャープネスの強さ 調整 (0-10)</string>

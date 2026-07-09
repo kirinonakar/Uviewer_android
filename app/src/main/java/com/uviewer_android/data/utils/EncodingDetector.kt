@@ -26,6 +26,9 @@ object EncodingDetector {
             if (b0 == 0xFE && b1 == 0xFF) return "UTF-16BE"
         }
 
+        // Check for ISO-2022-JP (JIS) escape sequences FIRST (stateful 7-bit encoding)
+        if (isJis(bytes)) return "ISO-2022-JP"
+
         // 2. Is valid UTF-8?
         if (isValidUtf8(bytes)) return "UTF-8"
 
@@ -37,40 +40,41 @@ object EncodingDetector {
         val sjisScore = getSjisScore(bytes)
         val eucKrScore = getEucKrScore(bytes)
         val johabScore = getJohabScore(bytes)
+        val johabMarkerPairCount = countJohabMarkerPairs(bytes)
+        val gbkScore = getGbkScore(bytes)
+        val gb18030Score = getGb18030Score(bytes)
+        val big5Score = getBig5Score(bytes)
 
-        // Winner takes all
-        if (sjisScore > eucKrScore && sjisScore > johabScore && sjisScore > 0) {
-            return "Shift_JIS"
-        }
-        if (eucKrScore > sjisScore && eucKrScore > johabScore && eucKrScore > 0) {
-            return "EUC-KR"
-        }
-        if (johabScore > sjisScore && johabScore > eucKrScore && johabScore > 0) {
-             return "JO-HAB"
+        val maxScore = maxOf(sjisScore, eucKrScore, johabScore, gbkScore, gb18030Score, big5Score)
+
+        if (maxScore > 0) {
+            if (maxScore == eucKrScore) return "EUC-KR"
+            if (maxScore == sjisScore) return "Shift_JIS"
+
+            val gbkFamilyScoreIsWinning = maxScore == gbkScore || maxScore == gb18030Score
+            val chineseScoreIsWinning = gbkFamilyScoreIsWinning || maxScore == big5Score
+            if (chineseScoreIsWinning &&
+                shouldPreferJohabOverChineseScores(bytes.size, johabScore, johabMarkerPairCount, gbkScore, gb18030Score, big5Score)) {
+                return "JO-HAB"
+            }
+
+            if (chineseScoreIsWinning &&
+                shouldPreferEucKrOverChineseScores(bytes, eucKrScore)) {
+                return "EUC-KR"
+            }
+
+            if (maxScore == gb18030Score && gb18030Score > gbkScore) return "GB18030"
+            if (maxScore == gbkScore) return "GBK"
+            if (maxScore == big5Score) return "Big5"
+            if (maxScore == johabScore) return "JO-HAB"
         }
 
-        // Default preference if scores match
-        // Johab is rarest, so lowest priority in tie-break
-        if (eucKrScore > 0 && eucKrScore >= sjisScore) {
-             return "EUC-KR"
-        }
-        if (sjisScore > 0) {
-            return "Shift_JIS"
-        }
-        if (johabScore > 0) {
-             return "JO-HAB"
-        }
-        
-        // 5. Try Johab pattern check
-        if (containsJohabPattern(bytes)) {
-            return "JO-HAB"
-        }
+        if (johabScore > 0 || johabMarkerPairCount >= 2) return "JO-HAB"
 
-        // Default Fallbacks
         return "EUC-KR"
     }
 
-    private fun containsJohabPattern(bytes: ByteArray): Boolean {
+    private fun countJohabMarkerPairs(bytes: ByteArray): Int {
         var johabOnlyPairCount = 0
         var i = 0
         val len = bytes.size
@@ -82,21 +86,13 @@ object EncodingDetector {
             }
             if (i + 1 >= len) break
             val b2 = bytes[i + 1].toInt() and 0xFF
-            
-            // Check for Johab-ONLY patterns:
-            // First byte 0x84-0xD3, second byte in ranges CP949 doesn't use
             if (b in 0x84..0xD3) {
-                // Johab-only second byte ranges: 0x5B-0x60, 0x7B-0x7E
                 val johabOnlySecond = (b2 in 0x5B..0x60) || (b2 in 0x7B..0x7E)
                 if (johabOnlySecond) {
                     johabOnlyPairCount++
                     i += 2
-                    if (johabOnlyPairCount >= 2) return true
                     continue
                 }
-            }
-            
-            if (b >= 0x81) {
                 if ((b2 in 0x41..0x7E) || (b2 in 0x81..0xFE)) {
                     i += 2
                     continue
@@ -104,8 +100,81 @@ object EncodingDetector {
             }
             i++
         }
-        return false
+        return johabOnlyPairCount
     }
+
+    private fun shouldPreferJohabOverChineseScores(
+        byteCount: Int,
+        johabScore: Int,
+        johabMarkerPairCount: Int,
+        gbkScore: Int,
+        gb18030Score: Int,
+        big5Score: Int
+    ): Boolean {
+        val requiredMarkerPairs = if (byteCount < 1024) 1 else if (byteCount >= 16 * 1024) 8 else 2
+        if (johabScore <= 0 || johabMarkerPairCount < requiredMarkerPairs) {
+            return false
+        }
+        val chineseScore = maxOf(gbkScore, gb18030Score, big5Score)
+        return chineseScore <= 0 || johabScore.toLong() * 4 >= chineseScore.toLong() * 3
+    }
+
+    private fun shouldPreferEucKrOverChineseScores(bytes: ByteArray, eucKrScore: Int): Boolean {
+        if (eucKrScore <= 0) {
+            return false
+        }
+
+        val profile = getTextScriptProfile(bytes)
+        val requiredHangulCount = if (bytes.size < 1024) 8 else 32
+        if (profile.hangulCount < requiredHangulCount) {
+            return false
+        }
+
+        if (profile.cjkCount * 3 > profile.hangulCount) {
+            return false
+        }
+
+        return profile.badCharacterCount <= maxOf(2, profile.hangulCount / 6)
+    }
+
+    private fun getTextScriptProfile(bytes: ByteArray): TextScriptProfile {
+        val sampleLimit = 128 * 1024
+        val sampleLength = minOf(bytes.size, sampleLimit)
+        val cs = try { Charset.forName("EUC-KR") } catch (e: Exception) { java.nio.charset.StandardCharsets.UTF_8 }
+        val text = String(bytes, 0, sampleLength, cs)
+
+        var hangulCount = 0
+        var cjkCount = 0
+        var badCharacterCount = 0
+        for (i in 0 until text.length) {
+            val ch = text[i]
+            if (isHangul(ch)) {
+                hangulCount++
+            } else if (isCjk(ch)) {
+                cjkCount++
+            } else if (ch == '\uFFFD' || ch == '?') {
+                badCharacterCount++
+            }
+        }
+        return TextScriptProfile(hangulCount, cjkCount, badCharacterCount)
+    }
+
+    private fun isHangul(ch: Char): Boolean {
+        return (ch in '\uAC00'..'\uD7A3') ||
+               (ch in '\u1100'..'\u11FF') ||
+               (ch in '\u3130'..'\u318F')
+    }
+
+    private fun isCjk(ch: Char): Boolean {
+        return (ch in '\u4E00'..'\u9FFF') ||
+               (ch in '\u3400'..'\u4DBF')
+    }
+
+    private class TextScriptProfile(
+        val hangulCount: Int,
+        val cjkCount: Int,
+        val badCharacterCount: Int
+    )
 
     @Suppress("unused")
     private fun isStrictJohab(bytes: ByteArray): Boolean {
@@ -308,6 +377,111 @@ object EncodingDetector {
     }
 
 
+
+    private fun isJis(bytes: ByteArray): Boolean {
+        var i = 0
+        val len = bytes.size
+        while (i < len - 2) {
+            if (bytes[i].toInt() == 0x1B) { // ESC
+                val b1 = bytes[i + 1].toInt() and 0xFF
+                val b2 = bytes[i + 2].toInt() and 0xFF
+                if (b1 == 0x24 && (b2 == 0x40 || b2 == 0x42)) {
+                    return true
+                }
+                if (b1 == 0x28 && (b2 == 0x42 || b2 == 0x4A || b2 == 0x49)) {
+                    return true
+                }
+            }
+            i++
+        }
+        return false
+    }
+
+    private fun getGb18030Score(bytes: ByteArray): Int {
+        var score = 0
+        var i = 0
+        val len = bytes.size
+        var hasFourByteSequence = false
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            
+            // Check for 4-byte sequence:
+            if (i + 3 < len) {
+                val b2 = bytes[i + 1].toInt() and 0xFF
+                val b3 = bytes[i + 2].toInt() and 0xFF
+                val b4 = bytes[i + 3].toInt() and 0xFF
+                if (b1 in 0x81..0xFE && b2 in 0x30..0x39 && b3 in 0x81..0xFE && b4 in 0x30..0x39) {
+                    score += 4
+                    hasFourByteSequence = true
+                    i += 4
+                    continue
+                }
+            }
+            
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            if (b1 in 0xB0..0xF7 && b2 in 0xA1..0xFE) {
+                score += 2
+                i += 2
+                continue
+            }
+            i++
+        }
+        if (hasFourByteSequence) {
+            score += 10000
+        }
+        return score
+    }
+
+    private fun getGbkScore(bytes: ByteArray): Int {
+        var score = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            
+            if (b1 in 0xB0..0xF7 && b2 in 0xA1..0xFE) {
+                score += 2
+                i += 2
+                continue
+            }
+            i++
+        }
+        return score
+    }
+
+    private fun getBig5Score(bytes: ByteArray): Int {
+        var score = 0
+        var i = 0
+        val len = bytes.size
+        while (i < len) {
+            val b1 = bytes[i].toInt() and 0xFF
+            if (b1 < 0x80) {
+                i++
+                continue
+            }
+            if (i + 1 >= len) break
+            val b2 = bytes[i + 1].toInt() and 0xFF
+            
+            if (b1 in 0xA4..0xF9 && (b2 in 0x40..0x7E || b2 in 0xA1..0xFE)) {
+                score += 2
+                i += 2
+                continue
+            }
+            i++
+        }
+        return score
+    }
 
     fun getCharset(name: String?): Charset {
         if (name == null) return StandardCharsets.UTF_8
