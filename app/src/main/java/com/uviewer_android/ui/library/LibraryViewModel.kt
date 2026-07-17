@@ -241,6 +241,10 @@ class LibraryViewModel(
         userPreferencesRepository.setLibrarySortOption(option.name)
     }
 
+    fun toggleSortOption() {
+        setSortOption(_sortOption.value.nextToggleOption())
+    }
+
     fun toggleViewMode() {
         val newMode = !_state.value.isGridView
         _state.value = _state.value.copy(isGridView = newMode)

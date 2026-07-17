@@ -158,27 +158,13 @@ fun LibraryScreen(
                         }
                     },
                     actions = {
-                        var sortExpanded by remember { mutableStateOf(false) }
-                        IconButton(onClick = { sortExpanded = true }) {
-                            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                        val (sortIcon, sortDescription) = when (uiState.sortOption) {
+                            SortOption.DATE_DESC -> Icons.Default.ArrowDownward to stringResource(R.string.sort_date_desc)
+                            SortOption.DATE_ASC -> Icons.Default.ArrowUpward to stringResource(R.string.sort_date_asc)
+                            else -> Icons.Default.SortByAlpha to stringResource(R.string.sort_name)
                         }
-                        DropdownMenu(
-                            expanded = sortExpanded,
-                            onDismissRequest = { sortExpanded = false },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_name)) },
-                                onClick = { viewModel.setSortOption(SortOption.NAME); sortExpanded = false }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_date_desc)) },
-                                onClick = { viewModel.setSortOption(SortOption.DATE_DESC); sortExpanded = false }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.sort_date_asc)) },
-                                onClick = { viewModel.setSortOption(SortOption.DATE_ASC); sortExpanded = false }
-                            )
+                        IconButton(onClick = viewModel::toggleSortOption) {
+                            Icon(sortIcon, contentDescription = sortDescription)
                         }
 
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
