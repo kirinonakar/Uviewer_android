@@ -167,7 +167,7 @@ fun MainScreen(
                     shadowElevation = 6.dp
                 ) {
                     Column(
-                        modifier = Modifier.padding(top = if (viewerBottomContent == null) 10.dp else 0.dp)
+                        modifier = Modifier.padding(top = if (viewerBottomContent == null) 3.dp else 0.dp)
                     ) {
                         // Viewer-specific content (Slider, etc.)
                         viewerBottomContent?.invoke()
@@ -183,8 +183,8 @@ fun MainScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(70.dp)
-                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                                .height(64.dp)
+                                .padding(horizontal = 10.dp, vertical = 7.dp),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
