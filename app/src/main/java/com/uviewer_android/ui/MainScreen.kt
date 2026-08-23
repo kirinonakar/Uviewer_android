@@ -4,24 +4,28 @@ import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,7 +39,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.layout.WindowInsets
 import kotlinx.coroutines.launch
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -152,35 +155,35 @@ fun MainScreen(
                 
                 Surface(
                     modifier = Modifier
-                        .padding(start = 8.dp, end = 8.dp, bottom = 16.dp)
+                        .fillMaxWidth()
+                        .padding(start = 10.dp, end = 10.dp, bottom = 14.dp)
                         .navigationBarsPadding(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(28.dp),
                     color = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp,
-                    shadowElevation = 1.dp
+                    shadowElevation = 6.dp
                 ) {
-                    Column {
-                        HorizontalDivider(
-                            thickness = 0.5.dp,
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
-                        )
-
+                    Column(
+                        modifier = Modifier.padding(top = if (viewerBottomContent == null) 10.dp else 0.dp)
+                    ) {
                         // Viewer-specific content (Slider, etc.)
                         viewerBottomContent?.invoke()
                         
                         if (viewerBottomContent != null) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(horizontal = 16.dp),
+                                modifier = Modifier.padding(horizontal = 20.dp),
                                 thickness = 0.5.dp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
                             )
                         }
 
-                        NavigationBar(
-                            windowInsets = WindowInsets(0),
-                            containerColor = Color.Transparent,
-                            modifier = Modifier.height(72.dp),
-                            tonalElevation = 0.dp
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(70.dp)
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             val navBackStackEntry by navController.currentBackStackEntryAsState()
                             val currentDestination = navBackStackEntry?.destination
@@ -192,8 +195,7 @@ fun MainScreen(
                                     is Screen.Settings -> screen.title
                                     is Screen.Resume -> "Resume"
                                 }
-                                NavigationBarItem(
-                                    selected = currentDestination?.hierarchy?.any { 
+                                val selected = currentDestination?.hierarchy?.any {
                                         val route = it.route
                                         if (screen is Screen.Library) {
                                             route?.startsWith("library") == true
@@ -202,7 +204,10 @@ fun MainScreen(
                                         } else {
                                             route == screen.route
                                         }
-                                    } == true,
+                                    } == true
+                                BottomNavigationButton(
+                                    modifier = Modifier.weight(1f),
+                                    selected = selected,
                                     onClick = {
                                         if (screen is Screen.Resume) {
                                             val recent = libraryUiState.mostRecentFile
@@ -274,13 +279,8 @@ fun MainScreen(
                                             }
                                         }
                                     },
-                                    icon = { Icon(screen.icon, contentDescription = title, modifier = Modifier.padding(vertical = 4.dp)) },
-                                    label = null,
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                        indicatorColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                    )
+                                    icon = screen.icon,
+                                    contentDescription = title
                                 )
                             }
                         }
@@ -444,6 +444,60 @@ fun MainScreen(
                     isFullScreen = isFullScreen,
                     onToggleFullScreen = { isFullScreen = !isFullScreen },
                     activity = activity
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BottomNavigationButton(
+    modifier: Modifier = Modifier,
+    selected: Boolean,
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
+        animationSpec = tween(durationMillis = 180),
+        label = "bottomNavigationContainerColor"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (selected) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f)
+        },
+        animationSpec = tween(durationMillis = 180),
+        label = "bottomNavigationIconColor"
+    )
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 3.dp)
+                .height(50.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = containerColor,
+            tonalElevation = 0.dp,
+            shadowElevation = if (selected) 2.dp else 0.5.dp
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.size(if (selected) 27.dp else 25.dp),
+                    tint = iconColor
                 )
             }
         }
