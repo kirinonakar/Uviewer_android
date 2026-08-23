@@ -4,6 +4,8 @@ import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -24,6 +26,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -458,9 +461,10 @@ private fun BottomNavigationButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     val containerColor by animateColorAsState(
         targetValue = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+            MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surface
         },
@@ -482,21 +486,27 @@ private fun BottomNavigationButton(
         contentAlignment = Alignment.Center
     ) {
         Surface(
-            onClick = onClick,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 3.dp)
-                .height(50.dp),
+                .height(50.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    onClick = onClick
+                ),
             shape = RoundedCornerShape(18.dp),
             color = containerColor,
             tonalElevation = 0.dp,
             shadowElevation = if (selected) 2.dp else 0.5.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
+                val iconSize = if (selected) 27.dp else 25.dp
                 Icon(
                     imageVector = icon,
                     contentDescription = contentDescription,
-                    modifier = Modifier.size(if (selected) 27.dp else 25.dp),
+                    modifier = Modifier.size(iconSize),
                     tint = iconColor
                 )
             }
