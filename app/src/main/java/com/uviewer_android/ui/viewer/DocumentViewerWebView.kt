@@ -236,6 +236,15 @@ fun DocumentViewerWebView(
                                     }
                                 }
                                 webViewRef = this
+
+                                fun toggleFullScreenPreservingFirstLine() {
+                                    evaluateJavascript(
+                                        "if (typeof window.captureViewerScrollState === 'function') " +
+                                            "window.captureViewerScrollState();"
+                                    ) {
+                                        post { onToggleFullScreen() }
+                                    }
+                                }
                                 
                                 val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
                                     override fun onSingleTapUp(e: android.view.MotionEvent): Boolean {
@@ -249,7 +258,7 @@ fun DocumentViewerWebView(
                                             } else if (x > width * 2 / 3) {
                                                 webViewRef?.evaluateJavascript("window.pageUp();", null)   // 뒤로
                                             } else {
-                                                onToggleFullScreen()
+                                                toggleFullScreenPreservingFirstLine()
                                             }
                                         } else {
                                             // 가로쓰기: 왼쪽 터치 = 이전(pageUp), 오른쪽 터치 = 다음(pageDown)
@@ -258,7 +267,7 @@ fun DocumentViewerWebView(
                                             } else if (x > width * 2 / 3) {
                                                 webViewRef?.evaluateJavascript("window.pageDown();", null)
                                             } else {
-                                                onToggleFullScreen()
+                                                toggleFullScreenPreservingFirstLine()
                                             }
                                         }
                                         return true
