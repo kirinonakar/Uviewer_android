@@ -3,6 +3,22 @@ package com.uviewer_android.ui.viewer
 internal object ViewerScrollEventsScript {
     fun install(): String {
         return """
+                  var resizeTimer = null;
+                  window._viewerRestoreToken = window._viewerRestoreToken || 0;
+
+                  window.cancelViewerScrollRestore = function() {
+                      window._viewerRestoreToken++;
+                      if (resizeTimer) {
+                          clearTimeout(resizeTimer);
+                          resizeTimer = null;
+                      }
+                      if (window.sysScrollTimer) {
+                          clearTimeout(window.sysScrollTimer);
+                          window.sysScrollTimer = null;
+                      }
+                      window.isSystemScrolling = false;
+                  };
+
                   window.captureViewerScrollState = function() {
                       var viewportWidth = window.innerWidth || 0;
                       var viewportHeight = window.innerHeight || 0;
@@ -51,6 +67,7 @@ internal object ViewerScrollEventsScript {
                       window._viewerScrollState = state;
                       window._scrollDir = 0;
                       window.isSystemScrolling = true;
+                      var restoreToken = ++window._viewerRestoreToken;
 
                       var targetX = Number(state.x) || 0;
                       var targetY = Number(state.y) || 0;
@@ -60,12 +77,36 @@ internal object ViewerScrollEventsScript {
                       var attempts = 0;
 
                       function restoreFirstVisibleLine() {
-                          if (!hasAnchor || typeof window.getVisualLines !== 'function') return;
+                          if (!hasAnchor || typeof window.getVisualLines !== 'function') return false;
+
+                          var anchorElement = document.getElementById(anchorId);
+                          if (!anchorElement) return false;
+
+                          // In vertical writing, a viewport-height change reflows all
+                          // following columns. The old X offset can therefore be far
+                          // away from the saved line, so position by its DOM anchor first.
+                          if (isVertical) {
+                              anchorElement.scrollIntoView({
+                                  behavior: 'instant',
+                                  block: 'start',
+                                  inline: 'start'
+                              });
+                          }
 
                           var lines = window.getVisualLines().filter(function(line) {
                               return line.element && line.element.id === anchorId;
                           });
-                          if (lines.length === 0) return;
+                          if (lines.length === 0) {
+                              anchorElement.scrollIntoView({
+                                  behavior: 'instant',
+                                  block: 'start',
+                                  inline: 'start'
+                              });
+                              lines = window.getVisualLines().filter(function(line) {
+                                  return line.element && line.element.id === anchorId;
+                              });
+                          }
+                          if (lines.length === 0) return false;
 
                           var viewportWidth = window.innerWidth || 0;
                           var bestLine = lines[0];
@@ -93,12 +134,18 @@ internal object ViewerScrollEventsScript {
                                   behavior: 'instant'
                               });
                           }
+                          return true;
                       }
 
                       function applyRestore() {
+                          if (restoreToken !== window._viewerRestoreToken) return;
                           attempts++;
-                          window.scrollTo(targetX, targetY);
-                          restoreFirstVisibleLine();
+                          if (isVertical && hasAnchor) {
+                              restoreFirstVisibleLine();
+                          } else {
+                              window.scrollTo(targetX, targetY);
+                              restoreFirstVisibleLine();
+                          }
                           if (typeof window.updateMask === 'function') window.updateMask(true);
                           if (attempts >= 5) {
                               window.captureViewerScrollState();
@@ -118,7 +165,6 @@ internal object ViewerScrollEventsScript {
                       return true;
                   };
 
-                  var resizeTimer = null;
                   var lastViewportWidth = window.innerWidth || 0;
                   var lastViewportHeight = window.innerHeight || 0;
                   window.addEventListener('resize', function() {

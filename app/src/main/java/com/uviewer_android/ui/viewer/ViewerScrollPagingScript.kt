@@ -72,6 +72,9 @@ internal object ViewerScrollPagingScript {
                  }
 
                  window.pageDown = function() {
+                     if (typeof window.cancelViewerScrollRestore === 'function') {
+                         window.cancelViewerScrollRestore();
+                     }
                      window._scrollDir = 1;
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
@@ -80,6 +83,9 @@ internal object ViewerScrollPagingScript {
 
                      if (snapFromImagePage(lines, true, w, h)) {
                          window._lastScrollX = window.pageXOffset;
+                         if (typeof window.captureViewerScrollState === 'function') {
+                             window.captureViewerScrollState();
+                         }
                          return;
                      }
 
@@ -166,17 +172,28 @@ internal object ViewerScrollPagingScript {
                          window.scrollBy({ left: Math.min(-20, Math.max(scrollDelta, -w)), behavior: 'instant' });
                      }
                      window.detectAndReportLine(); window.updateMask();
+                     if (typeof window.captureViewerScrollState === 'function') {
+                         window.captureViewerScrollState();
+                     }
                      window._lastScrollX = window.pageXOffset;
                  };
 
                  window.pageUp = function() {
+                     if (typeof window.cancelViewerScrollRestore === 'function') {
+                         window.cancelViewerScrollRestore();
+                     }
                      window._scrollDir = -1;
                      var w = isVertical ? document.documentElement.clientWidth : window.innerWidth;
                      var h = window.innerHeight;
                      var isAtTop = false;
                      var lines = window.getVisualLines(); // 1번만 호출하여 재사용
 
-                     if (snapFromImagePage(lines, false, w, h)) return;
+                     if (snapFromImagePage(lines, false, w, h)) {
+                         if (typeof window.captureViewerScrollState === 'function') {
+                             window.captureViewerScrollState();
+                         }
+                         return;
+                     }
                      
                      if (!isVertical) { 
                          if (window.pageYOffset <= 20) isAtTop = true;
@@ -241,6 +258,9 @@ internal object ViewerScrollPagingScript {
                          window.scrollBy({ left: Math.min(w, Math.max(scrollDelta, 20)), behavior: 'instant' });
                      }
                      window.detectAndReportLine(); window.updateMask();
+                     if (typeof window.captureViewerScrollState === 'function') {
+                         window.captureViewerScrollState();
+                     }
                  };
         """.trimIndent()
     }
