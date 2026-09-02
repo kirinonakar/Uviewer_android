@@ -68,6 +68,9 @@ fun DocumentViewerWebView(
                                             mode: android.view.ActionMode?,
                                             menu: android.view.Menu?
                                         ): Boolean {
+                                            // Add before the WebView's built-in actions so the
+                                            // same-order item is inserted at the beginning.
+                                            addLlmSelectionItem(menu)
                                             val created = original.onCreateActionMode(mode, menu)
                                             if (created) addLlmSelectionItem(menu)
                                             return created
@@ -77,6 +80,7 @@ fun DocumentViewerWebView(
                                             mode: android.view.ActionMode?,
                                             menu: android.view.Menu?
                                         ): Boolean {
+                                            addLlmSelectionItem(menu)
                                             val changed = original.onPrepareActionMode(mode, menu)
                                             addLlmSelectionItem(menu)
                                             return changed
@@ -93,8 +97,11 @@ fun DocumentViewerWebView(
                                                     decodeSelectedText(encoded)?.let { selected ->
                                                         if (selected.isNotBlank()) onLlmSelected(selected)
                                                     }
+                                                    // Read the selection before finishing the action
+                                                    // mode; finishing first can clear the WebView
+                                                    // selection before the JavaScript callback runs.
+                                                    mode?.finish()
                                                 }
-                                                mode?.finish()
                                                 return true
                                             }
                                             return original.onActionItemClicked(mode, item)
@@ -111,7 +118,7 @@ fun DocumentViewerWebView(
                                         menu?.add(
                                             android.view.Menu.NONE,
                                             LLM_SELECTION_ACTION_ID,
-                                            android.view.Menu.NONE,
+                                            0,
                                             context.getString(R.string.llm_action)
                                         )?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
                                     }

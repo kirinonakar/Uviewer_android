@@ -79,11 +79,11 @@
     <string name="llm_api_key">API 키</string>
     <string name="llm_api_key_configured">설정됨</string>
     <string name="llm_api_key_not_configured">설정되지 않음</string>
-    <string name="llm_api_key_public">Public 사용 (키 없음)</string>
+    <string name="llm_api_key_public">API 키 없이 요청</string>
     <string name="llm_api_key_hint">제공자의 API 키를 입력하세요</string>
     <string name="llm_api_key_secure_note">이 기기에 암호화하여 저장됩니다.</string>
     <string name="llm_api_key_secure_note_configured">키가 암호화되어 저장되어 있습니다. 새 키를 입력하면 교체됩니다.</string>
-    <string name="llm_api_key_secure_note_zen_public">Zen은 API 키가 없으면 Public 키로 요청합니다. 필요하면 별도 키를 암호화하여 저장할 수 있습니다.</string>
+    <string name="llm_api_key_secure_note_zen_public">Zen은 API 키가 없으면 인증 없이 요청합니다. 필요하면 별도 키를 암호화하여 저장할 수 있습니다.</string>
     <string name="llm_clear_api_key">API 키 삭제</string>
     <string name="llm_system_prompt">시스템 프롬프트</string>
     <string name="llm_prompt_custom">사용자 지정 프롬프트</string>
@@ -172,6 +172,6 @@
     <string name="llm_action">LLM</string>
     <string name="llm_response_title">LLM 응답</string>
     <string name="llm_selected_text">선택한 글자</string>
-    <string name="llm_loading">선택한 제공자에 요청 중...</string>
+    <string name="llm_loading">생각중...</string>
     <string name="llm_close">닫기</string>
 </resources>

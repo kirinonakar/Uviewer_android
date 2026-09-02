@@ -83,11 +83,11 @@
     <string name="llm_api_key">API key</string>
     <string name="llm_api_key_configured">Configured</string>
     <string name="llm_api_key_not_configured">Not configured</string>
-    <string name="llm_api_key_public">Public (no key)</string>
+    <string name="llm_api_key_public">No API key (public request)</string>
     <string name="llm_api_key_hint">Paste the provider API key</string>
     <string name="llm_api_key_secure_note">Stored encrypted on this device.</string>
     <string name="llm_api_key_secure_note_configured">A key is stored encrypted. Enter a new key to replace it.</string>
-    <string name="llm_api_key_secure_note_zen_public">Zen uses the Public key when no API key is configured. An optional key can still be stored encrypted.</string>
+    <string name="llm_api_key_secure_note_zen_public">Zen sends requests without an API key when none is configured. An optional key can still be stored encrypted.</string>
     <string name="llm_clear_api_key">Remove API key</string>
     <string name="llm_system_prompt">System prompt</string>
     <string name="llm_prompt_custom">Custom prompt</string>
@@ -196,6 +196,6 @@
     <string name="llm_action">LLM</string>
     <string name="llm_response_title">LLM response</string>
     <string name="llm_selected_text">Selected text</string>
-    <string name="llm_loading">Asking the selected provider...</string>
+    <string name="llm_loading">Thinking...</string>
     <string name="llm_close">Close</string>
 </resources>

@@ -34,6 +34,7 @@
 - **Thinking Controls**: Google supports `default`, `minimal` (for Gemma models), `low`, `medium`, and `high`. Ollama Cloud supports `default`, `disable`, `low`, `medium`, and `high`. OpenCode providers support `default`, `low`, `medium`, and `high`.
 - **Prompt Presets**: The built-in `explain this word` system prompt can be selected directly. Custom system prompts can be saved with a name, selected later, or deleted from the prompt preset menu.
 - **Secure API Keys**: Provider API keys are stored separately in Android `EncryptedSharedPreferences` and are not written to regular user preferences.
+- **Zen Without a Key**: OpenCode Zen sends requests without an `Authorization` header when no Zen API key is configured. A personal Zen key remains optional and, when entered, is stored encrypted.
 
 ### 🖼️ Image & Manga Viewer
 - **Archive Support**: Instantly View images inside `zip`, `cbz`, `rar`, and `7z` files without extraction.

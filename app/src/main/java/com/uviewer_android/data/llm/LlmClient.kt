@@ -40,7 +40,7 @@ class LlmClient(
         return withContext(Dispatchers.IO) {
             when (provider) {
                 LlmProvider.GOOGLE -> requestGoogle(
-                    apiKey = apiKey,
+                    apiKey = requireNotNull(apiKey),
                     model = model,
                     thinkingLevel = thinkingLevel,
                     systemPrompt = systemPrompt,
@@ -48,7 +48,7 @@ class LlmClient(
                 )
 
                 LlmProvider.OLLAMA_CLOUD -> requestOllamaCloud(
-                    apiKey = apiKey,
+                    apiKey = requireNotNull(apiKey),
                     model = model,
                     thinkingLevel = thinkingLevel,
                     systemPrompt = systemPrompt,
@@ -74,24 +74,18 @@ class LlmClient(
 
         return withContext(Dispatchers.IO) {
             when (provider) {
-                LlmProvider.GOOGLE -> listGoogleModels(apiKey)
-                LlmProvider.OLLAMA_CLOUD -> listOllamaCloudModels(apiKey)
+                LlmProvider.GOOGLE -> listGoogleModels(requireNotNull(apiKey))
+                LlmProvider.OLLAMA_CLOUD -> listOllamaCloudModels(requireNotNull(apiKey))
                 LlmProvider.OPENCODE_GO,
                 LlmProvider.ZEN -> listOpenCodeModels(provider, apiKey)
             }
         }
     }
 
-    private fun apiKeyFor(provider: LlmProvider): String {
+    private fun apiKeyFor(provider: LlmProvider): String? {
         val configuredApiKey = credentialsManager.getLlmApiKey(provider)
-        return configuredApiKey ?: if (provider == LlmProvider.ZEN) {
-            // Zen accepts the literal Public key for unauthenticated/public
-            // requests. Keep it as a request-time fallback instead of
-            // persisting it in the encrypted credentials store.
-            PUBLIC_API_KEY
-        } else {
-            throw IllegalStateException("Configure an API key for ${provider.displayName()} in Settings.")
-        }
+        if (configuredApiKey != null || provider == LlmProvider.ZEN) return configuredApiKey
+        throw IllegalStateException("Configure an API key for ${provider.displayName()} in Settings.")
     }
 
     private fun listGoogleModels(apiKey: String): List<LlmModelOption> {
@@ -160,7 +154,7 @@ class LlmClient(
 
     private fun listOpenCodeModels(
         provider: LlmProvider,
-        apiKey: String
+        apiKey: String?
     ): List<LlmModelOption> {
         val baseUrl = when (provider) {
             LlmProvider.OPENCODE_GO -> "https://opencode.ai/zen/go/v1"
@@ -314,7 +308,7 @@ class LlmClient(
 
     private fun requestOpenCode(
         provider: LlmProvider,
-        apiKey: String,
+        apiKey: String?,
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
@@ -359,7 +353,7 @@ class LlmClient(
 
     private fun requestOpenCodeResponses(
         url: String,
-        apiKey: String,
+        apiKey: String?,
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
@@ -403,7 +397,7 @@ class LlmClient(
 
     private fun requestOpenCodeChatCompletions(
         url: String,
-        apiKey: String,
+        apiKey: String?,
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
@@ -439,7 +433,7 @@ class LlmClient(
 
     private fun requestOpenCodeMessages(
         url: String,
-        apiKey: String,
+        apiKey: String?,
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
@@ -479,10 +473,13 @@ class LlmClient(
         }
     }
 
-    private fun openCodeRequest(url: String, apiKey: String, body: JSONObject): Request {
-        return Request.Builder()
+    private fun openCodeRequest(url: String, apiKey: String?, body: JSONObject): Request {
+        val builder = Request.Builder()
             .url(url)
-            .header("Authorization", "Bearer $apiKey")
+        if (apiKey != null) {
+            builder.header("Authorization", "Bearer $apiKey")
+        }
+        return builder
             .post(body.toString().jsonRequestBody())
             .build()
     }
@@ -601,7 +598,6 @@ class LlmClient(
     }
 
     private companion object {
-        const val PUBLIC_API_KEY = "Public"
         const val MAX_MODEL_PAGES = 10
 
         val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
