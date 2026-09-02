@@ -25,7 +25,11 @@
     <string name="no_servers_added">追加されたサーバーはありません</string>
     <string name="no_pinned_files">固定されたファイルはありません</string>
     <string name="no_files_found">ファイルが見つかりません</string>
+    <string name="no_matching_files">条件に一致するファイルがありません</string>
     <string name="add_server_hint">+ を押して WebDAV サーバーを追加してください</string>
+    <string name="filter_by_filename">ファイル名でフィルター</string>
+    <string name="filter_filename_hint">ファイル名を入力</string>
+    <string name="clear_filter">ファイル名フィルターをクリア</string>
 
     <!-- Favorites -->
     <string name="title_favorites">お気に入り</string>

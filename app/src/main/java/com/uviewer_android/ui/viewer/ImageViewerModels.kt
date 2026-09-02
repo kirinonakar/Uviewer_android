@@ -7,6 +7,14 @@ data class SharpenTransformation(private val intensity: Int) : coil.transform.Tr
     override val cacheKey: String = "sharpen_$intensity"
     override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
         if (intensity <= 0) return input
+
+        // getPixels()/setPixels() operate on 8-bit ARGB values. Applying this transformation to
+        // a gainmap-backed or high-precision bitmap would silently discard its HDR information.
+        if (input.containsHdrContent()) {
+            android.util.Log.d("Sharpen", "Skipping sharpening for HDR/high-precision bitmap")
+            return input
+        }
+
         val width = input.width
         val height = input.height
 

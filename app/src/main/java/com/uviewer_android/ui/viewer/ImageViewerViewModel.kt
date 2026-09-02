@@ -231,7 +231,7 @@ enum class ViewMode {
                             val zipSize = webDavRepository.getFileSize(serverId, filePath)
                             val manager = com.uviewer_android.data.utils.RemoteZipManager(webDavRepository, serverId, filePath, zipSize)
                             val entries = manager.getEntries()
-                            val imageExtensions = listOf("jpg", "jpeg", "png", "webp", "gif", "bmp")
+                            val imageExtensions = FileEntry.IMAGE_EXTENSIONS
                             val zipImages = entries.filter { !it.isDirectory && it.name.lowercase().let { n -> 
                                 imageExtensions.any { ext -> n.endsWith(".$ext") }
                             } }.map { entry ->
@@ -274,7 +274,7 @@ enum class ViewMode {
                             val unzipDir = File(cacheDir, "unzipped_$cacheKey")
                             val isDoneFile = File(unzipDir, ".extracted_done")
                             val tempFile = File(cacheDir, "temp_download_$cacheKey.$archiveExt")
-                            val imageExtensions = listOf("jpg", "jpeg", "png", "gif", "webp", "bmp")
+                            val imageExtensions = FileEntry.IMAGE_EXTENSIONS
 
                             if (isDoneFile.exists()) {
                                 Log.d("ImageViewer", "Archive already extracted in cache: $unzipDir")
@@ -384,7 +384,7 @@ enum class ViewMode {
                             }
                             
                             unzipDir.walkTopDown()
-                                .filter { it.isFile && it.extension.lowercase() in listOf("jpg", "jpeg", "png", "gif", "webp", "bmp") }
+                                .filter { it.isFile && it.extension.lowercase() in FileEntry.IMAGE_EXTENSIONS }
                                 .map { file ->
                                     FileEntry(
                                         name = file.name,

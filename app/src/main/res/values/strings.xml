@@ -29,7 +29,11 @@
     <string name="no_servers_added">No Servers Added</string>
     <string name="no_pinned_files">No Pinned Files</string>
     <string name="no_files_found">No Files Found</string>
+    <string name="no_matching_files">No files match the filter</string>
     <string name="add_server_hint">Click + to add a WebDAV server</string>
+    <string name="filter_by_filename">Filter by filename</string>
+    <string name="filter_filename_hint">Enter a filename</string>
+    <string name="clear_filter">Clear filename filter</string>
 
     <!-- Favorites -->
     <string name="title_favorites">Favorites</string>

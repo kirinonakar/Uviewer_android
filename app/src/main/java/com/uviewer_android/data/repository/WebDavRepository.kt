@@ -74,10 +74,7 @@ class WebDavRepository(
 
             val type = when {
                 file.isDirectory -> FileEntry.FileType.FOLDER
-                file.name.endsWith(".jpg", true) || file.name.endsWith(".jpeg", true) || 
-                file.name.endsWith(".png", true) || file.name.endsWith(".webp", true) || 
-                file.name.endsWith(".gif", true) || file.name.endsWith(".bmp", true) ||
-                file.name.endsWith(".avif", true) -> FileEntry.FileType.IMAGE
+                FileEntry.isImageFileName(file.name) -> FileEntry.FileType.IMAGE
                 file.name.endsWith(".txt", true) || file.name.endsWith(".md", true) || 
                 file.name.endsWith(".log", true) || file.name.endsWith(".aozora", true) ||
                 file.name.endsWith(".json", true) -> FileEntry.FileType.TEXT

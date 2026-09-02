@@ -40,7 +40,7 @@ fun ViewerScreen(
     val resolvedType = if (type == FileEntry.FileType.UNKNOWN) {
         val ext = filePath.substringAfterLast(".", "").lowercase()
         when (ext) {
-            "png", "jpg", "jpeg", "webp", "gif", "bmp", "avif" -> FileEntry.FileType.IMAGE
+            "heif", "heic", "avif", "png", "jpg", "jpeg", "webp", "gif", "bmp" -> FileEntry.FileType.IMAGE
             "zip", "cbz" -> FileEntry.FileType.ZIP
             "rar", "cbr" -> FileEntry.FileType.RAR
             "7z", "cb7" -> FileEntry.FileType.SEVEN_ZIP

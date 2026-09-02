@@ -76,6 +76,7 @@ fun LibraryScreen(
     val currentGridState = rememberLazyGridState()
 
     var showAddServerDialog by remember { mutableStateOf(false) }
+    var showNameFilter by remember { mutableStateOf(false) }
 
     // Drag and Drop state for Pinned Tab reordering
     var draggedItemPath by remember { mutableStateOf<String?>(null) }
@@ -86,7 +87,10 @@ fun LibraryScreen(
     var listInitialNodeOffset by remember { mutableStateOf(0) }
 
     BackHandler(enabled = true) {
-        if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
+        if (showNameFilter || uiState.fileNameFilter.isNotBlank()) {
+            showNameFilter = false
+            viewModel.clearFileNameFilter()
+        } else if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
             viewModel.navigateUp()
         } else {
             val currentTime = System.currentTimeMillis()
@@ -158,6 +162,16 @@ fun LibraryScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = {
+                            if (showNameFilter) viewModel.clearFileNameFilter()
+                            showNameFilter = !showNameFilter
+                        }) {
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = stringResource(R.string.filter_by_filename)
+                            )
+                        }
+
                         val (sortIcon, sortDescription) = when (uiState.sortOption) {
                             SortOption.DATE_DESC -> Icons.Default.ArrowDownward to stringResource(R.string.sort_date_desc)
                             SortOption.DATE_ASC -> Icons.Default.ArrowUpward to stringResource(R.string.sort_date_asc)
@@ -235,24 +249,58 @@ fun LibraryScreen(
                 }
             }
 
+            if (showNameFilter) {
+                val focusManager = LocalFocusManager.current
+                OutlinedTextField(
+                    value = uiState.fileNameFilter,
+                    onValueChange = viewModel::setFileNameFilter,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    label = { Text(stringResource(R.string.filter_by_filename)) },
+                    placeholder = { Text(stringResource(R.string.filter_filename_hint)) },
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (uiState.fileNameFilter.isNotEmpty()) {
+                            IconButton(onClick = viewModel::clearFileNameFilter) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = stringResource(R.string.clear_filter)
+                                )
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
+                )
+            }
+
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             } else {
-                val listToShow = if (selectedTab == 2) uiState.pinnedFiles else uiState.fileList
+                val sourceList = if (selectedTab == 2) uiState.pinnedFiles else uiState.fileList
+                val listToShow = filterFilesByName(sourceList, uiState.fileNameFilter)
                 
                 if (listToShow.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                if (selectedTab == 1 && uiState.serverId == null) stringResource(R.string.no_servers_added)
-                                else if (selectedTab == 2) stringResource(R.string.no_pinned_files)
-                                else stringResource(R.string.no_files_found),
+                                when {
+                                    uiState.fileNameFilter.isNotBlank() -> stringResource(R.string.no_matching_files)
+                                    selectedTab == 1 && uiState.serverId == null -> stringResource(R.string.no_servers_added)
+                                    selectedTab == 2 -> stringResource(R.string.no_pinned_files)
+                                    else -> stringResource(R.string.no_files_found)
+                                },
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (selectedTab == 1 && uiState.serverId == null) {
+                            if (uiState.fileNameFilter.isBlank() && selectedTab == 1 && uiState.serverId == null) {
                                 Text(
                                     stringResource(R.string.add_server_hint), 
                                     style = MaterialTheme.typography.bodySmall,
@@ -274,7 +322,8 @@ fun LibraryScreen(
                             itemsIndexed(listToShow, key = { _, file -> file.path }) { index, file ->
                                 val isDragging = draggedItemPath == file.path
                                 val isPinnedTab = selectedTab == 2
-                                val itemModifier = if (isPinnedTab) {
+                                val canReorder = isPinnedTab && uiState.fileNameFilter.isBlank()
+                                val itemModifier = if (canReorder) {
                                     Modifier
                                         .zIndex(if (isDragging) 10f else 0f)
                                         .pointerInput(file.path) {
@@ -373,7 +422,8 @@ fun LibraryScreen(
                             itemsIndexed(listToShow, key = { _, file -> file.path }) { index, file ->
                                 val isDragging = draggedItemPath == file.path
                                 val isPinnedTab = selectedTab == 2
-                                val itemModifier = if (isPinnedTab) {
+                                val canReorder = isPinnedTab && uiState.fileNameFilter.isBlank()
+                                val itemModifier = if (canReorder) {
                                     Modifier
                                         .zIndex(if (isDragging) 10f else 0f)
                                         .pointerInput(file.path) {

@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -73,6 +74,17 @@ fun ImageViewerScreen(
     var currentPageIndex by rememberSaveable(filePath) { mutableIntStateOf(initialIndex ?: 0) }
     var appliedInitialIndex by rememberSaveable(filePath) { mutableStateOf<Int?>(null) }
     var hasLoaded by rememberSaveable(filePath) { mutableStateOf(false) }
+    val hdrImageStatus = remember(filePath) { mutableStateMapOf<String, Boolean>() }
+    val updateHdrImageStatus = remember(filePath) {
+        { imagePath: String, isHdr: Boolean ->
+            if (isHdr) {
+                hdrImageStatus[imagePath] = true
+            } else {
+                hdrImageStatus.remove(imagePath)
+            }
+            Unit
+        }
+    }
     // viewMode is extracted from uiState where needed
 
     // Sync is done after pagerState is created (see below)
@@ -120,6 +132,7 @@ fun ImageViewerScreen(
             lifecycleOwner.lifecycle.removeObserver(observer)
             
             currentActivity?.volumeKeyPagingActive = false
+            currentActivity?.window?.setHdrColorMode(false)
             try {
                 if (window != null) {
                     val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
@@ -359,6 +372,25 @@ fun ImageViewerScreen(
                     }
                 }
             }
+        }
+
+        val visibleImagePaths = when (viewMode) {
+            ViewMode.SINGLE -> listOfNotNull(uiState.images.getOrNull(pagerState.currentPage)?.path)
+            ViewMode.DUAL -> {
+                val firstIndex = pagerState.currentPage * 2
+                val orderedIndices = if (dualPageOrder == 1) {
+                    listOf(firstIndex + 1, firstIndex)
+                } else {
+                    listOf(firstIndex, firstIndex + 1)
+                }
+                orderedIndices.mapNotNull { uiState.images.getOrNull(it)?.path }
+            }
+            ViewMode.SPLIT -> listOfNotNull(uiState.images.getOrNull(pagerState.currentPage / 2)?.path)
+        }
+        val currentPageHasHdr = visibleImagePaths.any { hdrImageStatus[it] == true }
+
+        LaunchedEffect(currentPageHasHdr, currentActivity) {
+            currentActivity?.window?.setHdrColorMode(currentPageHasHdr)
         }
 
         Scaffold(
@@ -642,8 +674,9 @@ fun ImageViewerScreen(
                                     authHeader = uiState.authHeader,
                                     serverUrl = uiState.serverUrl,
                                     scale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f }),
-                                    sharpeningAmount = uiState.sharpeningAmount,
-                                    onScaleChanged = { newScale -> 
+                                     sharpeningAmount = uiState.sharpeningAmount,
+                                     onHdrStatusChanged = updateHdrImageStatus,
+                                     onScaleChanged = { newScale ->
                                         if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
                                     }
                                 )
@@ -655,8 +688,11 @@ fun ImageViewerScreen(
                                     authHeader = uiState.authHeader,
                                     serverUrl = uiState.serverUrl,
                                     scale = currentScale,
-                                    sharpeningAmount = uiState.sharpeningAmount,
-                                    onScaleChanged = { newScale -> 
+                                     sharpeningAmount = uiState.sharpeningAmount,
+                                     onHdrStatusChanged = { isHdr ->
+                                         updateHdrImageStatus(firstImage.path, isHdr)
+                                     },
+                                     onScaleChanged = { newScale ->
                                         if (uiState.persistZoom) globalScale = newScale else scales[page] = newScale 
                                     },
                                     isSplit = isSplit,

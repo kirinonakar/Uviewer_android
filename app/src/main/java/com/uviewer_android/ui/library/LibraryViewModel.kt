@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 data class LibraryUiState(
     val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
     val fileList: List<FileEntry> = emptyList(),
+    val fileNameFilter: String = "",
     val favoritePaths: Set<String> = emptySet(),
     val pinnedFiles: List<FileEntry> = emptyList(), // For Pin Tab
     val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
@@ -249,6 +250,14 @@ class LibraryViewModel(
         val newMode = !_state.value.isGridView
         _state.value = _state.value.copy(isGridView = newMode)
         userPreferencesRepository.setLibraryViewMode(newMode)
+    }
+
+    fun setFileNameFilter(query: String) {
+        _state.value = _state.value.copy(fileNameFilter = query)
+    }
+
+    fun clearFileNameFilter() {
+        setFileNameFilter("")
     }
     
     fun selectTab(index: Int) {

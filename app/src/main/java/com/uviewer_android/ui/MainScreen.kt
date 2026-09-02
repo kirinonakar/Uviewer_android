@@ -77,7 +77,7 @@ fun MainScreen(
                 fileName.endsWith(".pdf") -> "PDF"
                 fileName.endsWith(".epub") -> "EPUB"
                 fileName.endsWith(".zip") || fileName.endsWith(".cbz") -> "COMPRESSED"
-                fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png") || fileName.endsWith(".gif") || fileName.endsWith(".webp") -> "IMAGE"
+                com.uviewer_android.data.model.FileEntry.isImageFileName(fileName) -> "IMAGE"
                 fileName.endsWith(".mp3") || fileName.endsWith(".m4a") || fileName.endsWith(".wav") || fileName.endsWith(".flac") -> "AUDIO"
                 fileName.endsWith(".mp4") || fileName.endsWith(".mkv") || fileName.endsWith(".avi") -> "VIDEO"
                 else -> "TEXT"

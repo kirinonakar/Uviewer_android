@@ -18,4 +18,13 @@ data class FileEntry(
     enum class FileType {
         FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV, IMAGE_ZIP, RAR, SEVEN_ZIP
     }
+
+    companion object {
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heif", "heic", "avif")
+
+        fun isImageFileName(name: String): Boolean {
+            val extension = name.substringAfterLast('.', missingDelimiterValue = "").lowercase()
+            return extension in IMAGE_EXTENSIONS
+        }
+    }
 }

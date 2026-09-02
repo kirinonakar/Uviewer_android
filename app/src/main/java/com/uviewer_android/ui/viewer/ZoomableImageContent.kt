@@ -1,5 +1,6 @@
 package com.uviewer_android.ui.viewer
 
+import android.graphics.drawable.BitmapDrawable
 import android.util.Log
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -36,9 +37,21 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
+
+private fun AsyncImagePainter.State.containsHdrContent(): Boolean {
+    val bitmap = (this as? AsyncImagePainter.State.Success)
+        ?.result
+        ?.drawable
+        ?.let { it as? BitmapDrawable }
+        ?.bitmap
+        ?: return false
+
+    return bitmap.containsHdrContent()
+}
 
 @Composable
 fun ZoomableImage(
@@ -51,7 +64,8 @@ fun ZoomableImage(
     onScaleChanged: (Float) -> Unit,
     secondImageUrl: String? = null,
     isSplit: Boolean = false,
-    isRight: Boolean = false
+    isRight: Boolean = false,
+    onHdrStatusChanged: (Boolean) -> Unit = {}
 ) {
     val currentScale by rememberUpdatedState(scale)
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -214,6 +228,7 @@ fun ZoomableImage(
                 model = imageRequest,
                 contentDescription = null,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
+                onState = { state -> onHdrStatusChanged(state.containsHdrContent()) },
                 modifier = Modifier.fillMaxSize()
             ) {
                 val state = painter.state
@@ -298,7 +313,8 @@ fun ZoomableDualImage(
     serverUrl: String?,
     scale: Float,
     sharpeningAmount: Int,
-    onScaleChanged: (Float) -> Unit
+    onScaleChanged: (Float) -> Unit,
+    onHdrStatusChanged: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     val currentScale by rememberUpdatedState(scale)
     var offsetX by remember { mutableFloatStateOf(0f) }
@@ -464,6 +480,9 @@ fun ZoomableDualImage(
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.CenterEnd,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
+                    onLoading = { onHdrStatusChanged(firstImageUrl, false) },
+                    onSuccess = { state -> onHdrStatusChanged(firstImageUrl, state.containsHdrContent()) },
+                    onError = { onHdrStatusChanged(firstImageUrl, false) },
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(strokeWidth = 2.dp)
@@ -494,6 +513,9 @@ fun ZoomableDualImage(
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.CenterStart,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
+                    onLoading = { onHdrStatusChanged(secondImageUrl, false) },
+                    onSuccess = { state -> onHdrStatusChanged(secondImageUrl, state.containsHdrContent()) },
+                    onError = { onHdrStatusChanged(secondImageUrl, false) },
                     loading = {
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(strokeWidth = 2.dp)

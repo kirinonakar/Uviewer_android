@@ -2,6 +2,7 @@ package com.uviewer_android.data.utils
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import com.uviewer_android.data.model.FileEntry
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import java.io.File
@@ -52,10 +53,7 @@ object ThumbnailUtils {
     }
 
     private fun isImageFile(name: String): Boolean {
-        val lowerName = name.lowercase()
-        return lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || 
-               lowerName.endsWith(".png") || lowerName.endsWith(".webp") || 
-               lowerName.endsWith(".gif") || lowerName.endsWith(".bmp")
+        return FileEntry.isImageFileName(name)
     }
 
     private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
