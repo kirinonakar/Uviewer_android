@@ -1,6 +1,8 @@
 package com.uviewer_android.ui.viewer
 
-import androidx.compose.foundation.text.selection.SelectionContainer
+import android.graphics.Color.TRANSPARENT
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,13 +24,18 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.uviewer_android.R
+import java.util.Locale
 
 @Composable
 fun LlmResponseOverlay(
@@ -97,16 +104,12 @@ fun LlmResponseOverlay(
                     }
 
                     is LlmUiState.Success -> {
-                        SelectionContainer {
-                            Text(
-                                text = state.response,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(min = 80.dp, max = 440.dp)
-                                    .verticalScroll(rememberScrollState()),
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
+                        MarkdownResponseView(
+                            markdown = state.response,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 80.dp, max = 440.dp)
+                        )
                     }
 
                     is LlmUiState.Error -> {
@@ -139,4 +142,143 @@ fun LlmResponseOverlay(
             }
         }
     }
+}
+
+@Composable
+private fun MarkdownResponseView(
+    markdown: String,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val foreground = colorScheme.onSurface.toCssColor()
+    val secondary = colorScheme.onSurfaceVariant.toCssColor()
+    val accent = colorScheme.primary.toCssColor()
+    val codeBackground = colorScheme.surfaceVariant.toCssColor()
+    val divider = colorScheme.outlineVariant.toCssColor()
+    val renderedDocument = remember(
+        markdown,
+        foreground,
+        secondary,
+        accent,
+        codeBackground,
+        divider
+    ) {
+        buildMarkdownDocument(
+            body = convertDocumentMarkdownToHtml(markdown),
+            foreground = foreground,
+            secondary = secondary,
+            accent = accent,
+            codeBackground = codeBackground,
+            divider = divider
+        )
+    }
+
+    AndroidView(
+        modifier = modifier,
+        factory = { context ->
+            WebView(context).apply {
+                settings.javaScriptEnabled = false
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                isVerticalScrollBarEnabled = true
+                setBackgroundColor(TRANSPARENT)
+                webViewClient = WebViewClient()
+            }
+        },
+        update = { webView ->
+            if (webView.tag != renderedDocument) {
+                webView.tag = renderedDocument
+                webView.loadDataWithBaseURL(
+                    null,
+                    renderedDocument,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+            }
+        }
+    )
+}
+
+private fun buildMarkdownDocument(
+    body: String,
+    foreground: String,
+    secondary: String,
+    accent: String,
+    codeBackground: String,
+    divider: String
+): String {
+    return """
+        <!doctype html>
+        <html>
+        <head>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                * { box-sizing: border-box; }
+                body {
+                    margin: 0;
+                    padding: 0;
+                    color: $foreground;
+                    background: transparent;
+                    font-family: sans-serif;
+                    font-size: 16px;
+                    line-height: 1.55;
+                    overflow-wrap: anywhere;
+                }
+                h1, h2, h3, h4, h5, h6 {
+                    color: $foreground;
+                    line-height: 1.25;
+                    margin: 0.9em 0 0.45em;
+                }
+                h1 { font-size: 1.55em; }
+                h2 { font-size: 1.35em; }
+                h3 { font-size: 1.18em; }
+                p, ul, ol, pre, blockquote, table { margin: 0.65em 0; }
+                a { color: $accent; }
+                blockquote {
+                    margin-left: 0;
+                    padding: 0.1em 0.9em;
+                    color: $secondary;
+                    border-left: 4px solid $accent;
+                }
+                code {
+                    padding: 0.12em 0.3em;
+                    color: $foreground;
+                    background: $codeBackground;
+                    border-radius: 4px;
+                    font-family: monospace;
+                }
+                pre {
+                    padding: 0.8em;
+                    overflow-x: auto;
+                    color: $foreground;
+                    background: $codeBackground;
+                    border-radius: 8px;
+                }
+                pre code { padding: 0; background: transparent; }
+                table {
+                    display: block;
+                    width: 100%;
+                    overflow-x: auto;
+                    border-collapse: collapse;
+                }
+                th, td {
+                    padding: 0.45em 0.6em;
+                    border: 1px solid $divider;
+                    text-align: left;
+                }
+                th { background: $codeBackground; }
+                img { max-width: 100%; height: auto; }
+                hr { border: 0; border-top: 1px solid $divider; }
+                mark { padding: 0.05em 0.15em; }
+            </style>
+        </head>
+        <body>$body</body>
+        </html>
+    """.trimIndent()
+}
+
+private fun Color.toCssColor(): String {
+    return String.format(Locale.US, "#%06X", toArgb() and 0xFFFFFF)
 }

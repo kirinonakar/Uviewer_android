@@ -29,6 +29,7 @@
 
 ### 🤖 LLM Text Actions
 - **Selection Action**: Select text in the document viewer and choose **LLM** from the Android text-selection menu to explain or transform the selected text.
+- **Markdown Responses**: LLM responses are rendered with Markdown support in the result overlay, including headings, lists, code blocks, quotes, tables, and links.
 - **Provider Support**: Google Gemini, Ollama Cloud, OpenCode Go, and OpenCode Zen.
 - **Configurable Requests**: Set the provider, model name, thinking level, and system prompt from Settings > LLM. Use **Load models** to fetch the provider's available models and select one, or enter a model name manually.
 - **Thinking Controls**: Google supports `default`, `minimal` (for Gemma models), `low`, `medium`, and `high`. Ollama Cloud supports `default`, `disable`, `low`, `medium`, and `high`. OpenCode providers support `default`, `low`, `medium`, and `high`.

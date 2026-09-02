@@ -145,6 +145,37 @@ fun DocumentViewerWebView(
                                         super.startActionMode(wrapSelectionActionModeCallback(callback))
                                     }
                                 }
+
+                                override fun startActionModeForChild(
+                                    child: android.view.View,
+                                    callback: android.view.ActionMode.Callback?,
+                                    type: Int
+                                ): android.view.ActionMode? {
+                                    return if (callback == null) {
+                                        super.startActionModeForChild(child, null, type)
+                                    } else {
+                                        super.startActionModeForChild(
+                                            child,
+                                            wrapSelectionActionModeCallback(callback),
+                                            type
+                                        )
+                                    }
+                                }
+
+                                @Suppress("DEPRECATION")
+                                override fun startActionModeForChild(
+                                    child: android.view.View,
+                                    callback: android.view.ActionMode.Callback?
+                                ): android.view.ActionMode? {
+                                    return if (callback == null) {
+                                        super.startActionModeForChild(child, null)
+                                    } else {
+                                        super.startActionModeForChild(
+                                            child,
+                                            wrapSelectionActionModeCallback(callback)
+                                        )
+                                    }
+                                }
                             }.apply {
                                 layoutParams = android.view.ViewGroup.LayoutParams(
                                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
