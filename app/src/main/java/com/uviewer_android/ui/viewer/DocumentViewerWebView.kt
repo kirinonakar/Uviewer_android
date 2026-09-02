@@ -120,7 +120,7 @@ fun DocumentViewerWebView(
                                             LLM_SELECTION_ACTION_ID,
                                             0,
                                             context.getString(R.string.llm_action)
-                                        )?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+                                        )?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_ALWAYS)
                                     }
                                 }
 
