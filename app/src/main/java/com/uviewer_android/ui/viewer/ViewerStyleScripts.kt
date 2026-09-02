@@ -52,6 +52,9 @@ internal object ViewerStyleScripts {
                      font-family: $fontFamily !important;
                      font-size: ${fontSize}px !important;
                      line-height: 1.8 !important;
+                     /* 공백이 없는 긴 토큰도 뷰포트 너비에서 줄바꿈 */
+                     overflow-wrap: anywhere !important;
+                     word-break: normal !important;
                      
                      /* 안전 영역 패딩 */
                      padding-top: env(safe-area-inset-top, 0) !important;
@@ -75,8 +78,11 @@ internal object ViewerStyleScripts {
                      padding-top: ${if (isVertical) "${sideMargin / 20.0}em" else "0"} !important;
                      padding-bottom: ${if (isVertical) "${sideMargin / 20.0}em" else "0"} !important;
                      
-                      box-sizing: border-box !important;
-                      text-align: left !important;
+                     white-space: normal !important;
+                     overflow-wrap: anywhere !important;
+                     word-break: normal !important;
+                     box-sizing: border-box !important;
+                     text-align: left !important;
                   }
                    .content-chunk {
                        overflow-anchor: none !important;
@@ -134,7 +140,7 @@ internal object ViewerStyleScripts {
                     padding: 8px !important;
                     white-space: normal !important;
                     word-wrap: break-word !important;
-                    overflow-wrap: break-word !important;
+                    overflow-wrap: anywhere !important;
                     vertical-align: top !important;
                 }
                 rt {

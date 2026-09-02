@@ -1,5 +1,6 @@
 package com.uviewer_android.ui.viewer
 
+import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.util.Log
 import androidx.compose.foundation.Image
@@ -52,6 +53,13 @@ private fun AsyncImagePainter.State.containsHdrContent(): Boolean {
 
     return bitmap.containsHdrContent()
 }
+
+private fun ImageRequest.Builder.preferHighPrecisionDecode(source: String): ImageRequest.Builder =
+    apply {
+        if (source.isHighPrecisionImageSource()) {
+            bitmapConfig(Bitmap.Config.RGBA_F16)
+        }
+    }
 
 @Composable
 fun ZoomableImage(
@@ -165,6 +173,7 @@ fun ZoomableImage(
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
+                        .preferHighPrecisionDecode(url)
                         .crossfade(true)
                         .apply {
                             val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
@@ -206,6 +215,7 @@ fun ZoomableImage(
                 }
                 
                 return loaderBuilder
+                    .preferHighPrecisionDecode(url)
                     .crossfade(true)
                     .apply {
                         // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
@@ -410,6 +420,7 @@ fun ZoomableDualImage(
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
+                        .preferHighPrecisionDecode(url)
                         .crossfade(true)
                         .apply {
                             val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
@@ -451,6 +462,7 @@ fun ZoomableDualImage(
                 }
 
                 return loaderBuilder
+                    .preferHighPrecisionDecode(url)
                     .crossfade(true)
                     .apply {
                         // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
