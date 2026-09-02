@@ -77,6 +77,12 @@ fun LibraryScreen(
 
     var showAddServerDialog by remember { mutableStateOf(false) }
     var showNameFilter by remember { mutableStateOf(false) }
+    val isNameFilterVisible = showNameFilter || uiState.fileNameFilter.isNotBlank()
+
+    fun closeNameFilter() {
+        showNameFilter = false
+        viewModel.clearFileNameFilter()
+    }
 
     // Drag and Drop state for Pinned Tab reordering
     var draggedItemPath by remember { mutableStateOf<String?>(null) }
@@ -87,9 +93,8 @@ fun LibraryScreen(
     var listInitialNodeOffset by remember { mutableStateOf(0) }
 
     BackHandler(enabled = true) {
-        if (showNameFilter || uiState.fileNameFilter.isNotBlank()) {
-            showNameFilter = false
-            viewModel.clearFileNameFilter()
+        if (isNameFilterVisible) {
+            closeNameFilter()
         } else if (uiState.currentPath != rootPath && uiState.currentPath != "WebDAV") {
             viewModel.navigateUp()
         } else {
@@ -163,8 +168,11 @@ fun LibraryScreen(
                     },
                     actions = {
                         IconButton(onClick = {
-                            if (showNameFilter) viewModel.clearFileNameFilter()
-                            showNameFilter = !showNameFilter
+                            if (isNameFilterVisible) {
+                                closeNameFilter()
+                            } else {
+                                showNameFilter = true
+                            }
                         }) {
                             Icon(
                                 Icons.Default.Search,
@@ -249,7 +257,7 @@ fun LibraryScreen(
                 }
             }
 
-            if (showNameFilter) {
+            if (isNameFilterVisible) {
                 val focusManager = LocalFocusManager.current
                 OutlinedTextField(
                     value = uiState.fileNameFilter,
