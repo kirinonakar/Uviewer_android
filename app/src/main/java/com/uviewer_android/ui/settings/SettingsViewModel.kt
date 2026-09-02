@@ -3,6 +3,11 @@ package com.uviewer_android.ui.settings
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.uviewer_android.data.llm.LlmPromptPreset
+import com.uviewer_android.data.llm.LlmClient
+import com.uviewer_android.data.llm.LlmModelOption
+import com.uviewer_android.data.llm.LlmProvider
+import com.uviewer_android.data.llm.LlmThinkingLevel
 import com.uviewer_android.data.WebDavServer
 import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.repository.CredentialsManager
@@ -22,14 +27,56 @@ class SettingsViewModel(
     application: Application,
     private val webDavServerDao: WebDavServerDao,
     private val credentialsManager: CredentialsManager,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val llmClient: LlmClient
 ) : AndroidViewModel(application) {
 
     private val _cacheSize = MutableStateFlow("0 B")
     val cacheSize: StateFlow<String> = _cacheSize.asStateFlow()
 
+    val llmProvider: StateFlow<LlmProvider> = userPreferencesRepository.llmProvider
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), LlmProvider.GOOGLE)
+
+    private val _llmModelName = MutableStateFlow(
+        userPreferencesRepository.getLlmModelName(userPreferencesRepository.llmProvider.value)
+    )
+    val llmModelName: StateFlow<String> = _llmModelName.asStateFlow()
+
+    private val _llmThinkingLevel = MutableStateFlow(
+        userPreferencesRepository.getLlmThinkingLevel(userPreferencesRepository.llmProvider.value)
+    )
+    val llmThinkingLevel: StateFlow<LlmThinkingLevel> = _llmThinkingLevel.asStateFlow()
+
+    private val _llmApiKeyConfigured = MutableStateFlow(
+        credentialsManager.hasLlmApiKey(userPreferencesRepository.llmProvider.value)
+    )
+    val llmApiKeyConfigured: StateFlow<Boolean> = _llmApiKeyConfigured.asStateFlow()
+
+    private val _llmModels = MutableStateFlow<List<LlmModelOption>>(emptyList())
+    val llmModels: StateFlow<List<LlmModelOption>> = _llmModels.asStateFlow()
+
+    private val _llmModelsLoading = MutableStateFlow(false)
+    val llmModelsLoading: StateFlow<Boolean> = _llmModelsLoading.asStateFlow()
+
+    private val _llmModelsError = MutableStateFlow<String?>(null)
+    val llmModelsError: StateFlow<String?> = _llmModelsError.asStateFlow()
+
+    private var llmModelsJob: kotlinx.coroutines.Job? = null
+
+    val llmPromptPresets: StateFlow<List<LlmPromptPreset>> = userPreferencesRepository.llmPromptPresets
+    val selectedLlmPromptPresetId: StateFlow<String?> = userPreferencesRepository.selectedLlmPromptPresetId
+    val llmSystemPrompt: StateFlow<String> = userPreferencesRepository.llmSystemPrompt
+
     init {
         updateCacheSize()
+        viewModelScope.launch {
+            userPreferencesRepository.llmProvider.collect { provider ->
+                _llmModelName.value = userPreferencesRepository.getLlmModelName(provider)
+                _llmThinkingLevel.value = userPreferencesRepository.getLlmThinkingLevel(provider)
+                _llmApiKeyConfigured.value = credentialsManager.hasLlmApiKey(provider)
+                clearLlmModels()
+            }
+        }
     }
 
     val servers: StateFlow<List<WebDavServer>> = webDavServerDao.getAllServers()
@@ -122,6 +169,82 @@ class SettingsViewModel(
 
     fun setAppLanguage(lang: String) {
         userPreferencesRepository.setAppLanguage(lang)
+    }
+
+    fun setLlmProvider(provider: LlmProvider) {
+        userPreferencesRepository.setLlmProvider(provider)
+        _llmModelName.value = userPreferencesRepository.getLlmModelName(provider)
+        _llmThinkingLevel.value = userPreferencesRepository.getLlmThinkingLevel(provider)
+        _llmApiKeyConfigured.value = credentialsManager.hasLlmApiKey(provider)
+        clearLlmModels()
+    }
+
+    fun setLlmModelName(modelName: String) {
+        val provider = userPreferencesRepository.llmProvider.value
+        userPreferencesRepository.setLlmModelName(provider, modelName)
+        _llmModelName.value = userPreferencesRepository.getLlmModelName(provider)
+    }
+
+    fun loadLlmModels() {
+        llmModelsJob?.cancel()
+        _llmModelsLoading.value = true
+        _llmModelsError.value = null
+        llmModelsJob = viewModelScope.launch {
+            try {
+                val models = llmClient.listModels()
+                _llmModels.value = models
+                if (models.isEmpty()) {
+                    _llmModelsError.value = "No models were returned by the provider."
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _llmModels.value = emptyList()
+                _llmModelsError.value = error.message ?: "Failed to load models."
+            } finally {
+                _llmModelsLoading.value = false
+            }
+        }
+    }
+
+    fun clearLlmModels() {
+        llmModelsJob?.cancel()
+        llmModelsJob = null
+        _llmModels.value = emptyList()
+        _llmModelsError.value = null
+        _llmModelsLoading.value = false
+    }
+
+    fun setLlmThinkingLevel(level: LlmThinkingLevel) {
+        val provider = userPreferencesRepository.llmProvider.value
+        userPreferencesRepository.setLlmThinkingLevel(provider, level)
+        _llmThinkingLevel.value = userPreferencesRepository.getLlmThinkingLevel(provider)
+    }
+
+    fun saveLlmApiKey(apiKey: String) {
+        credentialsManager.saveLlmApiKey(userPreferencesRepository.llmProvider.value, apiKey)
+        _llmApiKeyConfigured.value = credentialsManager.hasLlmApiKey(userPreferencesRepository.llmProvider.value)
+    }
+
+    fun clearLlmApiKey() {
+        credentialsManager.clearLlmApiKey(userPreferencesRepository.llmProvider.value)
+        _llmApiKeyConfigured.value = false
+    }
+
+    fun setLlmSystemPrompt(prompt: String) {
+        userPreferencesRepository.setLlmSystemPrompt(prompt)
+    }
+
+    fun selectLlmPromptPreset(presetId: String) {
+        userPreferencesRepository.selectLlmPromptPreset(presetId)
+    }
+
+    fun saveLlmPromptPreset(name: String, prompt: String) {
+        userPreferencesRepository.saveLlmPromptPreset(name, prompt)
+    }
+
+    fun deleteLlmPromptPreset(presetId: String) {
+        userPreferencesRepository.deleteLlmPromptPreset(presetId)
     }
 
     fun setSystemLanguage(lang: String) {

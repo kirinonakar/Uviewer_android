@@ -5,6 +5,7 @@ import com.uviewer_android.data.AppDatabase
 import com.uviewer_android.data.repository.CredentialsManager
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
+import com.uviewer_android.data.llm.LlmClient
 
 class AppContainer(private val context: Context) {
 
@@ -26,6 +27,13 @@ class AppContainer(private val context: Context) {
 
     val userPreferencesRepository by lazy {
         com.uviewer_android.data.repository.UserPreferencesRepository(context)
+    }
+
+    val llmClient by lazy {
+        LlmClient(
+            credentialsManager = credentialsManager,
+            userPreferencesRepository = userPreferencesRepository
+        )
     }
 
     val cacheManager by lazy {

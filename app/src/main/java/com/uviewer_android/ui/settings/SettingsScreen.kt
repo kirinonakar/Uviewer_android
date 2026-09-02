@@ -1,6 +1,8 @@
 package com.uviewer_android.ui.settings
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,6 +10,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.res.stringResource
 import com.uviewer_android.R
 import com.uviewer_android.data.repository.UserPreferencesRepository
+import com.uviewer_android.data.llm.LlmProvider
+import com.uviewer_android.data.llm.LlmModelOption
+import com.uviewer_android.data.llm.LlmPromptPreset
+import com.uviewer_android.data.llm.LlmThinkingLevel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
@@ -57,6 +63,16 @@ fun SettingsScreen(
     val volumeKeyPaging by viewModel.volumeKeyPaging.collectAsState()
     val cacheSize by viewModel.cacheSize.collectAsState()
     val maxCacheSize by viewModel.maxCacheSize.collectAsState()
+    val llmProvider by viewModel.llmProvider.collectAsState()
+    val llmModelName by viewModel.llmModelName.collectAsState()
+    val llmThinkingLevel by viewModel.llmThinkingLevel.collectAsState()
+    val llmApiKeyConfigured by viewModel.llmApiKeyConfigured.collectAsState()
+    val llmModels by viewModel.llmModels.collectAsState()
+    val llmModelsLoading by viewModel.llmModelsLoading.collectAsState()
+    val llmModelsError by viewModel.llmModelsError.collectAsState()
+    val llmSystemPrompt by viewModel.llmSystemPrompt.collectAsState()
+    val llmPromptPresets by viewModel.llmPromptPresets.collectAsState()
+    val selectedLlmPromptPresetId by viewModel.selectedLlmPromptPresetId.collectAsState()
 
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -68,6 +84,11 @@ fun SettingsScreen(
     var showDualPageOrderDialog by remember { mutableStateOf(false) }
     var showImageViewModeDialog by remember { mutableStateOf(false) }
     var showCacheLimitDialog by remember { mutableStateOf(false) }
+    var showLlmProviderDialog by remember { mutableStateOf(false) }
+    var showLlmModelDialog by remember { mutableStateOf(false) }
+    var showLlmThinkingDialog by remember { mutableStateOf(false) }
+    var showLlmApiKeyDialog by remember { mutableStateOf(false) }
+    var showLlmPromptDialog by remember { mutableStateOf(false) }
 
 
     val isDark = isSystemInDarkTheme() || themeMode == UserPreferencesRepository.THEME_DARK
@@ -138,6 +159,81 @@ fun SettingsScreen(
                         supportingContent = { Text(systemLanguageLabel) },
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                         modifier = Modifier.clickable { showSystemLanguageDialog = true }
+                    )
+                }
+            }
+
+            item {
+                SettingsGroup(title = stringResource(R.string.section_llm), color = cardColor, tonalElevation = if (isDark) 1.dp else 0.dp) {
+                    val providerLabel = when (llmProvider) {
+                        LlmProvider.GOOGLE -> stringResource(R.string.llm_provider_google)
+                        LlmProvider.OLLAMA_CLOUD -> stringResource(R.string.llm_provider_ollama_cloud)
+                        LlmProvider.OPENCODE_GO -> stringResource(R.string.llm_provider_opencode_go)
+                        LlmProvider.ZEN -> stringResource(R.string.llm_provider_zen)
+                    }
+                    val thinkingLabel = when (llmThinkingLevel) {
+                        LlmThinkingLevel.DEFAULT -> stringResource(R.string.llm_thinking_default)
+                        LlmThinkingLevel.MINIMAL -> stringResource(R.string.llm_thinking_minimal)
+                        LlmThinkingLevel.DISABLE -> stringResource(R.string.llm_thinking_disable)
+                        LlmThinkingLevel.LOW -> stringResource(R.string.llm_thinking_low)
+                        LlmThinkingLevel.MEDIUM -> stringResource(R.string.llm_thinking_medium)
+                        LlmThinkingLevel.HIGH -> stringResource(R.string.llm_thinking_high)
+                    }
+                    val promptPresetName = llmPromptPresets
+                        .firstOrNull { it.id == selectedLlmPromptPresetId }
+                        ?.name
+                        ?: stringResource(R.string.llm_prompt_custom)
+                    val apiKeyStatus = when {
+                        llmApiKeyConfigured -> stringResource(R.string.llm_api_key_configured)
+                        llmProvider == LlmProvider.ZEN -> stringResource(R.string.llm_api_key_public)
+                        else -> stringResource(R.string.llm_api_key_not_configured)
+                    }
+
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.llm_provider)) },
+                        supportingContent = { Text(providerLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLlmProviderDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.llm_model_name)) },
+                        supportingContent = { Text(llmModelName, maxLines = 1) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLlmModelDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.llm_thinking_level)) },
+                        supportingContent = { Text(thinkingLabel) },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLlmThinkingDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.llm_api_key)) },
+                        supportingContent = {
+                            Text(apiKeyStatus)
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLlmApiKeyDialog = true }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.llm_system_prompt)) },
+                        supportingContent = {
+                            Column {
+                                Text(promptPresetName)
+                                Text(
+                                    llmSystemPrompt,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        },
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        modifier = Modifier.clickable { showLlmPromptDialog = true }
                     )
                 }
             }
@@ -509,9 +605,448 @@ fun SettingsScreen(
                 }
             )
         }
+
+        if (showLlmProviderDialog) {
+            LlmProviderSelectionDialog(
+                currentProvider = llmProvider,
+                onDismiss = { showLlmProviderDialog = false },
+                onSelect = { provider ->
+                    viewModel.setLlmProvider(provider)
+                    showLlmProviderDialog = false
+                }
+            )
+        }
+
+        if (showLlmModelDialog) {
+            LlmModelNameDialog(
+                currentModelName = llmModelName,
+                models = llmModels,
+                isLoadingModels = llmModelsLoading,
+                modelLoadError = llmModelsError,
+                onDismiss = { showLlmModelDialog = false },
+                onLoadModels = viewModel::loadLlmModels,
+                onSave = { modelName ->
+                    viewModel.setLlmModelName(modelName)
+                    showLlmModelDialog = false
+                }
+            )
+        }
+
+        if (showLlmThinkingDialog) {
+            LlmThinkingLevelSelectionDialog(
+                provider = llmProvider,
+                currentLevel = llmThinkingLevel,
+                onDismiss = { showLlmThinkingDialog = false },
+                onSelect = { level ->
+                    viewModel.setLlmThinkingLevel(level)
+                    showLlmThinkingDialog = false
+                }
+            )
+        }
+
+        if (showLlmApiKeyDialog) {
+            LlmApiKeyDialog(
+                provider = llmProvider,
+                isConfigured = llmApiKeyConfigured,
+                onDismiss = { showLlmApiKeyDialog = false },
+                onSave = { apiKey ->
+                    viewModel.saveLlmApiKey(apiKey)
+                    showLlmApiKeyDialog = false
+                },
+                onClear = {
+                    viewModel.clearLlmApiKey()
+                    showLlmApiKeyDialog = false
+                }
+            )
+        }
+
+        if (showLlmPromptDialog) {
+            LlmPromptPresetDialog(
+                currentPrompt = llmSystemPrompt,
+                presets = llmPromptPresets,
+                selectedPresetId = selectedLlmPromptPresetId,
+                onDismiss = { showLlmPromptDialog = false },
+                onSelectPreset = { presetId ->
+                    viewModel.selectLlmPromptPreset(presetId)
+                    showLlmPromptDialog = false
+                },
+                onSavePrompt = { prompt ->
+                    viewModel.setLlmSystemPrompt(prompt)
+                    showLlmPromptDialog = false
+                },
+                onSavePreset = { name, prompt ->
+                    viewModel.saveLlmPromptPreset(name, prompt)
+                    showLlmPromptDialog = false
+                },
+                onDeletePreset = viewModel::deleteLlmPromptPreset
+            )
+        }
     }
 }
 
+
+@Composable
+fun LlmProviderSelectionDialog(
+    currentProvider: LlmProvider,
+    onDismiss: () -> Unit,
+    onSelect: (LlmProvider) -> Unit
+) {
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.select_llm_provider)) },
+        text = {
+            Column {
+                LlmProvider.entries.forEach { provider ->
+                    ThemeOptionRow(
+                        label = when (provider) {
+                            LlmProvider.GOOGLE -> stringResource(R.string.llm_provider_google)
+                            LlmProvider.OLLAMA_CLOUD -> stringResource(R.string.llm_provider_ollama_cloud)
+                            LlmProvider.OPENCODE_GO -> stringResource(R.string.llm_provider_opencode_go)
+                            LlmProvider.ZEN -> stringResource(R.string.llm_provider_zen)
+                        },
+                        mode = provider.storageKey,
+                        currentMode = currentProvider.storageKey,
+                        onSelect = { onSelect(provider) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun LlmModelNameDialog(
+    currentModelName: String,
+    models: List<LlmModelOption>,
+    isLoadingModels: Boolean,
+    modelLoadError: String?,
+    onDismiss: () -> Unit,
+    onLoadModels: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var modelName by remember(currentModelName) { mutableStateOf(currentModelName) }
+    val scrollState = rememberScrollState()
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.llm_model_name)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedTextField(
+                    value = modelName,
+                    onValueChange = { modelName = it },
+                    label = { Text(stringResource(R.string.llm_model_name)) },
+                    placeholder = { Text(stringResource(R.string.llm_model_name_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = onLoadModels,
+                        enabled = !isLoadingModels
+                    ) {
+                        if (isLoadingModels) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Text(stringResource(R.string.llm_load_models))
+                        }
+                    }
+                }
+                modelLoadError?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (models.isNotEmpty()) {
+                    HorizontalDivider()
+                    Text(
+                        text = stringResource(R.string.llm_available_models),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    models.forEach { model ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { modelName = model.id },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = model.id == modelName.trim(),
+                                onClick = { modelName = model.id }
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = model.displayName,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                if (model.displayName != model.id) {
+                                    Text(
+                                        text = model.id,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else if (!isLoadingModels && modelLoadError == null) {
+                    Text(
+                        text = stringResource(R.string.llm_no_models_loaded),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(modelName) },
+                enabled = modelName.isNotBlank()
+            ) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun LlmThinkingLevelSelectionDialog(
+    provider: LlmProvider,
+    currentLevel: LlmThinkingLevel,
+    onDismiss: () -> Unit,
+    onSelect: (LlmThinkingLevel) -> Unit
+) {
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.llm_thinking_level)) },
+        text = {
+            Column {
+                LlmThinkingLevel.optionsFor(provider).forEach { level ->
+                    ThemeOptionRow(
+                        label = when (level) {
+                            LlmThinkingLevel.DEFAULT -> stringResource(R.string.llm_thinking_default)
+                            LlmThinkingLevel.MINIMAL -> stringResource(R.string.llm_thinking_minimal)
+                            LlmThinkingLevel.DISABLE -> stringResource(R.string.llm_thinking_disable)
+                            LlmThinkingLevel.LOW -> stringResource(R.string.llm_thinking_low)
+                            LlmThinkingLevel.MEDIUM -> stringResource(R.string.llm_thinking_medium)
+                            LlmThinkingLevel.HIGH -> stringResource(R.string.llm_thinking_high)
+                        },
+                        mode = level.storageKey,
+                        currentMode = currentLevel.storageKey,
+                        onSelect = { onSelect(level) }
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun LlmApiKeyDialog(
+    provider: LlmProvider,
+    isConfigured: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit,
+    onClear: () -> Unit
+) {
+    var apiKey by remember { mutableStateOf("") }
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.llm_api_key)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text(stringResource(R.string.llm_api_key)) },
+                    placeholder = { Text(stringResource(R.string.llm_api_key_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done
+                    )
+                )
+                Text(
+                    text = if (provider == LlmProvider.ZEN && !isConfigured) {
+                        stringResource(R.string.llm_api_key_secure_note_zen_public)
+                    } else if (isConfigured) {
+                        stringResource(R.string.llm_api_key_secure_note_configured)
+                    } else {
+                        stringResource(R.string.llm_api_key_secure_note)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (isConfigured) {
+                    TextButton(onClick = onClear) {
+                        Text(
+                            stringResource(R.string.llm_clear_api_key),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(apiKey) },
+                enabled = apiKey.isNotBlank()
+            ) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
+
+@Composable
+fun LlmPromptPresetDialog(
+    currentPrompt: String,
+    presets: List<LlmPromptPreset>,
+    selectedPresetId: String?,
+    onDismiss: () -> Unit,
+    onSelectPreset: (String) -> Unit,
+    onSavePrompt: (String) -> Unit,
+    onSavePreset: (String, String) -> Unit,
+    onDeletePreset: (String) -> Unit
+) {
+    var prompt by remember(currentPrompt) { mutableStateOf(currentPrompt) }
+    var presetName by remember { mutableStateOf("") }
+    val scrollState = rememberScrollState()
+
+    com.uviewer_android.ui.theme.UviewerAlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(28.dp),
+        title = { Text(stringResource(R.string.llm_system_prompt)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    stringResource(R.string.llm_prompt_presets),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                presets.forEach { preset ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectPreset(preset.id) }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = preset.id == selectedPresetId,
+                            onClick = null
+                        )
+                        Text(
+                            text = preset.name,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                        )
+                        if (!preset.isBuiltIn) {
+                            IconButton(onClick = { onDeletePreset(preset.id) }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.delete),
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider()
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    label = { Text(stringResource(R.string.llm_system_prompt)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 4,
+                    maxLines = 8,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default)
+                )
+                OutlinedTextField(
+                    value = presetName,
+                    onValueChange = { presetName = it },
+                    label = { Text(stringResource(R.string.llm_preset_name)) },
+                    placeholder = { Text(stringResource(R.string.llm_preset_name_hint)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
+                )
+                TextButton(
+                    onClick = { onSavePreset(presetName, prompt) },
+                    enabled = presetName.isNotBlank() && prompt.isNotBlank(),
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(stringResource(R.string.llm_save_preset))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSavePrompt(prompt) },
+                enabled = prompt.isNotBlank()
+            ) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.cancel))
+            }
+        }
+    )
+}
 
 @Composable
 fun CacheLimitSelectionDialog(

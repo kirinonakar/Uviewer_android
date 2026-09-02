@@ -2,9 +2,16 @@ package com.uviewer_android.data.repository
 
 import android.content.Context
 import androidx.core.content.edit
+import com.uviewer_android.data.llm.LlmPromptPreset
+import com.uviewer_android.data.llm.LlmProvider
+import com.uviewer_android.data.llm.LlmThinkingLevel
+import com.uviewer_android.data.llm.isAllowedFor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 class UserPreferencesRepository(context: Context) {
     private val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
@@ -39,6 +46,45 @@ class UserPreferencesRepository(context: Context) {
         sharedPreferences.getString("language", "system") ?: "system"
     )
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    private val _llmProvider = MutableStateFlow(
+        LlmProvider.fromStorageKey(sharedPreferences.getString("llm_provider", null))
+    )
+    val llmProvider: StateFlow<LlmProvider> = _llmProvider.asStateFlow()
+
+    private val llmModelNames: Map<LlmProvider, MutableStateFlow<String>> =
+        LlmProvider.entries.associateWith { provider ->
+            MutableStateFlow(
+                sharedPreferences.getString("llm_model_${provider.storageKey}", provider.defaultModel)
+                    ?.ifBlank { provider.defaultModel }
+                    ?: provider.defaultModel
+            )
+        }
+
+    private val llmThinkingLevels: Map<LlmProvider, MutableStateFlow<LlmThinkingLevel>> =
+        LlmProvider.entries.associateWith { provider ->
+            val saved = LlmThinkingLevel.fromStorageKey(
+                sharedPreferences.getString("llm_thinking_${provider.storageKey}", null)
+            )
+            MutableStateFlow(if (saved.isAllowedFor(provider)) saved else LlmThinkingLevel.DEFAULT)
+        }
+
+    private val _llmPromptPresets = MutableStateFlow(loadLlmPromptPresets())
+    val llmPromptPresets: StateFlow<List<LlmPromptPreset>> = _llmPromptPresets.asStateFlow()
+
+    private val _llmSystemPrompt = MutableStateFlow(
+        sharedPreferences.getString("llm_system_prompt", DEFAULT_LLM_SYSTEM_PROMPT)
+            ?: DEFAULT_LLM_SYSTEM_PROMPT
+    )
+    val llmSystemPrompt: StateFlow<String> = _llmSystemPrompt.asStateFlow()
+
+    private val _selectedLlmPromptPresetId = MutableStateFlow(
+        sharedPreferences.getString("llm_selected_prompt_preset", null)
+            ?.takeIf { id -> _llmPromptPresets.value.any { it.id == id } }
+            ?: _llmPromptPresets.value.firstOrNull { it.prompt == _llmSystemPrompt.value }?.id
+    )
+    val selectedLlmPromptPresetId: StateFlow<String?> = _selectedLlmPromptPresetId.asStateFlow()
+
     private val _customDocBackgroundColor = MutableStateFlow(
         sharedPreferences.getString("custom_doc_background_color", "#FFFFFF") ?: "#FFFFFF"
     )
@@ -156,6 +202,163 @@ class UserPreferencesRepository(context: Context) {
             putString("language", lang)
         }
         _appLanguage.value = lang
+    }
+
+    fun setLlmProvider(provider: LlmProvider) {
+        sharedPreferences.edit {
+            putString("llm_provider", provider.storageKey)
+        }
+        _llmProvider.value = provider
+
+        val level = llmThinkingLevels.getValue(provider).value
+        if (!level.isAllowedFor(provider)) {
+            setLlmThinkingLevel(provider, LlmThinkingLevel.DEFAULT)
+        }
+    }
+
+    fun llmModelName(provider: LlmProvider): StateFlow<String> {
+        return llmModelNames.getValue(provider).asStateFlow()
+    }
+
+    fun getLlmModelName(provider: LlmProvider): String {
+        return llmModelNames.getValue(provider).value
+    }
+
+    fun setLlmModelName(provider: LlmProvider, modelName: String) {
+        val value = modelName.trim()
+        val finalValue = value.ifBlank { provider.defaultModel }
+        sharedPreferences.edit {
+            putString("llm_model_${provider.storageKey}", finalValue)
+        }
+        llmModelNames.getValue(provider).value = finalValue
+    }
+
+    fun llmThinkingLevel(provider: LlmProvider): StateFlow<LlmThinkingLevel> {
+        return llmThinkingLevels.getValue(provider).asStateFlow()
+    }
+
+    fun getLlmThinkingLevel(provider: LlmProvider): LlmThinkingLevel {
+        return llmThinkingLevels.getValue(provider).value
+    }
+
+    fun setLlmThinkingLevel(provider: LlmProvider, level: LlmThinkingLevel) {
+        val finalLevel = if (level.isAllowedFor(provider)) level else LlmThinkingLevel.DEFAULT
+        sharedPreferences.edit {
+            putString("llm_thinking_${provider.storageKey}", finalLevel.storageKey)
+        }
+        llmThinkingLevels.getValue(provider).value = finalLevel
+    }
+
+    fun setLlmSystemPrompt(prompt: String) {
+        val matchingPresetId = _llmPromptPresets.value.firstOrNull { it.prompt == prompt }?.id
+        sharedPreferences.edit {
+            putString("llm_system_prompt", prompt)
+            if (matchingPresetId == null) {
+                remove("llm_selected_prompt_preset")
+            } else {
+                putString("llm_selected_prompt_preset", matchingPresetId)
+            }
+        }
+        _llmSystemPrompt.value = prompt
+        _selectedLlmPromptPresetId.value = matchingPresetId
+    }
+
+    fun selectLlmPromptPreset(presetId: String) {
+        val preset = _llmPromptPresets.value.firstOrNull { it.id == presetId } ?: return
+        sharedPreferences.edit {
+            putString("llm_system_prompt", preset.prompt)
+            putString("llm_selected_prompt_preset", preset.id)
+        }
+        _llmSystemPrompt.value = preset.prompt
+        _selectedLlmPromptPresetId.value = preset.id
+    }
+
+    fun saveLlmPromptPreset(name: String, prompt: String, presetId: String? = null) {
+        val cleanName = name.trim()
+        val cleanPrompt = prompt.trim()
+        if (cleanName.isBlank() || cleanPrompt.isBlank()) return
+
+        val current = _llmPromptPresets.value
+        val existing = presetId?.let { id -> current.firstOrNull { it.id == id && !it.isBuiltIn } }
+        val savedPreset = (existing ?: LlmPromptPreset(
+            id = UUID.randomUUID().toString(),
+            name = cleanName,
+            prompt = cleanPrompt
+        )).copy(name = cleanName, prompt = cleanPrompt)
+        val updated = if (existing == null) {
+            current + savedPreset
+        } else {
+            current.map { if (it.id == existing.id) savedPreset else it }
+        }
+        persistLlmPromptPresets(updated)
+        sharedPreferences.edit {
+            putString("llm_system_prompt", savedPreset.prompt)
+            putString("llm_selected_prompt_preset", savedPreset.id)
+        }
+        _llmPromptPresets.value = updated
+        _llmSystemPrompt.value = savedPreset.prompt
+        _selectedLlmPromptPresetId.value = savedPreset.id
+    }
+
+    fun deleteLlmPromptPreset(presetId: String) {
+        val preset = _llmPromptPresets.value.firstOrNull { it.id == presetId } ?: return
+        if (preset.isBuiltIn) return
+
+        val updated = _llmPromptPresets.value.filterNot { it.id == presetId }
+        val fallback = updated.firstOrNull { it.isBuiltIn } ?: updated.firstOrNull() ?: return
+        persistLlmPromptPresets(updated)
+        _llmPromptPresets.value = updated
+        selectLlmPromptPreset(fallback.id)
+    }
+
+    private fun loadLlmPromptPresets(): List<LlmPromptPreset> {
+        val builtIn = LlmPromptPreset(
+            id = DEFAULT_LLM_PROMPT_PRESET_ID,
+            name = "Explain this word",
+            prompt = DEFAULT_LLM_SYSTEM_PROMPT,
+            isBuiltIn = true
+        )
+        val raw = sharedPreferences.getString("llm_prompt_presets", null)
+            ?: return listOf(builtIn)
+        return try {
+            val array = JSONArray(raw)
+            val parsed = buildList {
+                for (index in 0 until array.length()) {
+                    val item = array.optJSONObject(index) ?: continue
+                    val id = item.optString("id").trim()
+                    val name = item.optString("name").trim()
+                    val prompt = item.optString("prompt")
+                    if (id.isNotBlank() && name.isNotBlank() && prompt.isNotBlank()) {
+                        add(
+                            LlmPromptPreset(
+                                id = id,
+                                name = name,
+                                prompt = prompt,
+                                isBuiltIn = id == DEFAULT_LLM_PROMPT_PRESET_ID
+                            )
+                        )
+                    }
+                }
+            }
+            if (parsed.any { it.id == builtIn.id }) parsed else listOf(builtIn) + parsed
+        } catch (_: Exception) {
+            listOf(builtIn)
+        }
+    }
+
+    private fun persistLlmPromptPresets(presets: List<LlmPromptPreset>) {
+        val array = JSONArray()
+        presets.forEach { preset ->
+            array.put(
+                JSONObject()
+                    .put("id", preset.id)
+                    .put("name", preset.name)
+                    .put("prompt", preset.prompt)
+            )
+        }
+        sharedPreferences.edit {
+            putString("llm_prompt_presets", array.toString())
+        }
     }
 
     fun setInvertImageControl(invert: Boolean) {
@@ -285,6 +488,9 @@ class UserPreferencesRepository(context: Context) {
     }
 
     companion object {
+        const val DEFAULT_LLM_SYSTEM_PROMPT = "explain this word"
+        const val DEFAULT_LLM_PROMPT_PRESET_ID = "default-explain-this-word"
+
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"

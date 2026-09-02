@@ -75,6 +75,7 @@ fun DocumentViewerScreen(
 ) {
     BackHandler { onBack() }
     val uiState by viewModel.uiState.collectAsState()
+    val llmState by viewModel.llmState.collectAsState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     
@@ -105,6 +106,7 @@ fun DocumentViewerScreen(
     var tempSliderValue by remember { mutableFloatStateOf(-1f) }
 
     LaunchedEffect(filePath) {
+        viewModel.dismissLlm()
         val lineToLoad = if (hasLoaded) currentLine else initialLine
         viewModel.loadDocument(filePath, type, isWebDav, serverId, lineToLoad)
         hasLoaded = true
@@ -689,9 +691,10 @@ fun DocumentViewerScreen(
                             navigatingState = navigatingState,
                             isInteractingWithSlider = isInteractingWithSlider,
                             onToggleFullScreen = onToggleFullScreen,
-                            applyDocumentSearchHighlight = applyDocumentSearchHighlight,
-                            isScrollRestoring = { isScrollRestoring }
-                        )
+                             applyDocumentSearchHighlight = applyDocumentSearchHighlight,
+                             isScrollRestoring = { isScrollRestoring },
+                             onLlmSelected = viewModel::requestLlm
+                         )
             }
         }
     }
@@ -699,6 +702,13 @@ fun DocumentViewerScreen(
     }
 
     DocumentLoadingOverlay(uiState)
+
+    if (llmState !is LlmUiState.Idle) {
+        LlmResponseOverlay(
+            state = llmState,
+            onDismiss = viewModel::dismissLlm
+        )
+    }
 
 
     if (showGoToLineDialog) {

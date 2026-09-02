@@ -9,6 +9,7 @@
 
     <!-- General -->
     <string name="cancel">キャンセル</string>
+    <string name="save">保存</string>
     <string name="add">追加</string>
     <string name="delete">削除</string>
     <string name="back">戻る</string>
@@ -52,6 +53,42 @@
     <string name="doc_bg_custom">カスタム</string>
     <string name="doc_bg_comfort">やさしく</string>
     <string name="select_doc_bg">文書の背景色を選択</string>
+
+    <!-- Settings: LLM -->
+    <string name="section_llm">LLM</string>
+    <string name="llm_provider">プロバイダー</string>
+    <string name="select_llm_provider">LLMプロバイダーを選択</string>
+    <string name="llm_provider_google">Google</string>
+    <string name="llm_provider_ollama_cloud">Ollama Cloud</string>
+    <string name="llm_provider_opencode_go">OpenCode Go</string>
+    <string name="llm_provider_zen">OpenCode Zen</string>
+    <string name="llm_model_name">モデル名</string>
+    <string name="llm_model_name_hint">例: gemini-3.6-flash</string>
+    <string name="llm_load_models">モデルを読み込む</string>
+    <string name="llm_available_models">利用可能なモデル</string>
+    <string name="llm_no_models_loaded">まだモデルを読み込んでいません。</string>
+    <string name="llm_thinking_level">Thinking level</string>
+    <string name="llm_thinking_default">デフォルト</string>
+    <string name="llm_thinking_minimal">最小 (Gemmaモデル)</string>
+    <string name="llm_thinking_disable">無効</string>
+    <string name="llm_thinking_low">低</string>
+    <string name="llm_thinking_medium">中</string>
+    <string name="llm_thinking_high">高</string>
+    <string name="llm_api_key">APIキー</string>
+    <string name="llm_api_key_configured">設定済み</string>
+    <string name="llm_api_key_not_configured">未設定</string>
+    <string name="llm_api_key_public">Publicを使用（キーなし）</string>
+    <string name="llm_api_key_hint">プロバイダーのAPIキーを入力</string>
+    <string name="llm_api_key_secure_note">この端末に暗号化して保存されます。</string>
+    <string name="llm_api_key_secure_note_configured">キーは暗号化して保存されています。新しいキーで置き換えられます。</string>
+    <string name="llm_api_key_secure_note_zen_public">ZenはAPIキー未設定時にPublicキーでリクエストします。必要に応じて別のキーを暗号化して保存できます。</string>
+    <string name="llm_clear_api_key">APIキーを削除</string>
+    <string name="llm_system_prompt">システムプロンプト</string>
+    <string name="llm_prompt_custom">カスタムプロンプト</string>
+    <string name="llm_prompt_presets">プロンプトプリセット</string>
+    <string name="llm_preset_name">プリセット名</string>
+    <string name="llm_preset_name_hint">例: 辞書形式の説明</string>
+    <string name="llm_save_preset">プリセットとして保存</string>
 
     <!-- Settings: Reading -->
     <string name="section_reading">読書設定</string>
@@ -122,4 +159,9 @@
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
     <string name="volume_key_paging">音量ボタンでページめくり</string>
+    <string name="llm_action">LLM</string>
+    <string name="llm_response_title">LLMの応答</string>
+    <string name="llm_selected_text">選択したテキスト</string>
+    <string name="llm_loading">選択したプロバイダーに問い合わせ中...</string>
+    <string name="llm_close">閉じる</string>
 </resources>

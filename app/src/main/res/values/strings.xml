@@ -11,6 +11,7 @@
     <string name="cancel">Cancel</string>
     <string name="confirm">OK</string>
     <string name="add">Add</string>
+    <string name="save">Save</string>
     <string name="delete">Delete</string>
     <string name="back">Back</string>
     <string name="back_again_to_exit">Press again to exit</string>
@@ -58,6 +59,42 @@
     <string name="doc_bg_custom">Custom</string>
     <string name="doc_bg_comfort">Comfort</string>
     <string name="select_doc_bg">Select Document Background</string>
+
+    <!-- Settings: LLM -->
+    <string name="section_llm">LLM</string>
+    <string name="llm_provider">Provider</string>
+    <string name="select_llm_provider">Select LLM provider</string>
+    <string name="llm_provider_google">Google</string>
+    <string name="llm_provider_ollama_cloud">Ollama Cloud</string>
+    <string name="llm_provider_opencode_go">OpenCode Go</string>
+    <string name="llm_provider_zen">OpenCode Zen</string>
+    <string name="llm_model_name">Model name</string>
+    <string name="llm_model_name_hint">For example, gemini-3.6-flash</string>
+    <string name="llm_load_models">Load models</string>
+    <string name="llm_available_models">Available models</string>
+    <string name="llm_no_models_loaded">No models loaded yet.</string>
+    <string name="llm_thinking_level">Thinking level</string>
+    <string name="llm_thinking_default">Default</string>
+    <string name="llm_thinking_minimal">Minimal (Gemma models)</string>
+    <string name="llm_thinking_disable">Disable</string>
+    <string name="llm_thinking_low">Low</string>
+    <string name="llm_thinking_medium">Medium</string>
+    <string name="llm_thinking_high">High</string>
+    <string name="llm_api_key">API key</string>
+    <string name="llm_api_key_configured">Configured</string>
+    <string name="llm_api_key_not_configured">Not configured</string>
+    <string name="llm_api_key_public">Public (no key)</string>
+    <string name="llm_api_key_hint">Paste the provider API key</string>
+    <string name="llm_api_key_secure_note">Stored encrypted on this device.</string>
+    <string name="llm_api_key_secure_note_configured">A key is stored encrypted. Enter a new key to replace it.</string>
+    <string name="llm_api_key_secure_note_zen_public">Zen uses the Public key when no API key is configured. An optional key can still be stored encrypted.</string>
+    <string name="llm_clear_api_key">Remove API key</string>
+    <string name="llm_system_prompt">System prompt</string>
+    <string name="llm_prompt_custom">Custom prompt</string>
+    <string name="llm_prompt_presets">Prompt presets</string>
+    <string name="llm_preset_name">Preset name</string>
+    <string name="llm_preset_name_hint">For example, Dictionary</string>
+    <string name="llm_save_preset">Save as preset</string>
 
     <!-- Settings: Reading -->
     <string name="section_reading">Reading</string>
@@ -156,4 +193,9 @@
     <string name="prev_file">Previous File</string>
     <string name="next_file">Next File</string>
     <string name="volume_key_paging">Volume keys turn pages</string>
+    <string name="llm_action">LLM</string>
+    <string name="llm_response_title">LLM response</string>
+    <string name="llm_selected_text">Selected text</string>
+    <string name="llm_loading">Asking the selected provider...</string>
+    <string name="llm_close">Close</string>
 </resources>

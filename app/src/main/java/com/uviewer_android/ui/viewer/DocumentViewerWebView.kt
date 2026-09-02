@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.repository.UserPreferencesRepository
+import com.uviewer_android.R
+
+private const val LLM_SELECTION_ACTION_ID = 0x554C4D
 
 @Composable
 fun DocumentViewerWebView(
@@ -39,7 +42,8 @@ fun DocumentViewerWebView(
     isInteractingWithSlider: Boolean,
     onToggleFullScreen: () -> Unit,
     applyDocumentSearchHighlight: () -> Unit,
-    isScrollRestoring: () -> Boolean
+    isScrollRestoring: () -> Boolean,
+    onLlmSelected: (String) -> Unit
 ) {
     var webViewRef by webViewRefState
     var currentLine by currentLineState
@@ -55,6 +59,85 @@ fun DocumentViewerWebView(
                         factory = { context ->
                             object : WebView(context) {
                                 fun getHorizontalScrollRangePublic(): Int = computeHorizontalScrollRange()
+
+                                private fun wrapSelectionActionModeCallback(
+                                    original: android.view.ActionMode.Callback
+                                ): android.view.ActionMode.Callback {
+                                    return object : android.view.ActionMode.Callback {
+                                        override fun onCreateActionMode(
+                                            mode: android.view.ActionMode?,
+                                            menu: android.view.Menu?
+                                        ): Boolean {
+                                            val created = original.onCreateActionMode(mode, menu)
+                                            if (created) addLlmSelectionItem(menu)
+                                            return created
+                                        }
+
+                                        override fun onPrepareActionMode(
+                                            mode: android.view.ActionMode?,
+                                            menu: android.view.Menu?
+                                        ): Boolean {
+                                            val changed = original.onPrepareActionMode(mode, menu)
+                                            addLlmSelectionItem(menu)
+                                            return changed
+                                        }
+
+                                        override fun onActionItemClicked(
+                                            mode: android.view.ActionMode?,
+                                            item: android.view.MenuItem?
+                                        ): Boolean {
+                                            if (item?.itemId == LLM_SELECTION_ACTION_ID) {
+                                                evaluateJavascript(
+                                                    "(function(){var s=window.getSelection&&window.getSelection();return s?s.toString():'';})()"
+                                                ) { encoded ->
+                                                    decodeSelectedText(encoded)?.let { selected ->
+                                                        if (selected.isNotBlank()) onLlmSelected(selected)
+                                                    }
+                                                }
+                                                mode?.finish()
+                                                return true
+                                            }
+                                            return original.onActionItemClicked(mode, item)
+                                        }
+
+                                        override fun onDestroyActionMode(mode: android.view.ActionMode?) {
+                                            original.onDestroyActionMode(mode)
+                                        }
+                                    }
+                                }
+
+                                private fun addLlmSelectionItem(menu: android.view.Menu?) {
+                                    if (menu?.findItem(LLM_SELECTION_ACTION_ID) == null) {
+                                        menu?.add(
+                                            android.view.Menu.NONE,
+                                            LLM_SELECTION_ACTION_ID,
+                                            android.view.Menu.NONE,
+                                            context.getString(R.string.llm_action)
+                                        )?.setShowAsAction(android.view.MenuItem.SHOW_AS_ACTION_NEVER)
+                                    }
+                                }
+
+                                override fun startActionMode(
+                                    callback: android.view.ActionMode.Callback?,
+                                    type: Int
+                                ): android.view.ActionMode? {
+                                    return if (callback == null) {
+                                        super.startActionMode(null, type)
+                                    } else {
+                                        super.startActionMode(wrapSelectionActionModeCallback(callback), type)
+                                    }
+                                }
+
+                                @Suppress("DEPRECATION")
+                                override fun startActionMode(
+                                    callback: android.view.ActionMode.Callback?
+                                ): android.view.ActionMode? {
+                                    return if (callback == null) {
+                                        super.startActionMode(null)
+                                    } else {
+                                        super.startActionMode(wrapSelectionActionModeCallback(callback))
+                                    }
+                                }
                             }.apply {
                                 layoutParams = android.view.ViewGroup.LayoutParams(
                                     android.view.ViewGroup.LayoutParams.MATCH_PARENT,
@@ -233,6 +316,7 @@ fun DocumentViewerWebView(
                                                 isNavigating = false
                                             }, if (latestState.isImageOnlyChapter) 300L else 600L) // [수정됨] 이미지 챕터는 300ms, 일반은 600ms로 단축하여 반응성 개선
                                         }
+
                                     }
                                 }
                                 webViewRef = this
@@ -429,4 +513,13 @@ val style = ViewerScripts.getStyleSheet(
                                                                )
                                                           }
                                           }
+}
+
+private fun decodeSelectedText(encoded: String?): String? {
+    if (encoded.isNullOrBlank() || encoded == "null") return null
+    return try {
+        org.json.JSONArray("[$encoded]").optString(0).takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+        encoded.trim().trim('"').takeIf { it.isNotBlank() }
+    }
 }

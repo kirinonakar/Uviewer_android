@@ -27,6 +27,14 @@
 - **Math Rendering**: Full support for **KaTeX** math expressions (inline and display mode) in Markdown.
 - **Custom Themes**: White, Sepia, Comfort, Dark, and fully customizable background colors and font settings.
 
+### 🤖 LLM Text Actions
+- **Selection Action**: Select text in the document viewer and choose **LLM** from the Android text-selection menu to explain or transform the selected text.
+- **Provider Support**: Google Gemini, Ollama Cloud, OpenCode Go, and OpenCode Zen.
+- **Configurable Requests**: Set the provider, model name, thinking level, and system prompt from Settings > LLM. Use **Load models** to fetch the provider's available models and select one, or enter a model name manually.
+- **Thinking Controls**: Google supports `default`, `minimal` (for Gemma models), `low`, `medium`, and `high`. Ollama Cloud supports `default`, `disable`, `low`, `medium`, and `high`. OpenCode providers support `default`, `low`, `medium`, and `high`.
+- **Prompt Presets**: The built-in `explain this word` system prompt can be selected directly. Custom system prompts can be saved with a name, selected later, or deleted from the prompt preset menu.
+- **Secure API Keys**: Provider API keys are stored separately in Android `EncryptedSharedPreferences` and are not written to regular user preferences.
+
 ### 🖼️ Image & Manga Viewer
 - **Archive Support**: Instantly View images inside `zip`, `cbz`, `rar`, and `7z` files without extraction.
 - **View Modes**: Single page, Dual page (LTR/RTL), and Split view.

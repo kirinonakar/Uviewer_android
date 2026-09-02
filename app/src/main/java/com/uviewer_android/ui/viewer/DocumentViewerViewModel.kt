@@ -3,6 +3,7 @@ package com.uviewer_android.ui.viewer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.uviewer_android.data.llm.LlmClient
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.parser.EpubParser
 import com.uviewer_android.data.repository.FileRepository
@@ -28,11 +29,15 @@ class DocumentViewerViewModel(
     private val bookmarkDao: com.uviewer_android.data.BookmarkDao,
     private val favoriteDao: com.uviewer_android.data.FavoriteDao,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val cacheManager: com.uviewer_android.data.utils.CacheManager
+    private val cacheManager: com.uviewer_android.data.utils.CacheManager,
+    private val llmClient: LlmClient
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(DocumentViewerUiState())
     val uiState: StateFlow<DocumentViewerUiState> = _uiState.asStateFlow()
+
+    private val _llmState = MutableStateFlow<LlmUiState>(LlmUiState.Idle)
+    val llmState: StateFlow<LlmUiState> = _llmState.asStateFlow()
 
     // Expose flows for FontSettingsDialog
     val fontSize = userPreferencesRepository.fontSize
@@ -61,6 +66,7 @@ class DocumentViewerViewModel(
     private var epubUnzipDir: File? = null
     private var epubBook: com.uviewer_android.data.model.EpubBook? = null
     private var searchJob: Job? = null
+    private var llmJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -122,6 +128,33 @@ class DocumentViewerViewModel(
             }.collect {}
 
         }
+    }
+
+    fun requestLlm(selectedText: String) {
+        val text = selectedText.trim()
+        if (text.isBlank()) return
+
+        llmJob?.cancel()
+        _llmState.value = LlmUiState.Loading(text)
+        llmJob = viewModelScope.launch {
+            try {
+                val response = llmClient.complete(text)
+                _llmState.value = LlmUiState.Success(text, response)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _llmState.value = LlmUiState.Error(
+                    selectedText = text,
+                    message = error.message ?: "LLM request failed."
+                )
+            }
+        }
+    }
+
+    fun dismissLlm() {
+        llmJob?.cancel()
+        llmJob = null
+        _llmState.value = LlmUiState.Idle
     }
 
     fun loadDocument(filePath: String, type: FileEntry.FileType, isWebDav: Boolean, serverId: Int?, initialLine: Int? = null) {

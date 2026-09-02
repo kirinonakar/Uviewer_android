@@ -44,7 +44,8 @@ object AppViewModelProvider {
                 bookmarkDao = app.container.database.bookmarkDao(),
                 favoriteDao = app.container.database.favoriteDao(),
                 userPreferencesRepository = app.container.userPreferencesRepository,
-                cacheManager = app.container.cacheManager
+                cacheManager = app.container.cacheManager,
+                llmClient = app.container.llmClient
             )
         }
         initializer {
@@ -76,7 +77,8 @@ object AppViewModelProvider {
                 application = app,
                 webDavServerDao = app.container.database.webDavServerDao(),
                 credentialsManager = app.container.credentialsManager,
-                userPreferencesRepository = app.container.userPreferencesRepository
+                userPreferencesRepository = app.container.userPreferencesRepository,
+                llmClient = app.container.llmClient
             )
         }
         initializer {
