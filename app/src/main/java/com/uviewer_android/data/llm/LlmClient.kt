@@ -12,6 +12,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.util.Locale
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 /**
@@ -26,6 +27,10 @@ class LlmClient(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val httpClient: OkHttpClient = defaultHttpClient()
 ) {
+    // AppContainer keeps this client app-scoped, so this ID remains stable for
+    // the client conversation instead of changing on every request.
+    private val openCodeSessionId = UUID.randomUUID().toString()
+
     suspend fun complete(selectedText: String): String {
         require(selectedText.isNotBlank()) { "No text was selected." }
 
@@ -164,6 +169,11 @@ class LlmClient(
         val request = Request.Builder()
             .url("$baseUrl/models")
             .header("Authorization", "Bearer $apiKey")
+            .apply {
+                if (provider == LlmProvider.OPENCODE_GO) {
+                    header("x-opencode-session", openCodeSessionId)
+                }
+            }
             .get()
             .build()
 
@@ -315,6 +325,7 @@ class LlmClient(
         selectedText: String
     ): String {
         val apiModel = normalizeOpenCodeModel(model)
+        val sessionId = openCodeSessionId.takeIf { provider == LlmProvider.OPENCODE_GO }
         val baseUrl = when (provider) {
             LlmProvider.OPENCODE_GO -> "https://opencode.ai/zen/go/v1"
             LlmProvider.ZEN -> "https://opencode.ai/zen/v1"
@@ -328,7 +339,8 @@ class LlmClient(
                 model = apiModel,
                 thinkingLevel = thinkingLevel,
                 systemPrompt = systemPrompt,
-                selectedText = selectedText
+                selectedText = selectedText,
+                sessionId = sessionId
             )
 
             OpenCodeProtocol.CHAT_COMPLETIONS -> requestOpenCodeChatCompletions(
@@ -337,7 +349,8 @@ class LlmClient(
                 model = apiModel,
                 thinkingLevel = thinkingLevel,
                 systemPrompt = systemPrompt,
-                selectedText = selectedText
+                selectedText = selectedText,
+                sessionId = sessionId
             )
 
             OpenCodeProtocol.MESSAGES -> requestOpenCodeMessages(
@@ -346,7 +359,8 @@ class LlmClient(
                 model = apiModel,
                 thinkingLevel = thinkingLevel,
                 systemPrompt = systemPrompt,
-                selectedText = selectedText
+                selectedText = selectedText,
+                sessionId = sessionId
             )
         }
     }
@@ -357,7 +371,8 @@ class LlmClient(
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
-        selectedText: String
+        selectedText: String,
+        sessionId: String?
     ): String {
         val requestJson = JSONObject()
             .put("model", model)
@@ -374,7 +389,7 @@ class LlmClient(
             )
         }
 
-        val request = openCodeRequest(url, apiKey, requestJson)
+        val request = openCodeRequest(url, apiKey, requestJson, sessionId)
         return execute(request) { response ->
             val directText = response.optString("output_text", "")
             if (directText.isNotBlank()) return@execute directText
@@ -401,7 +416,8 @@ class LlmClient(
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
-        selectedText: String
+        selectedText: String,
+        sessionId: String?
     ): String {
         val requestJson = JSONObject()
             .put("model", model)
@@ -417,7 +433,7 @@ class LlmClient(
             requestJson.put("reasoning_effort", thinkingLevel.storageKey)
         }
 
-        val request = openCodeRequest(url, apiKey, requestJson)
+        val request = openCodeRequest(url, apiKey, requestJson, sessionId)
         return execute(request) { response ->
             val choices = response.optJSONArray("choices")
                 ?: throw IOException("OpenCode returned no choices.")
@@ -437,7 +453,8 @@ class LlmClient(
         model: String,
         thinkingLevel: LlmThinkingLevel,
         systemPrompt: String,
-        selectedText: String
+        selectedText: String,
+        sessionId: String?
     ): String {
         val requestJson = JSONObject()
             .put("model", model)
@@ -457,7 +474,7 @@ class LlmClient(
             )
         }
 
-        val request = openCodeRequest(url, apiKey, requestJson)
+        val request = openCodeRequest(url, apiKey, requestJson, sessionId)
         return execute(request) { response ->
             val content = response.optJSONArray("content")
                 ?: throw IOException("OpenCode returned no message content.")
@@ -473,11 +490,19 @@ class LlmClient(
         }
     }
 
-    private fun openCodeRequest(url: String, apiKey: String?, body: JSONObject): Request {
+    private fun openCodeRequest(
+        url: String,
+        apiKey: String?,
+        body: JSONObject,
+        sessionId: String?
+    ): Request {
         val builder = Request.Builder()
             .url(url)
         if (apiKey != null) {
             builder.header("Authorization", "Bearer $apiKey")
+        }
+        if (sessionId != null) {
+            builder.header("x-opencode-session", sessionId)
         }
         return builder
             .post(body.toString().jsonRequestBody())
