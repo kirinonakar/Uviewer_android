@@ -169,11 +169,7 @@ class LlmClient(
         val request = Request.Builder()
             .url("$baseUrl/models")
             .header("Authorization", "Bearer $apiKey")
-            .apply {
-                if (provider == LlmProvider.OPENCODE_GO) {
-                    header("x-opencode-session", openCodeSessionId)
-                }
-            }
+            .header("x-opencode-session", openCodeSessionId)
             .get()
             .build()
 
@@ -325,7 +321,7 @@ class LlmClient(
         selectedText: String
     ): String {
         val apiModel = normalizeOpenCodeModel(model)
-        val sessionId = openCodeSessionId.takeIf { provider == LlmProvider.OPENCODE_GO }
+        val sessionId = openCodeSessionId
         val baseUrl = when (provider) {
             LlmProvider.OPENCODE_GO -> "https://opencode.ai/zen/go/v1"
             LlmProvider.ZEN -> "https://opencode.ai/zen/v1"
