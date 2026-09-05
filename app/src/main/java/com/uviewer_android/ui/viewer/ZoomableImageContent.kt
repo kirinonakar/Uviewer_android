@@ -187,15 +187,15 @@ fun ZoomableImage(
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
                 Log.d("ImageViewer", "ZoomableImage: buildRequest: url=$url, isWebDav=$isWebDav")
-                
+                val isAnimated = url.isAnimationCapableImageSource()
+
                 // Handle custom schemes (webdav-zip, waiting-file, webdav-7z)
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .preferHighPrecisionDecode(url)
-                        .crossfade(true)
+                        .crossfade(!isAnimated)
                         .apply {
-                            val isAnimated = url.isAnimationCapableImageSource()
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
                             }
@@ -235,10 +235,9 @@ fun ZoomableImage(
                 
                 return loaderBuilder
                     .preferHighPrecisionDecode(url)
-                    .crossfade(true)
+                    .crossfade(!isAnimated)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.
-                        val isAnimated = url.isAnimationCapableImageSource()
                         if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }
@@ -434,15 +433,15 @@ fun ZoomableDualImage(
             // Helper to build ImageRequest
             fun buildRequest(url: String): ImageRequest {
                 Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav")
+                val isAnimated = url.isAnimationCapableImageSource()
 
                 // Handle custom schemes (webdav-zip, waiting-file, webdav-7z)
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .preferHighPrecisionDecode(url)
-                        .crossfade(true)
+                        .crossfade(!isAnimated)
                         .apply {
-                            val isAnimated = url.isAnimationCapableImageSource()
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
                             }
@@ -482,10 +481,9 @@ fun ZoomableDualImage(
 
                 return loaderBuilder
                     .preferHighPrecisionDecode(url)
-                    .crossfade(true)
+                    .crossfade(!isAnimated)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.
-                        val isAnimated = url.isAnimationCapableImageSource()
                         if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }

@@ -33,9 +33,30 @@ class AnimatedAvifDecoder(
         }
 
         DecodeResult(
-            drawable = AVIFDrawable(AvifByteBufferLoader(encodedBuffer)),
+            drawable = CoilManagedAvifDrawable(AvifByteBufferLoader(encodedBuffer)),
             isSampled = false,
         )
+    }
+
+    /**
+     * FrameAnimationDrawable auto-starts from setVisible(true), while Coil's
+     * DrawablePainter calls start() immediately afterwards. AVIFDrawable.start()
+     * restarts an already running decoder through asynchronous stop/start calls,
+     * which can leave the first playback attempt stopped depending on their order.
+     * Let Coil own the lifecycle and make duplicate starts harmless.
+     */
+    private class CoilManagedAvifDrawable(
+        loader: ByteBufferLoader,
+    ) : AVIFDrawable(loader) {
+        init {
+            setAutoPlay(false)
+        }
+
+        override fun start() {
+            if (!isRunning) {
+                super.start()
+            }
+        }
     }
 
     private class AvifByteBufferLoader(
