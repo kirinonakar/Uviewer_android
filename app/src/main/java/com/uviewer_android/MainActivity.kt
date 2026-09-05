@@ -117,7 +117,7 @@ class MainActivity : AppCompatActivity() {
             val configuration = androidx.compose.ui.platform.LocalConfiguration.current
             val context = androidx.compose.ui.platform.LocalContext.current
             
-            val localizedContext = remember(appLanguage) {
+            val localizedContext = remember(appLanguage, configuration) {
                 val locale = if (appLanguage == UserPreferencesRepository.LANG_SYSTEM) {
                     val systemLocales = AppCompatDelegate.getApplicationLocales()
                     if (!systemLocales.isEmpty) {
@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     java.util.Locale.forLanguageTag(appLanguage)
                 }
-                val config = android.content.res.Configuration(context.resources.configuration)
+                val config = android.content.res.Configuration(configuration)
                 config.setLocale(locale)
                 context.createConfigurationContext(config)
             }

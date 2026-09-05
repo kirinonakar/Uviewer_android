@@ -12,6 +12,7 @@ kotlin = "2.3.21"
 composeBom = "2024.09.00"
 navigationCompose = "2.8.0"
 coil = "2.7.0"
+apng4android = "3.0.5"
 media3 = "1.4.1"
 room = "2.7.0-alpha11"
 okhttp = "4.12.0"
@@ -44,6 +45,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 coil-gif = { group = "io.coil-kt", name = "coil-gif", version.ref = "coil" }
+animation-avif = { group = "com.github.penfeizhou.android.animation", name = "avif", version.ref = "apng4android" }
 androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }

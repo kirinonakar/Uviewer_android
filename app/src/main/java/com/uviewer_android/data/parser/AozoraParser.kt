@@ -198,7 +198,7 @@ object AozoraParser {
 
             l = l.replace(Regex("［＃挿絵（(.+?)）入る］")) { m -> makeImgTag(m.groupValues[1]) }
             l = l.replace(Regex("［＃.+?（(.+?)）］")) { m -> makeImgTag(m.groupValues[1]) }
-            l = l.replace(Regex("(?i)［＃(.+?\\.(?:jpg|jpeg|png|gif|webp|avif))］")) { m -> makeImgTag(m.groupValues[1]) }
+            l = l.replace(Regex("(?i)［＃(.+?\\.(?:jpg|jpeg|png|gif|webp|avif|avifs))］")) { m -> makeImgTag(m.groupValues[1]) }
 
             // Headers
             l = l.replace(Regex("［＃大見出し］(.+?)［＃大見出し終わり］"), "<h1 class=\"aozora-title\">$1</h1>")

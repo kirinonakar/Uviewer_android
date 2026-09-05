@@ -219,7 +219,7 @@ fun MediaPlayerScreen(
                     }
                 })
             }
-        }, context.mainExecutor)
+        }, androidx.core.content.ContextCompat.getMainExecutor(context))
         onDispose {
             mediaController?.let {
                 viewModel.savePosition(it.currentPosition)
@@ -405,7 +405,7 @@ fun MediaPlayerScreen(
             }
         }
     ) { paddingValues ->
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)

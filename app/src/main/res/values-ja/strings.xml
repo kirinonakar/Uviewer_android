@@ -9,6 +9,7 @@
 
     <!-- General -->
     <string name="cancel">キャンセル</string>
+    <string name="confirm">OK</string>
     <string name="save">保存</string>
     <string name="add">追加</string>
     <string name="delete">削除</string>
@@ -21,6 +22,9 @@
     <!-- Library -->
     <string name="add_to_favorites">お気に入りに追加</string>
     <string name="remove_from_favorites">お気に入りから削除</string>
+    <string name="go_to_root">ルートに移動</string>
+    <string name="local">ローカル</string>
+    <string name="remote">リモート</string>
     <string name="pinned">固定</string>
     <string name="no_servers_added">追加されたサーバーはありません</string>
     <string name="no_pinned_files">固定されたファイルはありません</string>
@@ -34,6 +38,8 @@
     <!-- Favorites -->
     <string name="title_favorites">お気に入り</string>
     <string name="no_favorites">お気に入りはまだありません</string>
+    <string name="tab_folders">フォルダー</string>
+    <string name="tab_files">ファイル</string>
 
     <!-- Recent -->
     <string name="title_recent_files">最近のファイル</string>
@@ -97,6 +103,11 @@
     <!-- Settings: Reading -->
     <string name="section_reading">読書設定</string>
     <string name="font_size_fmt">文字サイズ: %d sp</string>
+    <string name="font_family">フォント</string>
+    <string name="select_font_family">フォントを選択</string>
+    <string name="font_serif">明朝体</string>
+    <string name="font_sans_serif">ゴシック体</string>
+    <string name="font_monospace">等幅フォント</string>
     <string name="font_default">デフォルト</string>
     <string name="section_image_viewer">画像ビューア</string>
     <string name="invert_image_control">コントロール方向を反転</string>
@@ -113,6 +124,10 @@
     <string name="add_webdav_server">WebDAV サーバーを追加</string>
     <string name="server_name">名前</string>
     <string name="server_url">URL</string>
+    <string name="server_address">アドレス (IP またはドメイン)</string>
+    <string name="server_port">ポート (任意)</string>
+    <string name="server_path">パス (任意)</string>
+    <string name="protocol">プロトコル</string>
     <string name="username">ユーザー名</string>
     <string name="password">パスワード</string>
     <string name="add_server_desc">サーバーを追加</string>
@@ -132,6 +147,14 @@
     <string name="prev_chapter">前の章</string>
     <string name="next_chapter">次の章</string>
     <string name="table_of_contents">目次</string>
+    <string name="search">検索</string>
+    <string name="search_hint">検索テキスト</string>
+    <string name="search_clear">検索テキストをクリア</string>
+    <string name="search_previous">前の一致箇所</string>
+    <string name="search_next">次の一致箇所</string>
+    <string name="close_search">検索を閉じる</string>
+    <string name="searching">検索中...</string>
+    <string name="search_pdf_unsupported">この端末では PDF テキスト検索に対応していません</string>
     <string name="select_encoding">文字コードを選択</string>
     <string name="encoding_auto">自動</string>
     <string name="encoding_sjis">Shift_JIS (日本語)</string>
@@ -142,6 +165,7 @@
     <string name="encoding_gb18030">GB18030 (簡体字中国語)</string>
     <string name="encoding_gbk">GBK (簡体字中国語)</string>
     <string name="encoding_big5">Big5 (繁体字中国語)</string>
+    <string name="side_margin_fmt">左右の余白: %d</string>
     <string name="sharpening_amount">シャープネスの強さ</string>
     <string name="sharpening_amount_fmt">シャープネスの強さ: %d</string>
     <string name="sharpening_amount_desc">シャープネスの強さ 調整 (0-10)</string>
@@ -160,6 +184,14 @@
     <string name="cache_size_fmt">現在のサイズ: %s</string>
     <string name="clear_cache">削除</string>
     <string name="cache_limit">キャッシュ容量制限</string>
+    <string name="language">アプリの言語</string>
+    <string name="language_system">システム言語 (アプリごとの設定)</string>
+    <string name="lang_system">システムのデフォルト</string>
+    <string name="lang_en">英語</string>
+    <string name="lang_ko">韓国語</string>
+    <string name="lang_ja">日本語</string>
+    <string name="select_language">言語を選択</string>
+    <string name="select_system_language">システム言語を選択</string>
     <string name="prev_file">前のファイル</string>
     <string name="next_file">次のファイル</string>
     <string name="volume_key_paging">音量ボタンでページめくり</string>

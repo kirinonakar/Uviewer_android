@@ -8,6 +8,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
 import coil.decode.ImageDecoderDecoder
+import com.uviewer_android.data.utils.AnimatedAvifDecoder
 import android.os.Build
 
 class UviewerApplication : Application(), ImageLoaderFactory {
@@ -43,6 +44,7 @@ class UviewerApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .components {
+                add(AnimatedAvifDecoder.Factory())
                 if (Build.VERSION.SDK_INT >= 28) {
                     add(coil.decode.ImageDecoderDecoder.Factory())
                 } else {

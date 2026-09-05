@@ -20,7 +20,7 @@ data class FileEntry(
     }
 
     companion object {
-        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heif", "heic", "avif")
+        val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "gif", "webp", "bmp", "heif", "heic", "avif", "avifs")
 
         fun isImageFileName(name: String): Boolean {
             val extension = name.substringAfterLast('.', missingDelimiterValue = "").lowercase()

@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.os.Build
 import android.view.Window
 
-private val HIGH_PRECISION_IMAGE_EXTENSIONS = setOf("avif", "heif", "heic")
+private val HIGH_PRECISION_IMAGE_EXTENSIONS = setOf("avif", "avifs", "heif", "heic")
 
 /**
  * AVIF/HEIF containers can carry 10-bit PQ/HLG content even when they do not have an Ultra HDR

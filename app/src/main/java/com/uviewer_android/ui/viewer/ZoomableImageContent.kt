@@ -43,6 +43,25 @@ import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
+private fun String.isAnimationCapableImageSource(): Boolean {
+    val source = substringBefore('#').lowercase()
+    val candidates = buildList {
+        add(source.substringBefore('?'))
+        source.substringAfter('?', missingDelimiterValue = "")
+            .split('&')
+            .mapNotNullTo(this) { parameter ->
+                parameter.substringAfter('=', missingDelimiterValue = "")
+                    .takeIf { it.isNotEmpty() }
+            }
+    }
+
+    return candidates.any { candidate ->
+        val path = candidate.substringBefore('?')
+        path.endsWith(".gif") || path.endsWith(".webp") ||
+            path.endsWith(".avif") || path.endsWith(".avifs")
+    }
+}
+
 private fun AsyncImagePainter.State.containsHdrContent(): Boolean {
     val bitmap = (this as? AsyncImagePainter.State.Success)
         ?.result
@@ -176,7 +195,7 @@ fun ZoomableImage(
                         .preferHighPrecisionDecode(url)
                         .crossfade(true)
                         .apply {
-                            val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                            val isAnimated = url.isAnimationCapableImageSource()
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
                             }
@@ -218,8 +237,8 @@ fun ZoomableImage(
                     .preferHighPrecisionDecode(url)
                     .crossfade(true)
                     .apply {
-                        // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
-                        val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                        // Transformations break animation playback, including animated AVIF.
+                        val isAnimated = url.isAnimationCapableImageSource()
                         if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }
@@ -423,7 +442,7 @@ fun ZoomableDualImage(
                         .preferHighPrecisionDecode(url)
                         .crossfade(true)
                         .apply {
-                            val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                            val isAnimated = url.isAnimationCapableImageSource()
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
                             }
@@ -465,8 +484,8 @@ fun ZoomableDualImage(
                     .preferHighPrecisionDecode(url)
                     .crossfade(true)
                     .apply {
-                        // Skip sharpening for animated formats (WebP, GIF) as transformations break animation playback
-                        val isAnimated = url.lowercase().let { it.endsWith(".webp") || it.endsWith(".gif") }
+                        // Transformations break animation playback, including animated AVIF.
+                        val isAnimated = url.isAnimationCapableImageSource()
                         if (sharpeningAmount > 0 && !isAnimated) {
                             transformations(SharpenTransformation(sharpeningAmount))
                         }

@@ -19,6 +19,7 @@ import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.text.SubtitleParser
 
 @Suppress("DEPRECATION")
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 private fun DefaultExtractorsFactory.withTextTrackTranscodingDisabled(): DefaultExtractorsFactory =
     setTextTrackTranscodingEnabled(false)
 
