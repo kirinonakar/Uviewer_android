@@ -35,6 +35,10 @@
             inset: 0;
             pointer-events: none;
         }
+        .page .detail-canvas {
+            position: absolute;
+            pointer-events: none;
+        }
         .pdf-search-highlight {
             position: absolute;
             background: rgba(255, 221, 87, .56);
@@ -69,6 +73,113 @@
         let renderObserver = null;
         let reportTimer = null;
         let searchSerial = 0;
+        let detailTimer = null;
+        let detailSerial = 0;
+        let detailTask = null;
+        let detailRequestKey = null;
+
+        // Cache whole pages at the zoom resolution. Panning within the same
+        // pages must neither restart an in-flight render nor replace its bitmap.
+        function scheduleDetailRender() {
+            const visual = window.visualViewport;
+            const viewLeft = visual ? visual.pageLeft : window.scrollX;
+            const viewTop = visual ? visual.pageTop : window.scrollY;
+            const viewWidth = visual ? visual.width : window.innerWidth;
+            const viewHeight = visual ? visual.height : window.innerHeight;
+            const visiblePages = pages.filter(pageInfo => {
+                const bounds = pageInfo.el.getBoundingClientRect();
+                const left = bounds.left + window.scrollX;
+                const top = bounds.top + window.scrollY;
+                return left < viewLeft + viewWidth && left + bounds.width > viewLeft &&
+                    top < viewTop + viewHeight && top + bounds.height > viewTop;
+            });
+            const key = [visual ? visual.scale : 1, window.devicePixelRatio || 1,
+                ...visiblePages.map(pageInfo => pageInfo.num)].join(':');
+            if (key === detailRequestKey) return;
+            detailRequestKey = key;
+            const serial = ++detailSerial;
+            clearTimeout(detailTimer);
+            if (detailTask) detailTask.cancel();
+            detailTimer = setTimeout(() => renderVisibleDetails(serial), 150);
+        }
+
+        async function renderVisibleDetails(serial) {
+            const visual = window.visualViewport;
+            const zoom = visual ? visual.scale : 1;
+            const viewLeft = visual ? visual.pageLeft : window.scrollX;
+            const viewTop = visual ? visual.pageTop : window.scrollY;
+            const viewWidth = visual ? visual.width : window.innerWidth;
+            const viewHeight = visual ? visual.height : window.innerHeight;
+            for (const pageInfo of pages) {
+                if (serial !== detailSerial) return;
+                const bounds = pageInfo.el.getBoundingClientRect();
+                const pageLeft = bounds.left + window.scrollX;
+                const pageTop = bounds.top + window.scrollY;
+                const left = Math.max(0, viewLeft - pageLeft);
+                const top = Math.max(0, viewTop - pageTop);
+                const right = Math.min(bounds.width, viewLeft + viewWidth - pageLeft);
+                const bottom = Math.min(bounds.height, viewTop + viewHeight - pageTop);
+                if (zoom <= 1 || right <= left || bottom <= top) {
+                    removeDetailCanvas(pageInfo);
+                    continue;
+                }
+                const width = bounds.width;
+                const height = bounds.height;
+                const outputScale = Math.min(
+                    Math.max(1, window.devicePixelRatio || 1) * zoom,
+                    Math.sqrt(16777216 / (width * height)),
+                    8192 / width, 8192 / height
+                );
+                const key = [width, height, outputScale].join(':');
+                if (pageInfo.detailKey === key) continue;
+                let canvas = null;
+                let task = null;
+                try {
+                    const page = await pdfDoc.getPage(pageInfo.num);
+                    if (serial !== detailSerial) return;
+                    const viewport = page.getViewport({ scale: pageInfo.scale });
+                    canvas = document.createElement('canvas');
+                    canvas.className = 'detail-canvas';
+                    canvas.width = Math.max(1, Math.floor(width * outputScale));
+                    canvas.height = Math.max(1, Math.floor(height * outputScale));
+                    canvas.style.left = '0px';
+                    canvas.style.top = '0px';
+                    canvas.style.width = width + 'px';
+                    canvas.style.height = height + 'px';
+                    task = page.render({
+                        canvasContext: canvas.getContext('2d'),
+                        viewport,
+                        transform: [canvas.width / width, 0, 0, canvas.height / height, 0, 0]
+                    });
+                    detailTask = task;
+                    await task.promise;
+                    if (serial !== detailSerial) return;
+                    // Keep the previous image until its replacement is complete.
+                    removeDetailCanvas(pageInfo);
+                    pageInfo.el.insertBefore(canvas, pageInfo.el.querySelector('.highlight-layer'));
+                    pageInfo.detailKey = key;
+                    canvas = null;
+                } catch (error) {
+                    if (error.name !== 'RenderingCancelledException') {
+                        if (serial === detailSerial) detailRequestKey = null;
+                        console.error(error);
+                    }
+                } finally {
+                    if (detailTask === task) detailTask = null;
+                    if (canvas) { canvas.width = 0; canvas.height = 0; }
+                }
+            }
+        }
+
+        function removeDetailCanvas(pageInfo) {
+            const canvas = pageInfo.el.querySelector('.detail-canvas');
+            if (canvas) {
+                canvas.remove();
+                canvas.width = 0;
+                canvas.height = 0;
+            }
+            pageInfo.detailKey = null;
+        }
 
         function reportPage(pageNumber) {
             currentPage = Math.max(1, Math.min(pageNumber, pages.length || pageNumber));
@@ -326,6 +437,10 @@
         }
 
         async function loadPdf(fileUrl, initialPage) {
+            ++detailSerial;
+            detailRequestKey = null;
+            clearTimeout(detailTimer);
+            if (detailTask) detailTask.cancel();
             viewer.innerHTML = '<div class="loading">Loading...</div>';
             pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
             pages = [];
@@ -361,6 +476,7 @@
                 });
             }, { root: null, rootMargin: '900px 0px' });
             pages.forEach(pageInfo => renderObserver.observe(pageInfo.el));
+            scheduleDetailRender();
 
             if (window.Android && Android.onPdfLoaded) {
                 Android.onPdfLoaded(pdfDoc.numPages);
@@ -386,6 +502,12 @@
         };
 
         window.addEventListener('scroll', scheduleReportPage, { passive: true });
+        window.addEventListener('scroll', scheduleDetailRender, { passive: true });
+        window.addEventListener('resize', scheduleDetailRender, { passive: true });
+        if (window.visualViewport) {
+            window.visualViewport.addEventListener('resize', scheduleDetailRender, { passive: true });
+            window.visualViewport.addEventListener('scroll', scheduleDetailRender, { passive: true });
+        }
         document.addEventListener('click', event => {
             if (matches.length > 0 && event.target.classList.contains('pdf-search-highlight')) return;
             const third = window.innerWidth / 3;
