@@ -9,6 +9,7 @@ function setup() {
     const renders = [];
     let timer;
     const listeners = {};
+    const documentListeners = {};
     const visualViewport = {
         scale: 3, pageLeft: 100, pageTop: 200, width: 120, height: 240,
         addEventListener(name, handler) { listeners[name] = handler; }
@@ -43,7 +44,8 @@ function setup() {
             innerWidth: 360, innerHeight: 720, addEventListener() {}
         },
         document: {
-            getElementById: () => ({}), addEventListener() {},
+            getElementById: () => ({}),
+            addEventListener(name, handler) { documentListeners[name] = handler; },
             createElement: () => ({
                 style: {}, getContext() { return { canvas: this }; },
                 remove() { if (detail === this) detail = null; }
@@ -55,12 +57,47 @@ function setup() {
     vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
     vm.runInContext('pdfDoc = mockDoc; pages = [pageInfo];', context);
     return {
-        context, visualViewport, renders, page, listeners,
+        context, visualViewport, renders, page, listeners, documentListeners,
         flush: () => { const callback = timer; timer = null; return callback?.(); },
         detail: () => detail,
         render: () => vm.runInContext('renderVisibleDetails(detailSerial)', context)
     };
 }
+
+test('tap zones follow the visible screen at both edges and the middle of a zoomed page', () => {
+    const s = setup();
+    const actions = [];
+    s.context.window.UviewerPdf.previousPage = () => actions.push('previous');
+    s.context.window.UviewerPdf.nextPage = () => actions.push('next');
+    s.context.Android = s.context.window.Android = { toggleControls: () => actions.push('toggle') };
+    for (const offset of [0, 120, 240]) {
+        s.visualViewport.offsetLeft = offset;
+        for (const fraction of [0.1, 0.5, 0.9]) {
+            s.documentListeners.click({ clientX: offset + s.visualViewport.width * fraction });
+        }
+    }
+    assert.deepEqual(actions, [
+        'previous', 'toggle', 'next',
+        'previous', 'toggle', 'next',
+        'previous', 'toggle', 'next'
+    ]);
+});
+
+test('tap zones work at normal zoom and without the visual viewport API', () => {
+    const s = setup();
+    const actions = [];
+    s.context.window.UviewerPdf.previousPage = () => actions.push('previous');
+    s.context.window.UviewerPdf.nextPage = () => actions.push('next');
+    s.context.Android = s.context.window.Android = { toggleControls: () => actions.push('toggle') };
+    s.visualViewport.offsetLeft = 0;
+    s.visualViewport.width = 360;
+    s.visualViewport.scale = 1;
+    for (const visual of [s.visualViewport, undefined]) {
+        s.context.window.visualViewport = visual;
+        for (const clientX of [36, 180, 324]) s.documentListeners.click({ clientX });
+    }
+    assert.deepEqual(actions, ['previous', 'toggle', 'next', 'previous', 'toggle', 'next']);
+});
 
 test('pinch zoom renders the entire page at device density times zoom', async () => {
     const s = setup();

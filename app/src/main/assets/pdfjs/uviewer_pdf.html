@@ -510,9 +510,13 @@
         }
         document.addEventListener('click', event => {
             if (matches.length > 0 && event.target.classList.contains('pdf-search-highlight')) return;
-            const third = window.innerWidth / 3;
-            if (event.clientX < third) window.UviewerPdf.previousPage();
-            else if (event.clientX > third * 2) window.UviewerPdf.nextPage();
+            // clientX is relative to the layout viewport. Pinch zoom and pan
+            // move the visible screen within it, so classify taps in that screen.
+            const visual = window.visualViewport;
+            const screenX = event.clientX - (visual ? visual.offsetLeft : 0);
+            const third = (visual ? visual.width : window.innerWidth) / 3;
+            if (screenX < third) window.UviewerPdf.previousPage();
+            else if (screenX > third * 2) window.UviewerPdf.nextPage();
             else if (window.Android && Android.toggleControls) Android.toggleControls();
         });
     </script>
