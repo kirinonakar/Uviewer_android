@@ -396,7 +396,32 @@ fun PdfViewerScreen(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
-                            WebView(ctx).apply {
+                            object : WebView(ctx) {
+                                private var pdfPinching = false
+
+                                override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+                                    if (event.pointerCount > 1 && !pdfPinching) {
+                                        pdfPinching = true
+                                        evaluateJavascript(
+                                            "window.UviewerPdf && window.UviewerPdf.onNativeGestureStart();", null
+                                        )
+                                    }
+                                    val handled = super.dispatchTouchEvent(event)
+                                    if (pdfPinching && (event.actionMasked == android.view.MotionEvent.ACTION_UP ||
+                                            event.actionMasked == android.view.MotionEvent.ACTION_CANCEL)) {
+                                        pdfPinching = false
+                                        // Native pinch handling can consume DOM touchend. Notify JS
+                                        // after WebView has processed the final event as well.
+                                        post {
+                                            evaluateJavascript(
+                                                "window.UviewerPdf && window.UviewerPdf.onNativeGestureEnd();", null
+                                            )
+                                            postInvalidateOnAnimation()
+                                        }
+                                    }
+                                    return handled
+                                }
+                            }.apply {
                                 webViewRef = this
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
@@ -445,6 +470,15 @@ fun PdfViewerScreen(
                                     "Android"
                                 )
                                 webViewClient = object : WebViewClient() {
+                                    override fun onScaleChanged(view: WebView?, oldScale: Float, newScale: Float) {
+                                        super.onScaleChanged(view, oldScale, newScale)
+                                        if (!newScale.isFinite() || newScale <= 0f) return
+                                        view?.evaluateJavascript(
+                                            "window.UviewerPdf && window.UviewerPdf.onNativeScaleChanged($newScale);",
+                                            null
+                                        )
+                                    }
+
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
                                         webViewReady = true
