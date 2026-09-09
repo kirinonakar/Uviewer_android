@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=10.0, user-scalable=yes">
     <style>
         html, body {
             width: 100%;
@@ -38,6 +38,10 @@
         .page .detail-canvas {
             position: absolute;
             pointer-events: none;
+        }
+        .detail-canvas img {
+            position: absolute;
+            display: block;
         }
         .pdf-search-highlight {
             position: absolute;
@@ -125,11 +129,7 @@
                 }
                 const width = bounds.width;
                 const height = bounds.height;
-                const outputScale = Math.min(
-                    Math.max(1, window.devicePixelRatio || 1) * zoom,
-                    Math.sqrt(16777216 / (width * height)),
-                    8192 / width, 8192 / height
-                );
+                const outputScale = Math.max(1, window.devicePixelRatio || 1) * zoom;
                 const key = [width, height, outputScale].join(':');
                 if (pageInfo.detailKey === key) continue;
                 let canvas = null;
@@ -138,22 +138,29 @@
                     const page = await pdfDoc.getPage(pageInfo.num);
                     if (serial !== detailSerial) return;
                     const viewport = page.getViewport({ scale: pageInfo.scale });
-                    canvas = document.createElement('canvas');
-                    canvas.className = 'detail-canvas';
-                    canvas.width = Math.max(1, Math.floor(width * outputScale));
-                    canvas.height = Math.max(1, Math.floor(height * outputScale));
-                    canvas.style.left = '0px';
-                    canvas.style.top = '0px';
-                    canvas.style.width = width + 'px';
-                    canvas.style.height = height + 'px';
-                    task = page.render({
-                        canvasContext: canvas.getContext('2d'),
-                        viewport,
-                        transform: [canvas.width / width, 0, 0, canvas.height / height, 0, 0]
-                    });
-                    detailTask = task;
-                    await task.promise;
-                    if (serial !== detailSerial) return;
+                    const pixelWidth = Math.ceil(width * outputScale);
+                    const pixelHeight = Math.ceil(height * outputScale);
+                    if (pixelWidth * pixelHeight > 16777216 || pixelWidth > 8192 || pixelHeight > 8192) {
+                        canvas = await renderDetailTiles(page, viewport, width, height, outputScale, serial);
+                        if (!canvas || serial !== detailSerial) return;
+                    } else {
+                        canvas = document.createElement('canvas');
+                        canvas.className = 'detail-canvas';
+                        canvas.width = pixelWidth;
+                        canvas.height = pixelHeight;
+                        canvas.style.left = '0px';
+                        canvas.style.top = '0px';
+                        canvas.style.width = width + 'px';
+                        canvas.style.height = height + 'px';
+                        task = page.render({
+                            canvasContext: canvas.getContext('2d'),
+                            viewport,
+                            transform: [canvas.width / width, 0, 0, canvas.height / height, 0, 0]
+                        });
+                        detailTask = task;
+                        await task.promise;
+                        if (serial !== detailSerial) return;
+                    }
                     // Keep the previous image until its replacement is complete.
                     removeDetailCanvas(pageInfo);
                     pageInfo.el.insertBefore(canvas, pageInfo.el.querySelector('.highlight-layer'));
@@ -166,18 +173,85 @@
                     }
                 } finally {
                     if (detailTask === task) detailTask = null;
-                    if (canvas) { canvas.width = 0; canvas.height = 0; }
+                    if (canvas) releaseDetail(canvas);
                 }
+            }
+        }
+
+        // Large zoom levels cannot fit in one canvas. Keep lossless compressed
+        // tiles for the whole page and reuse one small raster buffer while drawing.
+        async function renderDetailTiles(page, viewport, width, height, scale, serial) {
+            const layer = document.createElement('div');
+            layer.className = 'detail-canvas';
+            layer.style.left = '0px';
+            layer.style.top = '0px';
+            layer.style.width = width + 'px';
+            layer.style.height = height + 'px';
+            layer.tileUrls = [];
+            const buffer = document.createElement('canvas');
+            const pixelWidth = Math.ceil(width * scale);
+            const pixelHeight = Math.ceil(height * scale);
+            let complete = false;
+            try {
+                for (let y = 0; y < pixelHeight; y += 2046) {
+                    for (let x = 0; x < pixelWidth; x += 2046) {
+                        if (serial !== detailSerial) return null;
+                        // Two pixels of overlap prevent seams from image sampling.
+                        buffer.width = Math.min(2048, pixelWidth - x);
+                        buffer.height = Math.min(2048, pixelHeight - y);
+                        const task = page.render({
+                            canvasContext: buffer.getContext('2d'), viewport,
+                            transform: [scale, 0, 0, scale, -x, -y]
+                        });
+                        detailTask = task;
+                        try {
+                            await task.promise;
+                        } finally {
+                            if (detailTask === task) detailTask = null;
+                        }
+                        if (serial !== detailSerial) return null;
+                        const blob = await new Promise((resolve, reject) => {
+                            buffer.toBlob(value => value ? resolve(value) :
+                                reject(new Error('Unable to encode PDF detail tile')), 'image/png');
+                        });
+                        if (serial !== detailSerial) return null;
+                        const url = URL.createObjectURL(blob);
+                        layer.tileUrls.push(url);
+                        const tile = document.createElement('img');
+                        tile.src = url;
+                        tile.alt = '';
+                        tile.decoding = 'async';
+                        tile.style.left = (x / scale) + 'px';
+                        tile.style.top = (y / scale) + 'px';
+                        tile.style.width = (buffer.width / scale) + 'px';
+                        tile.style.height = (buffer.height / scale) + 'px';
+                        layer.appendChild(tile);
+                    }
+                }
+                complete = true;
+                return layer;
+            } finally {
+                buffer.width = 0;
+                buffer.height = 0;
+                if (!complete) releaseDetail(layer);
+            }
+        }
+
+        function releaseDetail(element) {
+            element.remove();
+            if (element.tileUrls) {
+                element.querySelectorAll('img').forEach(tile => tile.removeAttribute('src'));
+                element.tileUrls.forEach(url => URL.revokeObjectURL(url));
+                element.tileUrls = [];
+            } else {
+                element.width = 0;
+                element.height = 0;
             }
         }
 
         function removeDetailCanvas(pageInfo) {
             const canvas = pageInfo.el.querySelector('.detail-canvas');
-            if (canvas) {
-                canvas.remove();
-                canvas.width = 0;
-                canvas.height = 0;
-            }
+            if (canvas) releaseDetail(canvas);
             pageInfo.detailKey = null;
         }
 
@@ -441,6 +515,7 @@
             detailRequestKey = null;
             clearTimeout(detailTimer);
             if (detailTask) detailTask.cancel();
+            pages.forEach(removeDetailCanvas);
             viewer.innerHTML = '<div class="loading">Loading...</div>';
             pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
             pages = [];

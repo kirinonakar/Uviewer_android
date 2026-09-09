@@ -7,6 +7,8 @@ const vm = require('node:vm');
 
 function setup() {
     const renders = [];
+    const blobs = new Set();
+    let nextBlob = 0;
     let timer;
     const listeners = {};
     const documentListeners = {};
@@ -30,7 +32,8 @@ function setup() {
     const page = {
         getViewport: ({ scale }) => ({ width: 720 * scale, height: 1200 * scale }),
         render(options) {
-            renders.push(options);
+            renders.push({ ...options, pixelWidth: options.canvasContext.canvas.width,
+                pixelHeight: options.canvasContext.canvas.height });
             return { promise: Promise.resolve(), cancel() {} };
         }
     };
@@ -39,6 +42,10 @@ function setup() {
         setTimeout(callback) { timer = callback; return 1; },
         clearTimeout() { timer = null; },
         pdfjsLib: { GlobalWorkerOptions: {} },
+        URL: {
+            createObjectURL() { const url = 'blob:' + nextBlob++; blobs.add(url); return url; },
+            revokeObjectURL(url) { blobs.delete(url); }
+        },
         window: {
             visualViewport, devicePixelRatio: 2, scrollX: 0, scrollY: 0,
             innerWidth: 360, innerHeight: 720, addEventListener() {}
@@ -46,8 +53,12 @@ function setup() {
         document: {
             getElementById: () => ({}),
             addEventListener(name, handler) { documentListeners[name] = handler; },
-            createElement: () => ({
-                style: {}, getContext() { return { canvas: this }; },
+            createElement: tag => ({
+                tag, children: [], style: {}, getContext() { return { canvas: this }; },
+                toBlob(callback) { callback({}); },
+                appendChild(child) { this.children.push(child); },
+                querySelectorAll() { return this.children; },
+                removeAttribute(name) { delete this[name]; },
                 remove() { if (detail === this) detail = null; }
             })
         },
@@ -57,7 +68,7 @@ function setup() {
     vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
     vm.runInContext('pdfDoc = mockDoc; pages = [pageInfo];', context);
     return {
-        context, visualViewport, renders, page, listeners, documentListeners,
+        context, visualViewport, renders, page, listeners, documentListeners, blobs,
         flush: () => { const callback = timer; timer = null; return callback?.(); },
         detail: () => detail,
         render: () => vm.runInContext('renderVisibleDetails(detailSerial)', context)
@@ -202,11 +213,65 @@ test('scroll events do not cancel or restart an in-flight render of the same pag
     assert.equal(renderCount, 1);
 });
 
-test('extreme zoom respects canvas memory and dimension limits', async () => {
+test('10x zoom renders the full page at native zoom resolution in bounded tiles', async () => {
     const s = setup();
-    s.visualViewport.scale = 100;
+    s.visualViewport.scale = 10;
     await s.render();
-    assert.ok(s.detail().width * s.detail().height <= 16777216);
-    assert.ok(s.detail().width <= 8192);
-    assert.ok(s.detail().height <= 8192);
+    assert.equal(s.detail().tag, 'div');
+    assert.equal(s.renders.length, 24);
+    for (const render of s.renders) {
+        assert.equal(render.transform[0], 20);
+        assert.equal(render.transform[3], 20);
+        assert.ok(render.pixelWidth <= 2048);
+        assert.ok(render.pixelHeight <= 2048);
+    }
+    const last = s.renders.at(-1);
+    assert.equal(-last.transform[4] + last.pixelWidth, 7200);
+    assert.equal(-last.transform[5] + last.pixelHeight, 12000);
+    assert.equal(new Set(s.renders.map(r => r.canvasContext.canvas)).size, 1);
+    assert.equal(s.renders[0].canvasContext.canvas.width, 0);
+    const previous = s.detail();
+    s.visualViewport.pageLeft += 20;
+    await s.render();
+    assert.equal(s.detail(), previous);
+    assert.equal(s.renders.length, 24);
+    assert.equal(s.blobs.size, 24);
+    s.visualViewport.scale = 1;
+    await s.render();
+    assert.equal(s.detail(), null);
+    assert.equal(s.blobs.size, 0);
+});
+
+test('cancelled tile rendering releases partial tiles and retains the previous image', async () => {
+    const s = setup();
+    await s.render();
+    const previous = s.detail();
+    s.visualViewport.scale = 10;
+    const render = s.page.render;
+    let count = 0;
+    s.page.render = options => {
+        if (++count === 2) vm.runInContext('++detailSerial', s.context);
+        return render(options);
+    };
+    await s.render();
+    assert.equal(s.detail(), previous);
+    assert.equal(s.blobs.size, 0);
+    assert.equal(s.renders.at(-1).canvasContext.canvas.width, 0);
+});
+
+test('a failed tile render releases blobs and can be retried', async () => {
+    const s = setup();
+    s.visualViewport.scale = 10;
+    const render = s.page.render;
+    let count = 0;
+    s.page.render = options => {
+        if (++count === 2) return { promise: Promise.reject({ name: 'RenderingCancelledException' }) };
+        return render(options);
+    };
+    await s.render();
+    assert.equal(s.detail(), null);
+    assert.equal(s.blobs.size, 0);
+    s.page.render = render;
+    await s.render();
+    assert.equal(s.detail().children.length, 24);
 });
