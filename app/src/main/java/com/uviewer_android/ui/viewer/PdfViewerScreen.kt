@@ -396,27 +396,87 @@ fun PdfViewerScreen(
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
+                            var pdfScale = ctx.resources.displayMetrics.density
+                            var detailFramePump: Runnable? = null
+                            var detailVisualPending = false
+                            fun setDetailRendering(view: WebView, active: Boolean) {
+                                if (!active) {
+                                    detailFramePump?.let { view.removeCallbacks(it) }
+                                    detailFramePump = null
+                                } else if (detailFramePump == null && view.isAttachedToWindow) {
+                                    // PDF.js display rendering yields through requestAnimationFrame.
+                                    // Keep WebView drawing until that asynchronous job finishes.
+                                    val pump = object : Runnable {
+                                        override fun run() {
+                                            if (detailFramePump !== this) return
+                                            view.postInvalidateOnAnimation()
+                                            view.postDelayed(this, 16L)
+                                        }
+                                    }
+                                    detailFramePump = pump
+                                    view.post(pump)
+                                }
+                            }
+                            fun reportViewport(view: WebView) {
+                                if (view.width <= 0 || view.height <= 0) return
+                                view.evaluateJavascript(
+                                    "window.UviewerPdf && window.UviewerPdf.onNativeViewportChanged(" +
+                                        "$pdfScale,${view.scrollX},${view.scrollY},${view.width},${view.height});",
+                                    null
+                                )
+                            }
                             object : WebView(ctx) {
                                 private var pdfPinching = false
+                                private var pdfHadPinch = false
+
+                                override fun onDetachedFromWindow() {
+                                    setDetailRendering(this, false)
+                                    super.onDetachedFromWindow()
+                                }
+
+                                override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+                                    super.onScrollChanged(l, t, oldl, oldt)
+                                    reportViewport(this)
+                                }
+
+                                override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+                                    super.onSizeChanged(w, h, oldw, oldh)
+                                    post { reportViewport(this) }
+                                }
 
                                 override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+                                    if (event.actionMasked == android.view.MotionEvent.ACTION_DOWN) pdfHadPinch = false
                                     if (event.pointerCount > 1 && !pdfPinching) {
                                         pdfPinching = true
+                                        pdfHadPinch = true
                                         evaluateJavascript(
                                             "window.UviewerPdf && window.UviewerPdf.onNativeGestureStart();", null
                                         )
                                     }
                                     val handled = super.dispatchTouchEvent(event)
-                                    if (pdfPinching && (event.actionMasked == android.view.MotionEvent.ACTION_UP ||
-                                            event.actionMasked == android.view.MotionEvent.ACTION_CANCEL)) {
+                                    val pinchEnded = event.actionMasked == android.view.MotionEvent.ACTION_POINTER_UP &&
+                                        event.pointerCount == 2
+                                    val gestureEnded = event.actionMasked == android.view.MotionEvent.ACTION_UP ||
+                                        event.actionMasked == android.view.MotionEvent.ACTION_CANCEL
+                                    if ((pdfPinching && pinchEnded) || (pdfHadPinch && gestureEnded)) {
                                         pdfPinching = false
                                         // Native pinch handling can consume DOM touchend. Notify JS
                                         // after WebView has processed the final event as well.
                                         post {
+                                            reportViewport(this)
                                             evaluateJavascript(
                                                 "window.UviewerPdf && window.UviewerPdf.onNativeGestureEnd();", null
                                             )
                                             postInvalidateOnAnimation()
+                                            // Re-read the DOM viewport after WebView commits the final
+                                            // pinch frame, even if it emits no resize/scroll event.
+                                            postVisualStateCallback(0L, object : WebView.VisualStateCallback() {
+                                                override fun onComplete(requestId: Long) {
+                                                    evaluateJavascript(
+                                                        "window.UviewerPdf && window.UviewerPdf.refreshDetailViewport();", null
+                                                    )
+                                                }
+                                            })
                                         }
                                     }
                                     return handled
@@ -437,6 +497,29 @@ fun PdfViewerScreen(
                                 setBackgroundColor(android.graphics.Color.rgb(32, 33, 36))
                                 addJavascriptInterface(
                                     object {
+                                        @JavascriptInterface
+                                        fun onDetailRendering(active: Boolean) {
+                                            post { setDetailRendering(this@apply, active) }
+                                        }
+
+                                        @JavascriptInterface
+                                        fun onDetailReady() {
+                                            post {
+                                                postInvalidateOnAnimation()
+                                                if (!detailVisualPending) {
+                                                    detailVisualPending = true
+                                                    // Invalidate after the updated DOM/canvas is drawable,
+                                                    // not only before the asynchronous PDF render starts.
+                                                    postVisualStateCallback(0L, object : WebView.VisualStateCallback() {
+                                                        override fun onComplete(requestId: Long) {
+                                                            detailVisualPending = false
+                                                            postInvalidateOnAnimation()
+                                                        }
+                                                    })
+                                                }
+                                            }
+                                        }
+
                                         @JavascriptInterface
                                         fun onPdfLoaded(totalPages: Int) {
                                             post {
@@ -473,10 +556,12 @@ fun PdfViewerScreen(
                                     override fun onScaleChanged(view: WebView?, oldScale: Float, newScale: Float) {
                                         super.onScaleChanged(view, oldScale, newScale)
                                         if (!newScale.isFinite() || newScale <= 0f) return
-                                        view?.evaluateJavascript(
-                                            "window.UviewerPdf && window.UviewerPdf.onNativeScaleChanged($newScale);",
-                                            null
-                                        )
+                                        pdfScale = newScale
+                                        view?.let {
+                                            reportViewport(it)
+                                            // The final pinch scroll offset can arrive after the scale callback.
+                                            it.postOnAnimation { reportViewport(it) }
+                                        }
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {

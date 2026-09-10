@@ -35,13 +35,9 @@
             inset: 0;
             pointer-events: none;
         }
-        .page .detail-canvas, .page .detail-pending {
+        .page .detail-canvas {
             position: absolute;
             pointer-events: none;
-        }
-        .detail-canvas img, .detail-pending img {
-            position: absolute;
-            display: block;
         }
         .detail-tile {
             position: absolute;
@@ -87,10 +83,14 @@
         const DETAIL_DEBOUNCE_MS = 120;
         let detailSerial = 0;
         let detailTask = null;
+        let detailActiveTile = null;
+        let detailRenderingScale = null;
         let detailRequestKey = null;
         let nativePageScale = null;
+        let nativeDetailViewport = null;
         let detailRenderingSerial = null;
         let detailSettleTimers = [];
+        let detailPinching = false;
 
         function detailZoom() {
             // Android can report pinch scaling before visualViewport is updated
@@ -105,25 +105,95 @@
             return scheduleDetailRender();
         }
 
-        // Cache whole pages at the zoom resolution. Panning within the same
-        // pages must neither restart an in-flight render nor replace its bitmap.
-        function scheduleDetailRender() {
+        function onNativeViewportChanged(scale, x, y, width, height) {
+            if (![scale, x, y, width, height].every(Number.isFinite) ||
+                scale <= 0 || width <= 0 || height <= 0) return;
+            // Android supplies physical pixels and physical pixels per CSS pixel.
+            // Keep position, size and zoom from the same native snapshot: the DOM
+            // visual viewport can still describe the area before the pinch.
+            nativePageScale = scale;
+            nativeDetailViewport = {
+                pageLeft: x / scale, pageTop: y / scale,
+                width: width / scale, height: height / scale
+            };
+            return scheduleDetailRender();
+        }
+
+        function detailViewport() {
             const visual = window.visualViewport;
-            const viewLeft = visual ? visual.pageLeft : window.scrollX;
-            const viewTop = visual ? visual.pageTop : window.scrollY;
-            const viewWidth = visual ? visual.width : window.innerWidth;
-            const viewHeight = visual ? visual.height : window.innerHeight;
-            const visiblePages = pages.filter(pageInfo => {
+            // Native scroll offsets can lag the compositor even when native scale
+            // is current. Once DOM scale catches up, use its live position too.
+            if (visual && (!nativeDetailViewport ||
+                Math.abs(visual.scale - detailZoom()) <= 0.001 * Math.max(1, visual.scale))) {
+                return { pageLeft: visual.pageLeft, pageTop: visual.pageTop,
+                    width: visual.width, height: visual.height };
+            }
+            return nativeDetailViewport || {
+                pageLeft: window.scrollX, pageTop: window.scrollY,
+                width: window.innerWidth, height: window.innerHeight
+            };
+        }
+
+        const DETAIL_TILE_SIZE = 1020;
+        const DETAIL_TILE_PADDING = 2;
+
+        function detailDemand() {
+            const visual = detailViewport();
+            const outputScale = Math.max(1, window.devicePixelRatio || 1) * detailZoom();
+            const tiles = [];
+            if (detailZoom() > 1) for (const pageInfo of pages) {
                 const bounds = pageInfo.el.getBoundingClientRect();
-                const left = bounds.left + window.scrollX;
-                const top = bounds.top + window.scrollY;
-                return left < viewLeft + viewWidth && left + bounds.width > viewLeft &&
-                    top < viewTop + viewHeight && top + bounds.height > viewTop;
-            });
-            const key = [detailZoom(), window.devicePixelRatio || 1,
-                ...visiblePages.map(pageInfo => pageInfo.num)].join(':');
-            if (key === detailRequestKey) return detailRenderPromise;
-            detailRequestKey = key;
+                const pageLeft = bounds.left + window.scrollX;
+                const pageTop = bounds.top + window.scrollY;
+                const left = Math.max(0, visual.pageLeft - pageLeft);
+                const top = Math.max(0, visual.pageTop - pageTop);
+                const right = Math.min(bounds.width, visual.pageLeft + visual.width - pageLeft);
+                const bottom = Math.min(bounds.height, visual.pageTop + visual.height - pageTop);
+                if (right <= left || bottom <= top) continue;
+                const pixelWidth = Math.ceil(bounds.width * outputScale);
+                const pixelHeight = Math.ceil(bounds.height * outputScale);
+                const sx = pixelWidth / bounds.width;
+                const sy = pixelHeight / bounds.height;
+                const key = [bounds.width, bounds.height, outputScale].join(':');
+                const minColumn = Math.floor(left * sx / DETAIL_TILE_SIZE);
+                const maxColumn = Math.ceil(right * sx / DETAIL_TILE_SIZE) - 1;
+                const minRow = Math.floor(top * sy / DETAIL_TILE_SIZE);
+                const maxRow = Math.ceil(bottom * sy / DETAIL_TILE_SIZE) - 1;
+                for (let row = minRow; row <= maxRow; row++) {
+                    for (let column = minColumn; column <= maxColumn; column++) {
+                        const x = column * DETAIL_TILE_SIZE;
+                        const y = row * DETAIL_TILE_SIZE;
+                        const w = Math.min(DETAIL_TILE_SIZE, pixelWidth - x);
+                        const h = Math.min(DETAIL_TILE_SIZE, pixelHeight - y);
+                        const dx = pageLeft + (x + w / 2) / sx - visual.pageLeft - visual.width / 2;
+                        const dy = pageTop + (y + h / 2) / sy - visual.pageTop - visual.height / 2;
+                        tiles.push({ pageInfo, key, id: column + ':' + row, x, y, w, h,
+                            pixelWidth, pixelHeight, width: bounds.width, height: bounds.height,
+                            priority: dx * dx + dy * dy });
+                    }
+                }
+            }
+            const key = [outputScale, ...tiles.map(tile =>
+                [tile.pageInfo.num, tile.key, tile.id].join('/'))].join('|');
+            tiles.sort((a, b) => a.priority - b.priority);
+            return { outputScale, key, tiles };
+        }
+
+        function sameDetailTile(a, b) {
+            return a && a.pageInfo === b.pageInfo && a.key === b.key && a.id === b.id;
+        }
+
+        function scheduleDetailRender() {
+            if (detailPinching) return;
+            const demand = detailDemand();
+            if (demand.key === detailRequestKey) return detailRenderPromise;
+            detailRequestKey = demand.key;
+            // Keep useful work and re-read demand after each tile. If the current
+            // tile is offscreen, cancel it so it cannot delay the new visible area.
+            if (detailRenderingSerial === detailSerial && detailRenderingScale === demand.outputScale &&
+                (!detailActiveTile || demand.tiles.some(tile => sameDetailTile(tile, detailActiveTile)))) {
+                return detailRenderPromise;
+            }
             ++detailSerial;
             if (detailTask) detailTask.cancel();
             cancelDetailDelay();
@@ -149,10 +219,36 @@
             detailTimerResolve = null;
             const serial = detailSerial;
             detailRenderingSerial = serial;
+            detailRenderingScale = detailDemand().outputScale;
+            notifyDetailRendering(true);
             resolve(renderVisibleDetails(serial).finally(() => {
-                if (detailRenderingSerial === serial) detailRenderingSerial = null;
+                if (detailRenderingSerial === serial) {
+                    detailRenderingSerial = null;
+                    notifyDetailRendering(false);
+                }
             }));
             return detailRenderPromise;
+        }
+
+        function notifyDetailRendering(active) {
+            if (window.Android && window.Android.onDetailRendering) window.Android.onDetailRendering(active);
+        }
+
+        function notifyDetailReady() {
+            if (window.Android && window.Android.onDetailReady) window.Android.onDetailReady();
+        }
+
+        function beginDetailGesture(event) {
+            if (event && event.touches.length < 2) return;
+            if (detailPinching) return;
+            detailPinching = true;
+            clearDetailSettlement();
+            cancelDetailDelay();
+            ++detailSerial;
+            detailRequestKey = null;
+            if (detailTask) detailTask.cancel();
+            detailRenderingSerial = null;
+            notifyDetailRendering(false);
         }
 
         function clearDetailSettlement() {
@@ -161,13 +257,14 @@
         }
 
         function settleDetailGesture() {
+            detailPinching = false;
             clearDetailSettlement();
             let lastVisualScale = window.visualViewport ? window.visualViewport.scale : 1;
             const refresh = () => {
                 const visual = window.visualViewport;
                 // A viewport update arriving after touchend is newer than the
                 // native scale snapshot that may have started the pending job.
-                if (visual && visual.scale !== lastVisualScale) {
+                if (!nativeDetailViewport && visual && visual.scale !== lastVisualScale) {
                     lastVisualScale = visual.scale;
                     if (nativePageScale !== null) nativePageScale = visual.scale * (window.devicePixelRatio || 1);
                 }
@@ -184,220 +281,119 @@
         }
 
         function finishDetailGesture(event) {
-            if (event.touches.length > 0) return;
+            if (event.touches.length > 1) return;
             return settleDetailGesture();
         }
 
-        async function renderVisibleDetails(serial) {
-            const visual = window.visualViewport;
-            const zoom = detailZoom();
-            const viewLeft = visual ? visual.pageLeft : window.scrollX;
-            const viewTop = visual ? visual.pageTop : window.scrollY;
-            const viewWidth = visual ? visual.width : window.innerWidth;
-            const viewHeight = visual ? visual.height : window.innerHeight;
+        function pruneDetailCache(demand) {
             for (const pageInfo of pages) {
-                if (serial !== detailSerial) return;
-                const bounds = pageInfo.el.getBoundingClientRect();
-                const pageLeft = bounds.left + window.scrollX;
-                const pageTop = bounds.top + window.scrollY;
-                const left = Math.max(0, viewLeft - pageLeft);
-                const top = Math.max(0, viewTop - pageTop);
-                const right = Math.min(bounds.width, viewLeft + viewWidth - pageLeft);
-                const bottom = Math.min(bounds.height, viewTop + viewHeight - pageTop);
-                if (zoom <= 1 || right <= left || bottom <= top) {
+                const wanted = demand.tiles.filter(tile => tile.pageInfo === pageInfo);
+                if (wanted.length === 0) {
                     removeDetailCanvas(pageInfo);
                     continue;
                 }
-                const width = bounds.width;
-                const height = bounds.height;
-                const outputScale = Math.max(1, window.devicePixelRatio || 1) * zoom;
-                const key = [width, height, outputScale].join(':');
-                if (pageInfo.detailKey === key) continue;
+                const cache = pageInfo.detailCache;
+                // Preserve the previous scale until the first replacement tile is ready.
+                if (!cache || cache.key !== wanted[0].key) continue;
+                const ids = new Set(wanted.map(tile => tile.id));
+                for (const [id, region] of cache.tiles) {
+                    if (!ids.has(id)) {
+                        releaseDetail(region);
+                        cache.tiles.delete(id);
+                    }
+                }
+            }
+        }
+
+        async function renderVisibleDetails(serial) {
+            while (serial === detailSerial) {
+                const demand = detailDemand();
+                pruneDetailCache(demand);
+                const spec = demand.tiles.find(tile => {
+                    const cache = tile.pageInfo.detailCache;
+                    return !cache || cache.key !== tile.key || !cache.tiles.has(tile.id);
+                });
+                if (!spec) return;
                 let canvas = null;
                 let task = null;
                 try {
-                    const page = await pdfDoc.getPage(pageInfo.num);
+                    const page = await pdfDoc.getPage(spec.pageInfo.num);
                     if (serial !== detailSerial) return;
-                    const viewport = page.getViewport({ scale: pageInfo.scale });
-                    const pixelWidth = Math.ceil(width * outputScale);
-                    const pixelHeight = Math.ceil(height * outputScale);
-                    if (pixelWidth * pixelHeight > 16777216 || pixelWidth > 8192 || pixelHeight > 8192) {
-                        canvas = await renderDetailTiles(pageInfo, page, viewport, width, height, outputScale, serial);
-                        if (!canvas || serial !== detailSerial) return;
-                    } else {
-                        canvas = document.createElement('canvas');
-                        canvas.className = 'detail-canvas';
-                        canvas.width = pixelWidth;
-                        canvas.height = pixelHeight;
-                        canvas.style.left = '0px';
-                        canvas.style.top = '0px';
-                        canvas.style.width = width + 'px';
-                        canvas.style.height = height + 'px';
-                        task = page.render({
-                            canvasContext: canvas.getContext('2d'),
-                            viewport,
-                            transform: [canvas.width / viewport.width, 0, 0,
-                                canvas.height / viewport.height, 0, 0]
-                        });
-                        detailTask = task;
-                        await task.promise;
-                        if (serial !== detailSerial) return;
+                    // getPage may yield while the compositor finishes the pinch.
+                    if (!detailDemand().tiles.some(tile => sameDetailTile(tile, spec))) continue;
+                    const viewport = page.getViewport({ scale: spec.pageInfo.scale });
+                    const renderLeft = Math.max(0, spec.x - DETAIL_TILE_PADDING);
+                    const renderTop = Math.max(0, spec.y - DETAIL_TILE_PADDING);
+                    canvas = document.createElement('canvas');
+                    canvas.width = Math.min(spec.pixelWidth, spec.x + spec.w + DETAIL_TILE_PADDING) - renderLeft;
+                    canvas.height = Math.min(spec.pixelHeight, spec.y + spec.h + DETAIL_TILE_PADDING) - renderTop;
+                    const cssX = spec.width / spec.pixelWidth;
+                    const cssY = spec.height / spec.pixelHeight;
+                    canvas.style.position = 'absolute';
+                    canvas.style.left = (renderLeft - spec.x) * cssX + 'px';
+                    canvas.style.top = (renderTop - spec.y) * cssY + 'px';
+                    canvas.style.width = canvas.width * cssX + 'px';
+                    canvas.style.height = canvas.height * cssY + 'px';
+                    task = page.render({
+                        canvasContext: canvas.getContext('2d'), viewport,
+                        transform: [spec.pixelWidth / viewport.width, 0, 0,
+                            spec.pixelHeight / viewport.height, -renderLeft, -renderTop]
+                    });
+                    detailTask = task;
+                    detailActiveTile = spec;
+                    await task.promise;
+                    if (serial !== detailSerial) return;
+                    if (!detailDemand().tiles.some(tile => sameDetailTile(tile, spec))) continue;
+                    let cache = spec.pageInfo.detailCache;
+                    if (!cache || cache.key !== spec.key) {
+                        removeDetailCanvas(spec.pageInfo);
+                        const layer = document.createElement('div');
+                        layer.className = 'detail-canvas';
+                        layer.style.left = '0px';
+                        layer.style.top = '0px';
+                        layer.style.width = spec.width + 'px';
+                        layer.style.height = spec.height + 'px';
+                        cache = { key: spec.key, layer, tiles: new Map() };
+                        spec.pageInfo.detailCache = cache;
+                        spec.pageInfo.el.insertBefore(layer, spec.pageInfo.el.querySelector('.highlight-layer'));
                     }
-                    // Keep the previous image until its replacement is complete.
-                    removeDetailCanvas(pageInfo);
-                    canvas.className = 'detail-canvas';
-                    pageInfo.el.insertBefore(canvas, pageInfo.el.querySelector('.highlight-layer'));
-                    pageInfo.detailKey = key;
+                    const region = document.createElement('div');
+                    region.className = 'detail-tile';
+                    region.style.left = spec.x * cssX + 'px';
+                    region.style.top = spec.y * cssY + 'px';
+                    region.style.width = spec.w * cssX + 'px';
+                    region.style.height = spec.h * cssY + 'px';
+                    region.appendChild(canvas);
+                    cache.layer.appendChild(region);
+                    cache.tiles.set(spec.id, region);
+                    // Publish the backing canvas immediately. PNG encoding and image
+                    // decoding must not sit between a finished render and the screen.
                     canvas = null;
+                    notifyDetailReady();
                 } catch (error) {
                     if (serial === detailSerial) detailRequestKey = null;
-                    if (error.name !== 'RenderingCancelledException') {
-                        console.error(error);
-                    }
+                    if (error.name !== 'RenderingCancelledException') console.error(error);
+                    return;
                 } finally {
-                    if (detailTask === task) detailTask = null;
+                    if (detailTask === task) {
+                        detailTask = null;
+                        detailActiveTile = null;
+                    }
                     if (canvas) releaseDetail(canvas);
                 }
             }
         }
 
-        // Large zoom levels cannot fit in one canvas. Keep lossless compressed
-        // tiles for the whole page and reuse one small raster buffer while drawing.
-        async function renderDetailTiles(pageInfo, page, viewport, width, height, scale, serial) {
-            const layer = document.createElement('div');
-            layer.className = 'detail-pending';
-            layer.style.left = '0px';
-            layer.style.top = '0px';
-            layer.tileUrls = [];
-            const buffer = document.createElement('canvas');
-            const pixelWidth = Math.ceil(width * scale);
-            const pixelHeight = Math.ceil(height * scale);
-            // All tiles share one pixel grid and one CSS transform. Independently
-            // rounded fractional tile positions can drift at WebView zoom levels.
-            layer.style.width = pixelWidth + 'px';
-            layer.style.height = pixelHeight + 'px';
-            layer.style.transformOrigin = '0 0';
-            layer.style.transform = `scale(${width / pixelWidth}, ${height / pixelHeight})`;
-            const scaleX = pixelWidth / viewport.width;
-            const scaleY = pixelHeight / viewport.height;
-            const tileSize = 2044;
-            const padding = 2;
-            const pending = [];
-            for (let y = 0; y < pixelHeight; y += tileSize) {
-                for (let x = 0; x < pixelWidth; x += tileSize) pending.push({ x, y });
-            }
-            let complete = false;
-            let attached = false;
-            try {
-                while (pending.length > 0) {
-                    // Re-evaluate on every tile so panning prioritizes newly
-                    // visible content without cancelling or redrawing cached tiles.
-                    const visual = window.visualViewport;
-                    const bounds = pageInfo.el.getBoundingClientRect();
-                    const left = ((visual ? visual.pageLeft : window.scrollX) -
-                        bounds.left - window.scrollX) * pixelWidth / bounds.width;
-                    const top = ((visual ? visual.pageTop : window.scrollY) -
-                        bounds.top - window.scrollY) * pixelHeight / bounds.height;
-                    const right = left + (visual ? visual.width : window.innerWidth) * pixelWidth / bounds.width;
-                    const bottom = top + (visual ? visual.height : window.innerHeight) * pixelHeight / bounds.height;
-                    const centerColumn = Math.max(0, Math.min(Math.ceil(pixelWidth / tileSize) - 1,
-                        Math.floor((left + right) / 2 / tileSize)));
-                    const centerRow = Math.max(0, Math.min(Math.ceil(pixelHeight / tileSize) - 1,
-                        Math.floor((top + bottom) / 2 / tileSize)));
-                    const priority = tile => {
-                        const tileRight = Math.min(pixelWidth, tile.x + tileSize);
-                        const tileBottom = Math.min(pixelHeight, tile.y + tileSize);
-                        const visible = tile.x < right && tileRight > left &&
-                            tile.y < bottom && tileBottom > top;
-                        const dx = tile.x / tileSize - centerColumn;
-                        const dy = tile.y / tileSize - centerRow;
-                        const ring = Math.max(Math.abs(dx), Math.abs(dy));
-                        const angle = (Math.atan2(dy, dx) + 2 * Math.PI) % (2 * Math.PI);
-                        return { offscreen: visible ? 0 : 1, ring, angle };
-                    };
-                    // Finish all visible tiles first. Within each group, walk
-                    // clockwise around a complete ring before stepping outward.
-                    const ranked = pending.map(tile => ({ tile, ...priority(tile) }));
-                    ranked.sort((a, b) => a.offscreen - b.offscreen || a.ring - b.ring || a.angle - b.angle);
-                    pending.splice(0, pending.length, ...ranked.map(entry => entry.tile));
-                    const { x, y } = pending.shift();
-                    if (serial !== detailSerial) return null;
-                    const tileWidth = Math.min(tileSize, pixelWidth - x);
-                    const tileHeight = Math.min(tileSize, pixelHeight - y);
-                    const renderLeft = Math.max(0, x - padding);
-                    const renderTop = Math.max(0, y - padding);
-                    // Render a gutter on every side, but display only the tile's
-                    // own rectangle. Completion order cannot overwrite neighbours.
-                    buffer.width = Math.min(pixelWidth, x + tileWidth + padding) - renderLeft;
-                    buffer.height = Math.min(pixelHeight, y + tileHeight + padding) - renderTop;
-                    const task = page.render({
-                        canvasContext: buffer.getContext('2d'), viewport,
-                        transform: [scaleX, 0, 0, scaleY, -renderLeft, -renderTop]
-                    });
-                    detailTask = task;
-                    try {
-                        await task.promise;
-                    } finally {
-                        if (detailTask === task) detailTask = null;
-                    }
-                    if (serial !== detailSerial) return null;
-                    const blob = await new Promise((resolve, reject) => {
-                        buffer.toBlob(value => value ? resolve(value) :
-                            reject(new Error('Unable to encode PDF detail tile')), 'image/png');
-                    });
-                    if (serial !== detailSerial) return null;
-                    const url = URL.createObjectURL(blob);
-                    layer.tileUrls.push(url);
-                    const tile = document.createElement('img');
-                    tile.src = url;
-                    tile.alt = '';
-                    tile.decoding = 'async';
-                    tile.style.left = (renderLeft - x) + 'px';
-                    tile.style.top = (renderTop - y) + 'px';
-                    tile.style.width = buffer.width + 'px';
-                    tile.style.height = buffer.height + 'px';
-                    await tile.decode();
-                    if (serial !== detailSerial) return null;
-                    const region = document.createElement('div');
-                    region.className = 'detail-tile';
-                    region.style.left = x + 'px';
-                    region.style.top = y + 'px';
-                    region.style.width = tileWidth + 'px';
-                    region.style.height = tileHeight + 'px';
-                    region.appendChild(tile);
-                    layer.appendChild(region);
-                    // Publish each ready tile immediately over the previous image.
-                    // The rest of the page continues rendering in the background.
-                    if (!attached) {
-                        pageInfo.el.insertBefore(layer, pageInfo.el.querySelector('.highlight-layer'));
-                        attached = true;
-                    }
-                }
-                complete = true;
-                return layer;
-            } finally {
-                buffer.width = 0;
-                buffer.height = 0;
-                if (!complete) releaseDetail(layer);
-            }
-        }
-
         function releaseDetail(element) {
             element.remove();
-            if (element.tileUrls) {
-                element.querySelectorAll('img').forEach(tile => tile.removeAttribute('src'));
-                element.tileUrls.forEach(url => URL.revokeObjectURL(url));
-                element.tileUrls = [];
-            } else {
-                element.width = 0;
-                element.height = 0;
-            }
+            const canvases = element.tagName === 'CANVAS' ? [element] : element.querySelectorAll('canvas');
+            canvases.forEach(canvas => { canvas.width = 0; canvas.height = 0; });
         }
 
         function removeDetailCanvas(pageInfo) {
-            const canvas = pageInfo.el.querySelector('.detail-canvas');
-            if (canvas) releaseDetail(canvas);
-            pageInfo.detailKey = null;
+            const cache = pageInfo.detailCache;
+            if (cache) releaseDetail(cache.layer);
+            pageInfo.detailCache = null;
         }
 
         function reportPage(pageNumber) {
@@ -708,8 +704,10 @@
         window.UviewerPdf = {
             loadPdf,
             onNativeScaleChanged,
-            onNativeGestureStart: clearDetailSettlement,
+            onNativeViewportChanged,
+            onNativeGestureStart: beginDetailGesture,
             onNativeGestureEnd: settleDetailGesture,
+            refreshDetailViewport: () => { scheduleDetailRender(); return flushDetailRender(); },
             find,
             nextMatch,
             previousMatch,
@@ -729,7 +727,7 @@
         window.addEventListener('scroll', scheduleDetailRender, { passive: true });
         window.addEventListener('resize', scheduleDetailRender, { passive: true });
         document.addEventListener('touchend', finishDetailGesture, { passive: true });
-        document.addEventListener('touchstart', clearDetailSettlement, { passive: true });
+        document.addEventListener('touchstart', beginDetailGesture, { passive: true });
         document.addEventListener('touchcancel', finishDetailGesture, { passive: true });
         if (window.visualViewport) {
             window.visualViewport.addEventListener('resize', scheduleDetailRender, { passive: true });

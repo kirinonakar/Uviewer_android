@@ -1,101 +1,9 @@
 // Run with: node --test app/src/test/js/pdf-zoom.test.cjs
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const vm = require('node:vm');
 
-function setup() {
-    const renders = [];
-    const blobs = new Set();
-    let nextBlob = 0;
-    const timers = new Map();
-    let timerId = 0;
-    let clock = 0;
-    const listeners = {};
-    const documentListeners = {};
-    const visualViewport = {
-        scale: 3, pageLeft: 100, pageTop: 200, width: 120, height: 240,
-        addEventListener(name, handler) { listeners[name] = handler; }
-    };
-    const layer = {};
-    const details = [];
-    const pageInfo = {
-        num: 1, scale: 0.5,
-        el: {
-            getBoundingClientRect: () => ({ left: 8, top: 8, width: 360, height: 600 }),
-            querySelector: selector => selector === '.highlight-layer' ? layer :
-                details.find(element => element.className === 'detail-canvas') || null,
-            insertBefore(canvas, reference) {
-                assert.equal(reference, layer);
-                const index = details.indexOf(canvas);
-                if (index >= 0) details.splice(index, 1);
-                details.push(canvas);
-            }
-        }
-    };
-    const page = {
-        getViewport: ({ scale }) => ({ width: 720 * scale, height: 1200 * scale }),
-        render(options) {
-            renders.push({ ...options, pixelWidth: options.canvasContext.canvas.width,
-                pixelHeight: options.canvasContext.canvas.height });
-            return { promise: Promise.resolve(), cancel() {} };
-        }
-    };
-    const context = vm.createContext({
-        console,
-        setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, due: clock + delay }); return id; },
-        clearTimeout(id) { timers.delete(id); },
-        pdfjsLib: { GlobalWorkerOptions: {} },
-        URL: {
-            createObjectURL() { const url = 'blob:' + nextBlob++; blobs.add(url); return url; },
-            revokeObjectURL(url) { blobs.delete(url); }
-        },
-        window: {
-            visualViewport, devicePixelRatio: 2, scrollX: 0, scrollY: 0,
-            innerWidth: 360, innerHeight: 720, addEventListener() {}
-        },
-        document: {
-            getElementById: () => ({}),
-            addEventListener(name, handler) { documentListeners[name] = handler; },
-            createElement: tag => ({
-                tag, children: [], style: {}, getContext() { return { canvas: this }; },
-                toBlob(callback) { callback({}); },
-                decode: async () => {},
-                appendChild(child) { this.children.push(child); },
-                querySelectorAll() {
-                    return this.children.flatMap(child => child.tag === 'img' ? [child] : child.querySelectorAll());
-                },
-                removeAttribute(name) { delete this[name]; },
-                remove() { const index = details.indexOf(this); if (index >= 0) details.splice(index, 1); }
-            })
-        },
-        pageInfo, mockDoc: { getPage: async () => page }
-    });
-    const html = fs.readFileSync(path.join(__dirname, '../../main/assets/pdfjs/uviewer_pdf.html'), 'utf8');
-    vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], context);
-    vm.runInContext('pdfDoc = mockDoc; pages = [pageInfo];', context);
-    return {
-        context, visualViewport, renders, page, listeners, documentListeners, blobs,
-        flush: () => vm.runInContext('flushDetailRender()', context),
-        elapse: ms => {
-            const target = clock + ms;
-            const results = [];
-            while (true) {
-                const next = [...timers].sort((a, b) => a[1].due - b[1].due)[0];
-                if (!next || next[1].due > target) break;
-                clock = next[1].due;
-                timers.delete(next[0]);
-                results.push(next[1].callback());
-            }
-            clock = target;
-            return Promise.all(results);
-        },
-        detail: () => details.find(element => element.className === 'detail-canvas') || null,
-        displayed: () => details.at(-1),
-        render: () => vm.runInContext('renderVisibleDetails(detailSerial)', context)
-    };
-}
+const { setup } = require('./pdf-test-helpers.cjs');
 
 test('tap zones follow the visible screen at both edges and the middle of a zoomed page', () => {
     const s = setup();
@@ -132,239 +40,253 @@ test('tap zones work at normal zoom and without the visual viewport API', () => 
     assert.deepEqual(actions, ['previous', 'toggle', 'next', 'previous', 'toggle', 'next']);
 });
 
-test('pinch zoom renders the entire page at device density times zoom', async () => {
+function nativeViewport(s, scale, left, top, width, height) {
+    return s.context.window.UviewerPdf.onNativeViewportChanged(scale * 2,
+        left * scale * 2, top * scale * 2, width * scale * 2, height * scale * 2);
+}
+
+function assertVisible(render, visual, bounds = { left: 8, top: 8, width: 360, height: 600 }) {
+    const [sx, , , sy, tx, ty] = render.transform;
+    const left = bounds.left - tx / sx;
+    const top = bounds.top - ty / sy;
+    const right = left + render.pixelWidth / sx;
+    const bottom = top + render.pixelHeight / sy;
+    assert.ok(left < visual.pageLeft + visual.width && right > visual.pageLeft &&
+        top < visual.pageTop + visual.height && bottom > visual.pageTop,
+        `tile (${left}, ${top}, ${right}, ${bottom}) must intersect the visible screen`);
+}
+
+function holdRender(s, number = 1) {
+    const original = s.page.render;
+    let finish;
+    let fail;
+    let started;
+    let cancellations = 0;
+    const ready = new Promise(resolve => { started = resolve; });
+    s.page.render = options => {
+        const task = original(options);
+        if (s.renders.length === number) {
+            task.promise = new Promise((resolve, reject) => { finish = resolve; fail = reject; started(); });
+            task.cancel = () => { cancellations++; fail({ name: 'RenderingCancelledException' }); };
+        }
+        return task;
+    };
+    return { ready, finish: () => finish(), fail: error => fail(error), cancelled: () => cancellations };
+}
+
+test('settled DOM viewport wins over stale native offsets at the same zoom', async () => {
     const s = setup();
-    await s.render();
-    assert.equal(s.detail().width, 2160);
-    assert.equal(s.detail().height, 3600);
-    assert.deepEqual(Array.from(s.renders[0].transform), [6, 0, 0, 6, 0, 0]);
-    assert.equal(s.detail().style.left, '0px');
-    assert.equal(s.detail().style.width, '360px');
-    assert.equal(s.renders[0].viewport.width, 360);
-    assert.equal(typeof s.listeners.resize, 'function');
-    assert.equal(typeof s.listeners.scroll, 'function');
-    await s.render();
-    assert.equal(s.renders.length, 1);
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 330, pageTop: 536, width: 36, height: 72 });
+    nativeViewport(s, 10, 0, 0, 36, 72);
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    assert.ok(s.renders.length > 0);
+    s.renders.forEach(render => assertVisible(render, s.visualViewport));
 });
 
-test('panning reuses the entire page bitmap; zoom out releases it', async () => {
+test('late DOM position corrects the first native snapshot without scroll or resize events', async () => {
+    const s = setup();
+    Object.assign(s.visualViewport, { scale: 1, pageLeft: 0, pageTop: 0, width: 360, height: 720 });
+    nativeViewport(s, 10, 0, 0, 36, 72);
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    const oldCount = s.renders.length;
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 330, pageTop: 536, width: 36, height: 72 });
+    await s.elapse(60);
+    assert.ok(s.renders.length > oldCount);
+    s.renders.slice(oldCount).forEach(render => assertVisible(render, s.visualViewport));
+});
+
+test('a compositor commit rechecks the viewport even after settlement timers expire', async () => {
+    const s = setup();
+    s.visualViewport.scale = 1;
+    nativeViewport(s, 10, 0, 0, 36, 72);
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    await s.elapse(360);
+    const oldCount = s.renders.length;
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 330, pageTop: 536, width: 36, height: 72 });
+    await s.context.window.UviewerPdf.refreshDetailViewport();
+    assert.ok(s.renders.length > oldCount);
+    s.renders.slice(oldCount).forEach(render => assertVisible(render, s.visualViewport));
+});
+
+test('native position is used while DOM zoom still lags', async () => {
+    const s = setup();
+    s.visualViewport.scale = 1;
+    nativeViewport(s, 10, 330, 536, 36, 72);
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    s.renders.forEach(render => {
+        assert.equal(render.transform[0], 20);
+        assertVisible(render, { pageLeft: 330, pageTop: 536, width: 36, height: 72 });
+    });
+    const count = s.renders.length;
+    s.visualViewport.scale = 3; // Late intermediate scale cannot downgrade the native snapshot.
+    await s.elapse(360);
+    assert.equal(s.renders.length, count);
+});
+
+test('10x detail renders only the visible area, at full density, without PNG encoding', async () => {
+    const s = setup();
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 150, pageTop: 400, width: 36, height: 72 });
+    await s.render();
+    assert.ok(s.renders.length > 0 && s.renders.length <= 6);
+    s.renders.forEach(render => {
+        assertVisible(render, s.visualViewport);
+        assert.equal(render.transform[0], 20);
+        assert.equal(render.transform[3], 20);
+        assert.ok(render.pixelWidth <= 1024 && render.pixelHeight <= 1024);
+        assert.ok(render.canvasContext.canvas.width > 0);
+    });
+    assert.equal(s.detail().querySelectorAll('canvas').length, s.renders.length);
+    assert.equal(s.blobs.size, 0);
+    const count = s.renders.length;
+    await s.elapse(2000);
+    assert.equal(s.renders.length, count); // No peripheral background work.
+});
+
+test('the first ready canvas is displayed while the next visible tile is still rendering', async () => {
+    const s = setup();
+    const signals = [];
+    s.context.window.Android = {
+        onDetailRendering: active => signals.push(active ? 'start' : 'stop'),
+        onDetailReady: () => signals.push('ready')
+    };
+    const held = holdRender(s, 2);
+    const pending = s.context.window.UviewerPdf.onNativeGestureEnd();
+    await held.ready;
+    assert.equal(s.detail().querySelectorAll('canvas').length, 1);
+    assert.deepEqual(signals, ['start', 'ready']);
+    assertVisible(s.renders[0], s.visualViewport);
+    held.finish();
+    await pending;
+    assert.equal(signals.at(-1), 'stop');
+    assert.equal(signals.filter(value => value === 'ready').length, s.renders.length);
+});
+
+test('moderate zoom also uses visible tiles instead of waiting for a whole-page canvas', async () => {
     const s = setup();
     await s.render();
-    const previous = s.detail();
-    s.visualViewport.pageLeft += 20;
+    assert.equal(s.detail().style.width, '360px');
+    assert.equal(s.detail().style.height, '600px');
+    assert.ok(s.renders.length > 1);
+    for (const render of s.renders) {
+        assert.equal(render.transform[0], 6);
+        assertVisible(render, s.visualViewport);
+        assert.ok(render.pixelWidth <= 1024 && render.pixelHeight <= 1024);
+    }
+});
+
+test('small pans within cached tiles reuse canvases; zoom-out releases every backing store', async () => {
+    const s = setup();
     await s.render();
-    assert.equal(s.detail(), previous);
-    assert.equal(s.renders.length, 1);
+    const before = s.renders.length;
+    const canvases = s.detail().querySelectorAll('canvas');
+    s.visualViewport.pageLeft += 1;
+    await s.render();
+    assert.equal(s.renders.length, before);
     s.visualViewport.scale = 1;
     await s.render();
     assert.equal(s.detail(), null);
-    assert.equal(previous.width, 0);
+    assert.ok(canvases.every(canvas => canvas.width === 0 && canvas.height === 0));
 });
 
-test('offscreen pages release detail canvases', async () => {
+test('panning to another region evicts old canvases and draws only newly visible tiles', async () => {
+    const s = setup();
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 8, pageTop: 8, width: 36, height: 72 });
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    const before = s.renders.length;
+    const old = s.detail().querySelectorAll('canvas');
+    s.visualViewport.pageLeft = 300;
+    s.visualViewport.pageTop = 520;
+    s.listeners.scroll();
+    await s.flush();
+    assert.ok(s.renders.length > before);
+    s.renders.slice(before).forEach(render => assertVisible(render, s.visualViewport));
+    assert.ok(old.every(canvas => canvas.width === 0));
+    assert.ok(s.detail().querySelectorAll('canvas').length <= 6);
+});
+
+test('offscreen pages release their cached tiles', async () => {
     const s = setup();
     await s.render();
+    const old = s.detail().querySelectorAll('canvas');
     s.visualViewport.pageTop = 1000;
     await s.render();
     assert.equal(s.detail(), null);
+    assert.ok(old.every(canvas => canvas.width === 0));
 });
 
-test('stale render does not replace the last complete image', async () => {
+test('page selection uses document coordinates when layout scrolling is nonzero', async () => {
+    const s = setup();
+    s.context.window.scrollY = 1000;
+    s.context.pageInfo.el.getBoundingClientRect = () => ({ left: 8, top: 508, width: 360, height: 600 });
+    s.visualViewport.scale = 1;
+    nativeViewport(s, 10, 330, 2036, 36, 72);
+    await s.flush();
+    assert.ok(s.renders.length > 0);
+    s.renders.forEach(render => assertVisible(render,
+        { pageLeft: 330, pageTop: 2036, width: 36, height: 72 }, { left: 8, top: 1508 }));
+});
+
+test('stale render completion cannot replace the last completed image', async () => {
     const s = setup();
     await s.render();
     const previous = s.detail();
-    let finish;
-    let markStarted;
-    const started = new Promise(resolve => { markStarted = resolve; });
-    s.page.render = () => ({ promise: new Promise(resolve => {
-        finish = resolve;
-        markStarted();
-    }), cancel() {} });
+    const held = holdRender(s, s.renders.length + 1);
     s.visualViewport.scale = 4;
     const pending = s.render();
-    await started;
+    await held.ready;
     vm.runInContext('++detailSerial', s.context);
-    finish();
+    held.finish();
     await pending;
     assert.equal(s.detail(), previous);
-});
-
-test('render failure retains previous image and allows retry', async () => {
-    const s = setup();
-    await s.render();
-    const previous = s.detail();
-    const original = s.page.render;
-    s.page.render = () => ({
-        promise: Promise.reject({ name: 'RenderingCancelledException' }), cancel() {}
-    });
-    s.visualViewport.scale = 4;
-    await s.render();
-    assert.equal(s.detail(), previous);
-    s.page.render = original;
-    await s.render();
-    assert.notEqual(s.detail(), previous);
-    assert.equal(s.detail().width, 2880);
-});
-
-test('scroll events do not cancel or restart an in-flight render of the same page', async () => {
-    const s = setup();
-    let finish;
-    let markStarted;
-    const started = new Promise(resolve => { markStarted = resolve; });
-    let cancellations = 0;
-    let renderCount = 0;
-    s.page.render = () => {
-        renderCount++;
-        return {
-            promise: new Promise(resolve => { finish = resolve; markStarted(); }),
-            cancel() { cancellations++; }
-        };
-    };
-    s.listeners.resize();
-    const pending = s.flush();
-    await started;
-    s.visualViewport.pageLeft += 20;
-    s.visualViewport.pageTop += 50;
-    s.listeners.scroll();
-    assert.equal(cancellations, 0);
-    finish();
-    await pending;
-    assert.ok(s.detail());
-    s.listeners.scroll();
-    await s.flush();
-    assert.equal(renderCount, 1);
-});
-
-test('10x zoom renders the full page at native zoom resolution in bounded tiles', async () => {
-    const s = setup();
-    s.visualViewport.scale = 10;
-    await s.render();
-    assert.equal(s.detail().tag, 'div');
-    assert.equal(s.renders.length, 24);
-    for (const render of s.renders) {
-        assert.equal(render.transform[0], 20);
-        assert.equal(render.transform[3], 20);
-        assert.ok(render.pixelWidth <= 2048);
-        assert.ok(render.pixelHeight <= 2048);
-    }
-    assert.equal(Math.max(...s.renders.map(r => -r.transform[4] + r.pixelWidth)), 7200);
-    assert.equal(Math.max(...s.renders.map(r => -r.transform[5] + r.pixelHeight)), 12000);
-    assert.equal(new Set(s.renders.map(r => r.canvasContext.canvas)).size, 1);
-    assert.equal(s.renders[0].canvasContext.canvas.width, 0);
-    const previous = s.detail();
-    s.visualViewport.pageLeft += 20;
-    await s.render();
-    assert.equal(s.detail(), previous);
-    assert.equal(s.renders.length, 24);
-    assert.equal(s.blobs.size, 24);
-    s.visualViewport.scale = 1;
-    await s.render();
-    assert.equal(s.detail(), null);
-    assert.equal(s.blobs.size, 0);
-});
-
-test('cancelled tile rendering releases partial tiles and retains the previous image', async () => {
-    const s = setup();
-    await s.render();
-    const previous = s.detail();
-    s.visualViewport.scale = 10;
-    const render = s.page.render;
-    let count = 0;
-    s.page.render = options => {
-        if (++count === 2) vm.runInContext('++detailSerial', s.context);
-        return render(options);
-    };
-    await s.render();
-    assert.equal(s.detail(), previous);
-    assert.equal(s.blobs.size, 0);
     assert.equal(s.renders.at(-1).canvasContext.canvas.width, 0);
 });
 
-test('a failed tile render releases blobs and can be retried', async () => {
+test('render failure retains completed tiles and retries only missing work', async () => {
     const s = setup();
-    s.visualViewport.scale = 10;
     const render = s.page.render;
-    let count = 0;
-    s.page.render = options => {
-        if (++count === 2) return { promise: Promise.reject({ name: 'RenderingCancelledException' }) };
-        return render(options);
-    };
+    let attempts = 0;
+    s.page.render = options => ++attempts === 2 ?
+        { promise: Promise.reject({ name: 'RenderingCancelledException' }) } : render(options);
     await s.render();
-    assert.equal(s.detail(), null);
-    assert.equal(s.blobs.size, 0);
+    const first = s.detail().querySelectorAll('canvas')[0];
     s.page.render = render;
     await s.render();
-    assert.equal(s.detail().children.length, 24);
+    assert.equal(s.detail().querySelectorAll('canvas')[0], first);
+    assert.equal(s.renders.filter(entry => entry.canvasContext.canvas === first).length, 1);
 });
 
-test('visible tiles appear before the full page is ready and panning reprioritizes remaining tiles', async () => {
+test('offscreen in-flight work is cancelled so a new visible area is not blocked', async () => {
     const s = setup();
-    s.visualViewport.scale = 10;
-    s.visualViewport.width = 36;
-    s.visualViewport.height = 72;
-    s.visualViewport.pageLeft = 330;
-    s.visualViewport.pageTop = 536;
-    let finishSecond;
-    let markSecond;
-    const secondStarted = new Promise(resolve => { markSecond = resolve; });
-    const render = s.page.render;
-    let count = 0;
-    s.page.render = options => {
-        const task = render(options);
-        if (++count === 2) task.promise = new Promise(resolve => {
-            finishSecond = resolve;
-            markSecond();
-        });
-        return task;
-    };
-    const pending = s.render();
-    await secondStarted;
-    assert.equal(s.detail(), null); // Full page is still incomplete.
-    assert.equal(s.displayed().children.length, 1); // First tile is already on screen.
-    assert.equal(s.renders[0].transform[4], -6130);
-    assert.equal(s.renders[0].transform[5], -10218);
-    s.visualViewport.pageLeft = 8;
-    s.visualViewport.pageTop = 8;
-    finishSecond();
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 8, pageTop: 8, width: 36, height: 72 });
+    const held = holdRender(s);
+    const old = s.context.window.UviewerPdf.onNativeGestureEnd();
+    await held.ready;
+    s.visualViewport.pageLeft = 300;
+    s.visualViewport.pageTop = 520;
+    await s.context.window.UviewerPdf.refreshDetailViewport();
+    await old;
+    assert.equal(held.cancelled(), 1);
+    assert.equal(s.renders[0].canvasContext.canvas.width, 0);
+    s.renders.slice(1).forEach(render => assertVisible(render, s.visualViewport));
+});
+
+test('duplicate viewport events and small pans do not cancel useful active work', async () => {
+    const s = setup();
+    const held = holdRender(s);
+    const pending = s.context.window.UviewerPdf.onNativeGestureEnd();
+    await held.ready;
+    s.visualViewport.pageLeft += 1;
+    s.listeners.scroll();
+    s.listeners.resize();
+    assert.equal(held.cancelled(), 0);
+    held.finish();
     await pending;
-    assert.equal(s.renders[2].transform[4], -0);
-    assert.equal(s.renders[2].transform[5], -0);
-    assert.equal(new Set(s.renders.map(r => r.transform.slice(4).join(':'))).size, 24);
-    assert.equal(s.detail().children.length, 24);
+    const count = s.renders.length;
+    await s.elapse(360);
+    assert.equal(s.renders.length, count);
 });
 
-test('scale changes cancel the previous render and start the latest after the debounce', async () => {
-    const s = setup();
-    const starts = [];
-    let notifyStart;
-    let started = new Promise(resolve => { notifyStart = resolve; });
-    let cancellations = 0;
-    s.page.render = options => {
-        const task = {};
-        task.promise = new Promise((resolve, reject) => {
-            task.finish = resolve;
-            task.cancel = () => { cancellations++; reject({ name: 'RenderingCancelledException' }); };
-        });
-        starts.push({ task, scale: options.transform[0] });
-        notifyStart();
-        return task;
-    };
-    const first = s.listeners.resize();
-    s.elapse(120);
-    await started;
-    started = new Promise(resolve => { notifyStart = resolve; });
-    s.visualViewport.scale = 4;
-    const second = s.listeners.resize();
-    s.elapse(120);
-    await started;
-    assert.equal(cancellations, 1);
-    assert.deepEqual(starts.map(start => start.scale), [6, 8]);
-    starts[1].task.finish();
-    await Promise.all([first, second]);
-    assert.equal(s.detail().width, 2880);
-});
-
-test('fractional zoom and page sizes share exact tile boundaries and PDF coordinates', async () => {
+test('fractional zoom preserves tile placement and PDF coordinates without seams', async () => {
     const s = setup();
     const width = 359.984375;
     const height = 599.984375;
@@ -372,150 +294,72 @@ test('fractional zoom and page sizes share exact tile boundaries and PDF coordin
     s.visualViewport.scale = 7.35;
     s.context.window.devicePixelRatio = 2.625;
     await s.render();
-    const layer = s.detail();
-    const pixelWidth = parseFloat(layer.style.width);
-    const pixelHeight = parseFloat(layer.style.height);
-    const [cssScaleX, cssScaleY] = layer.style.transform.match(/scale\(([^)]+)\)/)[1].split(',').map(Number);
-    const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8,
-        `${actual} should equal ${expected}`);
-    close(pixelWidth * cssScaleX, width);
-    close(pixelHeight * cssScaleY, height);
-    let area = 0;
+    const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
     const rows = new Map();
-    layer.children.forEach((region, index) => {
+    s.detail().children.forEach(region => {
+        const canvas = region.children[0];
+        const render = s.renders.find(entry => entry.canvasContext.canvas === canvas);
+        const [sx, , , sy, tx, ty] = render.transform;
+        const cssX = parseFloat(canvas.style.width) / canvas.width;
+        const cssY = parseFloat(canvas.style.height) / canvas.height;
         const x = parseFloat(region.style.left);
         const y = parseFloat(region.style.top);
-        const w = parseFloat(region.style.width);
-        const h = parseFloat(region.style.height);
-        const image = region.children[0];
-        const tx = s.renders[index].transform;
-        area += w * h;
-        for (const value of [x, y, w, h]) assert.ok(Number.isInteger(value));
-        // A PDF point lands at the same displayed coordinate in every tile,
-        // including the clipped gutter and the last partial row/column.
-        close((123.456 * tx[0] + tx[4] + parseFloat(image.style.left) + x) * cssScaleX,
-            123.456 * width / 360);
-        close((456.789 * tx[3] + tx[5] + parseFloat(image.style.top) + y) * cssScaleY,
-            456.789 * height / 600);
+        close((123.456 * sx + tx) * cssX + parseFloat(canvas.style.left) + x, 123.456 * width / 360);
+        close((456.789 * sy + ty) * cssY + parseFloat(canvas.style.top) + y, 456.789 * height / 600);
         if (!rows.has(y)) rows.set(y, []);
-        rows.get(y).push({ x, w, h });
+        rows.get(y).push(region);
     });
-    let nextY = 0;
-    for (const [y, row] of [...rows].sort((a, b) => a[0] - b[0])) {
-        assert.equal(y, nextY);
-        let nextX = 0;
-        for (const region of row.sort((a, b) => a.x - b.x)) {
-            assert.equal(region.x, nextX);
-            nextX += region.w;
+    for (const row of rows.values()) {
+        row.sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left));
+        for (let i = 1; i < row.length; i++) {
+            close(parseFloat(row[i - 1].style.left) + parseFloat(row[i - 1].style.width), parseFloat(row[i].style.left));
         }
-        assert.equal(nextX, pixelWidth);
-        nextY += row[0].h;
-    }
-    assert.equal(nextY, pixelHeight);
-    assert.equal(area, pixelWidth * pixelHeight);
-});
-
-test('tiles complete clockwise rings before stepping outward from the screen center', async () => {
-    const s = setup();
-    s.visualViewport.scale = 10;
-    s.visualViewport.pageLeft = 8 + 1.5 * 2044 / 20 - 18;
-    s.visualViewport.pageTop = 8 + 2.5 * 2044 / 20 - 18;
-    s.visualViewport.width = 36;
-    s.visualViewport.height = 36;
-    await s.render();
-    const cells = Array.from(s.detail().children, region => [
-        parseFloat(region.style.left) / 2044, parseFloat(region.style.top) / 2044
-    ]);
-    assert.deepEqual(cells.slice(0, 9), [
-        [1, 2], [2, 2], [2, 3], [1, 3], [0, 3], [0, 2], [0, 1], [1, 1], [2, 1]
-    ]);
-    let previousRing = -1;
-    for (const [column, row] of cells) {
-        const ring = Math.max(Math.abs(column - 1), Math.abs(row - 2));
-        assert.ok(ring >= previousRing);
-        previousRing = ring;
     }
 });
 
-test('the visible left third is rendered before any offscreen tile', async () => {
+test('a held pinch stays on preview, then release renders without a debounce or scroll', async () => {
     const s = setup();
-    s.visualViewport.scale = 10;
-    s.visualViewport.pageLeft = 8 + 100 / 20;
-    s.visualViewport.pageTop = 8 + 2.5 * 2044 / 20 - 10;
-    s.visualViewport.width = (3 * 2044 - 200) / 20;
-    s.visualViewport.height = 20;
-    await s.render();
-    const cells = Array.from(s.detail().children, region => [
-        parseFloat(region.style.left) / 2044, parseFloat(region.style.top) / 2044
-    ]);
-    assert.deepEqual(cells.slice(0, 3), [[1, 2], [2, 2], [0, 2]]);
-    assert.equal(cells.length, 24);
-});
-
-test('the first native pinch renders without viewport resize or scroll events', async () => {
-    const s = setup();
-    s.visualViewport.scale = 1;
-    await s.render();
-    assert.equal(s.detail(), null);
-    // WebView reports physical pixels per CSS pixel; DPR is 2 in this fixture.
-    s.context.window.UviewerPdf.onNativeScaleChanged(6);
-    await s.elapse(120);
-    assert.equal(s.detail().width, 2160);
-    assert.equal(s.renders.length, 1);
-    await s.context.window.UviewerPdf.onNativeScaleChanged(6);
-    assert.equal(s.renders.length, 1);
+    s.context.window.UviewerPdf.onNativeGestureStart();
     s.context.window.UviewerPdf.onNativeScaleChanged(8);
-    await s.elapse(120);
-    assert.equal(s.detail().width, 2880);
-    s.visualViewport.scale = 4; // Even if the JS viewport now lags zoom-out.
-    s.context.window.UviewerPdf.onNativeScaleChanged(2);
-    await s.elapse(120);
-    assert.equal(s.detail(), null);
+    await s.elapse(1000);
+    assert.equal(s.renders.length, 0);
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    assert.ok(s.renders.length > 0);
+    assert.equal(s.renders[0].transform[0], 8);
 });
 
-test('rapid pinch updates coalesce into one render 120ms after the latest scale change', async () => {
+test('lifting one pinch finger starts rendering and the final release reuses the tiles', async () => {
     const s = setup();
-    const first = s.listeners.resize();
+    s.context.window.UviewerPdf.onNativeGestureStart();
+    s.context.window.UviewerPdf.onNativeScaleChanged(8);
+    await s.documentListeners.touchend({ touches: [{}, {}] });
+    assert.equal(s.renders.length, 0);
+    await s.documentListeners.touchend({ touches: [{}] });
+    const count = s.renders.length;
+    assert.ok(count > 0);
+    await s.documentListeners.touchend({ touches: [] });
+    await s.elapse(360);
+    assert.equal(s.renders.length, count);
+});
+
+test('rapid scale changes debounce until 120ms after the latest update', async () => {
+    const s = setup();
+    s.listeners.resize();
     s.elapse(60);
     s.visualViewport.scale = 3.5;
-    const second = s.listeners.resize();
+    s.listeners.resize();
     s.elapse(60);
     s.visualViewport.scale = 4;
-    const last = s.listeners.resize();
+    s.listeners.resize();
     await s.elapse(119);
     assert.equal(s.renders.length, 0);
-    // A duplicate viewport notification must not extend the delay.
     s.listeners.resize();
     await s.elapse(1);
-    await Promise.all([first, second, last]);
-    assert.equal(s.renders.length, 1);
-    assert.equal(s.detail().width, 2880);
+    assert.ok(s.renders.length > 0);
+    s.renders.forEach(render => assert.equal(render.transform[0], 8));
 });
 
-test('releasing the last finger flushes the pending scale without a second timer render', async () => {
-    const s = setup();
-    const pending = s.context.window.UviewerPdf.onNativeScaleChanged(8);
-    await s.documentListeners.touchend({ touches: [{}] });
-    assert.equal(s.renders.length, 0);
-    await s.documentListeners.touchend({ touches: [] });
-    await pending;
-    assert.equal(s.renders.length, 1);
-    assert.equal(s.detail().width, 2880);
-    await s.elapse(120);
-    assert.equal(s.renders.length, 1);
-});
-
-test('native pinch completion renders when WebView omits DOM touchend', async () => {
-    const s = setup();
-    s.visualViewport.scale = 1;
-    s.context.window.UviewerPdf.onNativeScaleChanged(8);
-    await s.context.window.UviewerPdf.onNativeGestureEnd();
-    assert.equal(s.detail().width, 2880);
-    await s.elapse(360);
-    assert.equal(s.renders.length, 1);
-});
-
-test('a viewport scale arriving after finger release renders without resize or scroll', async () => {
+test('scale arriving after release renders without resize or scroll', async () => {
     const s = setup();
     s.visualViewport.scale = 1;
     s.context.window.UviewerPdf.onNativeScaleChanged(2);
@@ -523,40 +367,83 @@ test('a viewport scale arriving after finger release renders without resize or s
     assert.equal(s.detail(), null);
     s.visualViewport.scale = 3;
     await s.elapse(60);
-    assert.equal(s.detail().width, 2160);
-    await s.elapse(300);
-    assert.equal(s.renders.length, 1);
+    assert.ok(s.renders.length > 0);
+    assert.equal(s.renders[0].transform[0], 6);
 });
 
-test('settlement checks do not interrupt an active render', async () => {
+test('failure stops the native frame pump without publishing an image', async () => {
     const s = setup();
-    let finish;
-    let started;
-    const ready = new Promise(resolve => { started = resolve; });
-    let cancellations = 0;
-    let count = 0;
-    s.page.render = () => {
-        count++;
-        return {
-            promise: new Promise(resolve => { finish = resolve; started(); }),
-            cancel() { cancellations++; }
-        };
+    const signals = [];
+    s.context.window.Android = {
+        onDetailRendering: active => signals.push(active),
+        onDetailReady: () => assert.fail('failed image must not be published')
     };
-    const pending = s.context.window.UviewerPdf.onNativeGestureEnd();
-    await ready;
-    const checks = s.elapse(360);
-    assert.equal(count, 1);
-    assert.equal(cancellations, 0);
-    finish();
-    await Promise.all([pending, checks]);
-    assert.ok(s.detail());
+    s.page.render = () => ({ promise: Promise.reject({ name: 'RenderingCancelledException' }) });
+    await s.context.window.UviewerPdf.onNativeGestureEnd();
+    assert.deepEqual(signals, [true, false]);
+    assert.equal(s.detail(), null);
 });
 
-test('starting another pinch cancels previous settlement checks', async () => {
+test('another pinch cancels rendering and stale completion cannot stop the new frame pump', async () => {
+    const s = setup();
+    const signals = [];
+    s.context.window.Android = { onDetailRendering: active => signals.push(active) };
+    const held = holdRender(s);
+    const old = s.context.window.UviewerPdf.onNativeGestureEnd();
+    await held.ready;
+    s.context.window.UviewerPdf.onNativeGestureStart();
+    assert.equal(held.cancelled(), 1);
+    s.context.window.UviewerPdf.onNativeScaleChanged(8);
+    const latest = s.context.window.UviewerPdf.onNativeGestureEnd();
+    await Promise.all([old, latest]);
+    assert.deepEqual(signals, [true, false, true, false]);
+    assert.equal(s.renders.at(-1).transform[0], 8);
+});
+
+test('late compositor callbacks cannot render during another pinch', async () => {
     const s = setup();
     await s.context.window.UviewerPdf.onNativeGestureEnd();
+    const count = s.renders.length;
     s.context.window.UviewerPdf.onNativeGestureStart();
     s.visualViewport.scale = 4;
+    await s.context.window.UviewerPdf.refreshDetailViewport();
     await s.elapse(360);
-    assert.equal(s.renders.length, 1);
+    assert.equal(s.renders.length, count);
+});
+
+test('visible tile regions completely cover the viewport at integer and fractional zoom', async () => {
+    for (const scale of [3, 4.75, 10]) {
+        const s = setup();
+        Object.assign(s.visualViewport, { scale, pageLeft: 97.25, pageTop: 306.5,
+            width: 360 / scale, height: 720 / scale });
+        await s.render();
+        const left = Math.max(0, s.visualViewport.pageLeft - 8);
+        const top = Math.max(0, s.visualViewport.pageTop - 8);
+        const right = Math.min(360, left + s.visualViewport.width);
+        const bottom = Math.min(600, top + s.visualViewport.height);
+        let area = 0;
+        for (const region of s.detail().children) {
+            const x = parseFloat(region.style.left);
+            const y = parseFloat(region.style.top);
+            const w = parseFloat(region.style.width);
+            const h = parseFloat(region.style.height);
+            area += Math.max(0, Math.min(right, x + w) - Math.max(left, x)) *
+                Math.max(0, Math.min(bottom, y + h) - Math.max(top, y));
+        }
+        assert.ok(Math.abs(area - (right - left) * (bottom - top)) < 1e-6);
+    }
+});
+
+test('the page at screen center renders before the narrow edge of the preceding page', async () => {
+    const s = setup();
+    const first = s.context.pageInfo;
+    s.context.secondPage = { num: 2, scale: 0.5, el: { ...first.el,
+        getBoundingClientRect: () => ({ left: 8, top: 616, width: 360, height: 600 }) } };
+    vm.runInContext('pages = [pageInfo, secondPage]', s.context);
+    const pagesRendered = [];
+    s.context.mockDoc.getPage = async num => { pagesRendered.push(num); return s.page; };
+    s.visualViewport.pageTop = 590;
+    await s.render();
+    assert.equal(pagesRendered[0], 2);
+    assert.ok(pagesRendered.includes(1));
 });
