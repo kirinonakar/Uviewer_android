@@ -106,4 +106,37 @@ function setup({ createCanvas } = {}) {
     };
 }
 
-module.exports = { setup };
+function cssMatrix(element) {
+    const transform = element.style.transform || '';
+    const matrix = transform.match(/matrix\(([^)]+)\)/);
+    if (matrix) return matrix[1].split(',').map(Number);
+    const scale = transform.match(/scale\(([^)]+)\)/);
+    if (scale) {
+        const [x, y] = scale[1].split(',').map(Number);
+        return [x, 0, 0, y, 0, 0];
+    }
+    return [1, 0, 0, 1, 0, 0];
+}
+
+function elementPoint(element, x, y, length = parseFloat) {
+    const [a, b, c, d, e, f] = cssMatrix(element);
+    return { x: a * x + c * y + e + length(element.style.left || '0'),
+        y: b * x + d * y + f + length(element.style.top || '0') };
+}
+
+function tilePoint(layer, region, canvas, x, y, length = parseFloat) {
+    const local = elementPoint(canvas, x * length(canvas.style.width) / canvas.width,
+        y * length(canvas.style.height) / canvas.height, length);
+    const point = elementPoint(region, local.x, local.y, length);
+    return elementPoint(layer, point.x, point.y, length);
+}
+
+function tileRect(layer, region) {
+    const local = elementPoint(region, 0, 0);
+    const end = elementPoint(region, parseFloat(region.style.width), parseFloat(region.style.height));
+    const startPoint = elementPoint(layer, local.x, local.y);
+    const endPoint = elementPoint(layer, end.x, end.y);
+    return { left: startPoint.x, top: startPoint.y, right: endPoint.x, bottom: endPoint.y };
+}
+
+module.exports = { setup, cssMatrix, tilePoint, tileRect };

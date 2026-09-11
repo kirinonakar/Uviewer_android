@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
 
-const { setup } = require('./pdf-test-helpers.cjs');
+const { setup, tilePoint, tileRect } = require('./pdf-test-helpers.cjs');
 
 test('tap zones follow the visible screen at both edges and the middle of a zoomed page', () => {
     const s = setup();
@@ -39,6 +39,11 @@ test('tap zones work at normal zoom and without the visual viewport API', () => 
     }
     assert.deepEqual(actions, ['previous', 'toggle', 'next', 'previous', 'toggle', 'next']);
 });
+
+function layerScale(layer) {
+    const match = layer.style.transform?.match(/scale\(([^)]+)\)/);
+    return match ? match[1].split(',').map(Number) : [1, 1];
+}
 
 function nativeViewport(s, scale, left, top, width, height) {
     return s.context.window.UviewerPdf.onNativeViewportChanged(scale * 2,
@@ -164,8 +169,9 @@ test('the first ready canvas is displayed while the next visible tile is still r
 test('moderate zoom also uses visible tiles instead of waiting for a whole-page canvas', async () => {
     const s = setup();
     await s.render();
-    assert.equal(s.detail().style.width, '360px');
-    assert.equal(s.detail().style.height, '600px');
+    const [sx, sy] = layerScale(s.detail());
+    assert.equal(parseFloat(s.detail().style.width) * sx, 360);
+    assert.equal(parseFloat(s.detail().style.height) * sy, 600);
     assert.ok(s.renders.length > 1);
     for (const render of s.renders) {
         assert.equal(render.transform[0], 6);
@@ -300,19 +306,19 @@ test('fractional zoom preserves tile placement and PDF coordinates without seams
         const canvas = region.children[0];
         const render = s.renders.find(entry => entry.canvasContext.canvas === canvas);
         const [sx, , , sy, tx, ty] = render.transform;
-        const cssX = parseFloat(canvas.style.width) / canvas.width;
-        const cssY = parseFloat(canvas.style.height) / canvas.height;
-        const x = parseFloat(region.style.left);
-        const y = parseFloat(region.style.top);
-        close((123.456 * sx + tx) * cssX + parseFloat(canvas.style.left) + x, 123.456 * width / 360);
-        close((456.789 * sy + ty) * cssY + parseFloat(canvas.style.top) + y, 456.789 * height / 600);
-        if (!rows.has(y)) rows.set(y, []);
-        rows.get(y).push(region);
+        const point = tilePoint(s.detail(), region, canvas, 123.456 * sx + tx, 456.789 * sy + ty);
+        close(point.x, 123.456 * width / 360);
+        close(point.y, 456.789 * height / 600);
+        const rect = tileRect(s.detail(), region);
+        if (!rows.has(rect.top)) rows.set(rect.top, []);
+        rows.get(rect.top).push(rect);
     });
+    const pixelWidth = Math.ceil(width * s.visualViewport.scale * s.context.window.devicePixelRatio);
     for (const row of rows.values()) {
-        row.sort((a, b) => parseFloat(a.style.left) - parseFloat(b.style.left));
+        row.sort((a, b) => a.left - b.left);
         for (let i = 1; i < row.length; i++) {
-            close(parseFloat(row[i - 1].style.left) + parseFloat(row[i - 1].style.width), parseFloat(row[i].style.left));
+            // Both sides expose one gutter pixel from the same PDF coordinates.
+            close(row[i - 1].right - row[i].left, 2 * width / pixelWidth);
         }
     }
 });
@@ -421,16 +427,19 @@ test('visible tile regions completely cover the viewport at integer and fraction
         const top = Math.max(0, s.visualViewport.pageTop - 8);
         const right = Math.min(360, left + s.visualViewport.width);
         const bottom = Math.min(600, top + s.visualViewport.height);
-        let area = 0;
-        for (const region of s.detail().children) {
-            const x = parseFloat(region.style.left);
-            const y = parseFloat(region.style.top);
-            const w = parseFloat(region.style.width);
-            const h = parseFloat(region.style.height);
-            area += Math.max(0, Math.min(right, x + w) - Math.max(left, x)) *
-                Math.max(0, Math.min(bottom, y + h) - Math.max(top, y));
+        const rects = s.detail().children.map(region => tileRect(s.detail(), region));
+        // Check coverage of every horizontal band, allowing intentional gutter overlap.
+        const ys = [...new Set([top, bottom, ...rects.flatMap(r => [r.top, r.bottom])])]
+            .filter(y => y >= top && y <= bottom).sort((a, b) => a - b);
+        for (let i = 1; i < ys.length; i++) {
+            const y = (ys[i - 1] + ys[i]) / 2;
+            let covered = left;
+            for (const rect of rects.filter(r => r.top <= y && r.bottom >= y).sort((a, b) => a.left - b.left)) {
+                assert.ok(rect.left <= covered + 1e-8, 'gap between adjacent visible tiles');
+                covered = Math.max(covered, rect.right);
+            }
+            assert.ok(covered >= right - 1e-8, 'visible band must reach the right edge');
         }
-        assert.ok(Math.abs(area - (right - left) * (bottom - top)) < 1e-6);
     }
 });
 
@@ -446,4 +455,37 @@ test('the page at screen center renders before the narrow edge of the preceding 
     await s.render();
     assert.equal(pagesRendered[0], 2);
     assert.ok(pagesRendered.includes(1));
+});
+
+test('WebView layout rounding does not shift neighbouring tile pixels at fractional zoom', async () => {
+    const s = setup();
+    const width = 359.984375;
+    const height = 599.984375;
+    s.context.pageInfo.el.getBoundingClientRect = () => ({ left: 8, top: 8, width, height });
+    s.visualViewport.scale = 7.35;
+    s.context.window.devicePixelRatio = 2.625;
+    await s.render();
+    const layer = s.detail();
+    // Blink layout lengths are quantized to 1/64 CSS pixel before transforms.
+    const layout = value => Math.trunc(parseFloat(value) * 64) / 64;
+    for (const region of layer.children) {
+        const canvas = region.children[0];
+        const render = s.renders.find(entry => entry.canvasContext.canvas === canvas);
+        const [sx, , , sy, tx, ty] = render.transform;
+        const point = tilePoint(layer, region, canvas, 123.456 * sx + tx, 456.789 * sy + ty, layout);
+        assert.ok(Math.abs(point.x - 123.456 * width / 360) < 1e-8, `tile x shifted by ${point.x - 123.456 * width / 360}`);
+        assert.ok(Math.abs(point.y - 456.789 * height / 600) < 1e-8, `tile y shifted by ${point.y - 456.789 * height / 600}`);
+    }
+});
+
+test('bottom tiles at high zoom do not require a page-sized backing-pixel layer', async () => {
+    const s = setup();
+    Object.assign(s.visualViewport, { scale: 10, pageLeft: 180, pageTop: 536, width: 120, height: 72 });
+    await s.render();
+    assert.ok(s.renders.length > 0);
+    const layer = s.detail();
+    assert.ok(parseFloat(layer.style.width) <= 360, 'container width must stay in page CSS pixels');
+    assert.ok(parseFloat(layer.style.height) <= 600, 'container height must stay in page CSS pixels');
+    assert.ok(s.renders.some(render => -render.transform[5] + render.pixelHeight === 12000),
+        'the final partial row at the bottom of the page must be rendered');
 });

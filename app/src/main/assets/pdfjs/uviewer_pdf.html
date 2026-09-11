@@ -38,6 +38,7 @@
         .page .detail-canvas {
             position: absolute;
             pointer-events: none;
+            isolation: isolate;
         }
         .detail-tile {
             position: absolute;
@@ -136,6 +137,7 @@
 
         const DETAIL_TILE_SIZE = 1020;
         const DETAIL_TILE_PADDING = 2;
+        const DETAIL_TILE_BLEED = 1;
 
         function detailDemand() {
             const visual = detailViewport();
@@ -324,16 +326,23 @@
                     const viewport = page.getViewport({ scale: spec.pageInfo.scale });
                     const renderLeft = Math.max(0, spec.x - DETAIL_TILE_PADDING);
                     const renderTop = Math.max(0, spec.y - DETAIL_TILE_PADDING);
+                    // Show one gutter pixel across each shared edge, leaving the
+                    // outer gutter for filtering. Fractional device-pixel offsets
+                    // must not expose the low-resolution page between clip edges.
+                    const displayLeft = Math.max(0, spec.x - DETAIL_TILE_BLEED);
+                    const displayTop = Math.max(0, spec.y - DETAIL_TILE_BLEED);
+                    const displayRight = Math.min(spec.pixelWidth, spec.x + spec.w + DETAIL_TILE_BLEED);
+                    const displayBottom = Math.min(spec.pixelHeight, spec.y + spec.h + DETAIL_TILE_BLEED);
                     canvas = document.createElement('canvas');
                     canvas.width = Math.min(spec.pixelWidth, spec.x + spec.w + DETAIL_TILE_PADDING) - renderLeft;
                     canvas.height = Math.min(spec.pixelHeight, spec.y + spec.h + DETAIL_TILE_PADDING) - renderTop;
                     const cssX = spec.width / spec.pixelWidth;
                     const cssY = spec.height / spec.pixelHeight;
                     canvas.style.position = 'absolute';
-                    canvas.style.left = (renderLeft - spec.x) * cssX + 'px';
-                    canvas.style.top = (renderTop - spec.y) * cssY + 'px';
-                    canvas.style.width = canvas.width * cssX + 'px';
-                    canvas.style.height = canvas.height * cssY + 'px';
+                    canvas.style.left = (renderLeft - displayLeft) + 'px';
+                    canvas.style.top = (renderTop - displayTop) + 'px';
+                    canvas.style.width = canvas.width + 'px';
+                    canvas.style.height = canvas.height + 'px';
                     task = page.render({
                         canvasContext: canvas.getContext('2d'), viewport,
                         transform: [spec.pixelWidth / viewport.width, 0, 0,
@@ -351,6 +360,9 @@
                         layer.className = 'detail-canvas';
                         layer.style.left = '0px';
                         layer.style.top = '0px';
+                        // Keep the container in page CSS coordinates. A scaled
+                        // whole-page backing-pixel layer becomes extremely tall
+                        // at high zoom and makes lower tiles depend on its culling.
                         layer.style.width = spec.width + 'px';
                         layer.style.height = spec.height + 'px';
                         cache = { key: spec.key, layer, tiles: new Map() };
@@ -359,10 +371,18 @@
                     }
                     const region = document.createElement('div');
                     region.className = 'detail-tile';
-                    region.style.left = spec.x * cssX + 'px';
-                    region.style.top = spec.y * cssY + 'px';
-                    region.style.width = spec.w * cssX + 'px';
-                    region.style.height = spec.h * cssY + 'px';
+                    region.style.left = '0px';
+                    region.style.top = '0px';
+                    region.style.width = (displayRight - displayLeft) + 'px';
+                    region.style.height = (displayBottom - displayTop) + 'px';
+                    // Use the same backing-pixel grid, but transform each small
+                    // tile directly into page coordinates. Matrix translation
+                    // avoids rounding fractional CSS left/top independently.
+                    region.style.transformOrigin = '0 0';
+                    region.style.transform = `matrix(${cssX}, 0, 0, ${cssY}, ${displayLeft * cssX}, ${displayTop * cssY})`;
+                    // Stable overlap order regardless of which visible tile is ready first.
+                    region.style.zIndex = String(Math.floor(spec.y / DETAIL_TILE_SIZE) *
+                        Math.ceil(spec.pixelWidth / DETAIL_TILE_SIZE) + Math.floor(spec.x / DETAIL_TILE_SIZE));
                     region.appendChild(canvas);
                     cache.layer.appendChild(region);
                     cache.tiles.set(spec.id, region);
