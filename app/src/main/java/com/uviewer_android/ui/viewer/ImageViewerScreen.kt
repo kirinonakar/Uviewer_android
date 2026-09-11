@@ -221,6 +221,12 @@ fun ImageViewerScreen(
         }
         
         val scales = remember { mutableStateMapOf<Int, Float>() }
+        val loadedImagePaths = remember(uiState.images, uiState.sharpeningAmount) {
+            mutableStateMapOf<String, Boolean>()
+        }
+        var enableAdjacentPreload by remember(uiState.images, uiState.sharpeningAmount) {
+            mutableStateOf(false)
+        }
         var globalScale by remember { mutableFloatStateOf(1f) }
         // currentPageIndex hoisted to top level
 
@@ -388,6 +394,14 @@ fun ImageViewerScreen(
             ViewMode.SPLIT -> listOfNotNull(uiState.images.getOrNull(pagerState.currentPage / 2)?.path)
         }
         val currentPageHasHdr = visibleImagePaths.any { hdrImageStatus[it] == true }
+
+        // Finish the opening page before competing with up to four adjacent original decodes.
+        // Keep preloading enabled afterwards so subsequent page turns remain ready in advance.
+        val visibleOriginalsLoaded = visibleImagePaths.isNotEmpty() &&
+            visibleImagePaths.all { loadedImagePaths[it] == true }
+        LaunchedEffect(visibleOriginalsLoaded) {
+            if (visibleOriginalsLoaded) enableAdjacentPreload = true
+        }
 
         LaunchedEffect(currentPageHasHdr, currentActivity) {
             currentActivity?.window?.setHdrColorMode(currentPageHasHdr)
@@ -636,7 +650,7 @@ fun ImageViewerScreen(
                     modifier = Modifier.fillMaxSize(),
                     userScrollEnabled = currentScale <= 1.1f,
                     reverseLayout = invertImageControl,
-                    beyondViewportPageCount = 1
+                    beyondViewportPageCount = if (enableAdjacentPreload) 1 else 0
                 ) { page ->
                     val quad = when (viewMode) {
                         ViewMode.DUAL -> {
@@ -668,6 +682,8 @@ fun ImageViewerScreen(
                         key(firstIdx, isSplit, isRight) {
                             if (viewMode == ViewMode.DUAL) {
                                 ZoomableDualImage(
+                                    loadPreview = page == pagerState.currentPage,
+                                    onImageLoaded = { loadedImagePaths[it] = true },
                                     firstImageUrl = firstImage?.path,
                                     secondImageUrl = secondImage?.path,
                                     isWebDav = uiState.isContentLoadedFromWebDav,
@@ -683,6 +699,8 @@ fun ImageViewerScreen(
                             } else if (firstImage != null) {
                                 val currentScale = if (uiState.persistZoom) globalScale else (scales.getOrPut(page) { 1f })
                                  ZoomableImage(
+                                    loadPreview = page == pagerState.currentPage,
+                                    onImageLoaded = { loadedImagePaths[it] = true },
                                     imageUrl = firstImage.path,
                                     isWebDav = uiState.isContentLoadedFromWebDav,
                                     authHeader = uiState.authHeader,

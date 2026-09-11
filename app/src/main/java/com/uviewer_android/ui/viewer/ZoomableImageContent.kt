@@ -99,6 +99,8 @@ fun ZoomableImage(
     secondImageUrl: String? = null,
     isSplit: Boolean = false,
     isRight: Boolean = false,
+    loadPreview: Boolean = true,
+    onImageLoaded: (String) -> Unit = {},
     onHdrStatusChanged: (Boolean) -> Unit = {}
 ) {
     val currentScale by rememberUpdatedState(scale)
@@ -201,7 +203,7 @@ fun ZoomableImage(
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .decodeOriginalImage(url)
-                        .crossfade(!isAnimated)
+                        .crossfade(false)
                         .apply {
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
@@ -242,7 +244,7 @@ fun ZoomableImage(
                 
                 return loaderBuilder
                     .decodeOriginalImage(url)
-                    .crossfade(!isAnimated)
+                    .crossfade(false)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.
                         if (sharpeningAmount > 0 && !isAnimated) {
@@ -263,15 +265,16 @@ fun ZoomableImage(
                 model = imageRequest,
                 contentDescription = null,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
-                onState = { state -> onHdrStatusChanged(state.containsHdrContent()) },
+                onState = { state ->
+                    onHdrStatusChanged(state.containsHdrContent())
+                    if (state is AsyncImagePainter.State.Success) onImageLoaded(imageUrl)
+                },
                 modifier = Modifier.fillMaxSize()
             ) {
                 val state = painter.state
                 when (state) {
                     is coil.compose.AsyncImagePainter.State.Loading -> {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        }
+                        ImageLoadingPreview(imageRequest, loadPreview, isSplit, isRight)
                     }
                     is coil.compose.AsyncImagePainter.State.Error -> {
                         val errorMsg = state.result.throwable.message ?: "Unknown error"
@@ -285,52 +288,7 @@ fun ZoomableImage(
                         }
                     }
                     is coil.compose.AsyncImagePainter.State.Success -> {
-                        if (isSplit) {
-                            val srcSize = state.painter.intrinsicSize
-                            if (srcSize.width > 0 && srcSize.height > 0) {
-                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    androidx.compose.ui.layout.Layout(
-                                        content = {
-                                            androidx.compose.foundation.Image(
-                                                painter = state.painter,
-                                                contentDescription = null,
-                                                modifier = Modifier.fillMaxSize(),
-                                                contentScale = androidx.compose.ui.layout.ContentScale.FillBounds
-                                            )
-                                        }
-                                    ) { measurables, constraints ->
-                                        val halfWidth = srcSize.width / 2f
-                                        val ar = halfWidth / srcSize.height
-                                        
-                                        val width: Int
-                                        val height: Int
-                                        if (constraints.maxWidth / ar <= constraints.maxHeight) {
-                                            width = constraints.maxWidth
-                                            height = (width / ar).toInt()
-                                        } else {
-                                            height = constraints.maxHeight
-                                            width = (height * ar).toInt()
-                                        }
-                                        
-                                        val imagePlaceable = measurables[0].measure(
-                                            androidx.compose.ui.unit.Constraints.fixed(width * 2, height)
-                                        )
-                                        
-                                        layout(width, height) {
-                                            val x = if (isRight) -width else 0
-                                            imagePlaceable.place(x, 0)
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            androidx.compose.foundation.Image(
-                                painter = state.painter,
-                                contentDescription = null,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
+                        ViewerImageContent(state.painter, isSplit, isRight)
                     }
                     else -> {}
                 }
@@ -349,6 +307,8 @@ fun ZoomableDualImage(
     scale: Float,
     sharpeningAmount: Int,
     onScaleChanged: (Float) -> Unit,
+    loadPreview: Boolean = true,
+    onImageLoaded: (String) -> Unit = {},
     onHdrStatusChanged: (String, Boolean) -> Unit = { _, _ -> }
 ) {
     val currentScale by rememberUpdatedState(scale)
@@ -447,7 +407,7 @@ fun ZoomableDualImage(
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
                         .decodeOriginalImage(url)
-                        .crossfade(!isAnimated)
+                        .crossfade(false)
                         .apply {
                             if (sharpeningAmount > 0 && !isAnimated) {
                                 transformations(SharpenTransformation(sharpeningAmount))
@@ -488,7 +448,7 @@ fun ZoomableDualImage(
 
                 return loaderBuilder
                     .decodeOriginalImage(url)
-                    .crossfade(!isAnimated)
+                    .crossfade(false)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.
                         if (sharpeningAmount > 0 && !isAnimated) {
@@ -517,12 +477,13 @@ fun ZoomableDualImage(
                     alignment = Alignment.CenterEnd,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     onLoading = { onHdrStatusChanged(firstImageUrl, false) },
-                    onSuccess = { state -> onHdrStatusChanged(firstImageUrl, state.containsHdrContent()) },
+                    onSuccess = { state ->
+                        onHdrStatusChanged(firstImageUrl, state.containsHdrContent())
+                        onImageLoaded(firstImageUrl)
+                    },
                     onError = { onHdrStatusChanged(firstImageUrl, false) },
                     loading = {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        }
+                        ImageLoadingPreview(firstImageRequest, loadPreview, alignment = Alignment.CenterEnd)
                     },
                     error = { state ->
                         val errorMsg = state.result.throwable.message ?: "Unknown error"
@@ -550,12 +511,13 @@ fun ZoomableDualImage(
                     alignment = Alignment.CenterStart,
                     filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
                     onLoading = { onHdrStatusChanged(secondImageUrl, false) },
-                    onSuccess = { state -> onHdrStatusChanged(secondImageUrl, state.containsHdrContent()) },
+                    onSuccess = { state ->
+                        onHdrStatusChanged(secondImageUrl, state.containsHdrContent())
+                        onImageLoaded(secondImageUrl)
+                    },
                     onError = { onHdrStatusChanged(secondImageUrl, false) },
                     loading = {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(strokeWidth = 2.dp)
-                        }
+                        ImageLoadingPreview(secondImageRequest, loadPreview, alignment = Alignment.CenterStart)
                     },
                     error = { state ->
                         val errorMsg = state.result.throwable.message ?: "Unknown error"
