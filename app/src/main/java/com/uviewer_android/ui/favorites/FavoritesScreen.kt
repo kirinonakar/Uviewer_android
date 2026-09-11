@@ -30,6 +30,7 @@ import com.uviewer_android.R
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.ui.AppViewModelProvider
 import com.uviewer_android.ui.common.FileItemRow
+import com.uviewer_android.ui.common.LibraryViewModeIcon
 import com.uviewer_android.ui.common.FileItemGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -39,7 +40,7 @@ fun FavoritesScreen(
     viewModel: FavoritesViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
     val favorites by viewModel.favorites.collectAsState()
-    val isGridView by viewModel.isGridView.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf(
         stringResource(R.string.tab_folders), 
@@ -75,10 +76,7 @@ fun FavoritesScreen(
                         title = { Text(stringResource(R.string.title_favorites), style = MaterialTheme.typography.titleMedium) },
                         actions = {
                             IconButton(onClick = { viewModel.toggleViewMode() }) {
-                                Icon(
-                                    if (isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.ViewModule,
-                                    contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View"
-                                )
+                                LibraryViewModeIcon(viewMode)
                             }
                         }
                     )
@@ -142,9 +140,9 @@ fun FavoritesScreen(
                 Text(emptyText)
             }
         } else {
-            if (isGridView) {
+            if (viewMode.isGrid) {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(120.dp),
+                    columns = GridCells.Fixed(viewMode.columns),
                     state = gridState,
                     contentPadding = PaddingValues(8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -216,6 +214,7 @@ fun FavoritesScreen(
                         Box(modifier = itemModifier) {
                             FileItemGridCard(
                                 file = item,
+                                showDetails = viewMode.columns != 4,
                                 isFavorite = true,
                                 isPinnedTab = isPinnedTab,
                                 onClick = { onNavigateToViewer(item) },

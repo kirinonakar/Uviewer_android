@@ -200,4 +200,7 @@
     <string name="llm_selected_text">선택한 글자</string>
     <string name="llm_loading">생각중...</string>
     <string name="llm_close">닫기</string>
+    <string name="switch_to_grid_2">가로 2장 썸네일 보기로 전환</string>
+    <string name="switch_to_grid_4">가로 4장 썸네일 보기로 전환</string>
+    <string name="switch_to_list">리스트 보기로 전환</string>
 </resources>

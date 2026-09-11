@@ -41,7 +41,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import coil.size.Precision
+import coil.size.Size
 import okhttp3.HttpUrl.Companion.toHttpUrl
+
+private const val MAX_IMAGE_SCALE = 20f
 
 private fun String.isAnimationCapableImageSource(): Boolean {
     val source = substringBefore('#').lowercase()
@@ -73,8 +77,11 @@ private fun AsyncImagePainter.State.containsHdrContent(): Boolean {
     return bitmap.containsHdrContent()
 }
 
-private fun ImageRequest.Builder.preferHighPrecisionDecode(source: String): ImageRequest.Builder =
+private fun ImageRequest.Builder.decodeOriginalImage(source: String): ImageRequest.Builder =
     apply {
+        // Keep source pixels for zooming and split pages instead of decoding at layout size.
+        size(Size.ORIGINAL)
+        precision(Precision.EXACT)
         if (source.isHighPrecisionImageSource()) {
             bitmapConfig(Bitmap.Config.RGBA_F16)
         }
@@ -147,7 +154,7 @@ fun ZoomableImage(
                                 // Pan/Zoom Logic combined
                                 if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
                                     val oldScale = currentScale
-                                    val newScale = (oldScale * zoomChange).coerceIn(1f, 5f)
+                                    val newScale = (oldScale * zoomChange).coerceIn(1f, MAX_IMAGE_SCALE)
                                     onScaleChanged(newScale)
                                     
                                     val scaleChange = newScale / oldScale
@@ -193,7 +200,7 @@ fun ZoomableImage(
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
-                        .preferHighPrecisionDecode(url)
+                        .decodeOriginalImage(url)
                         .crossfade(!isAnimated)
                         .apply {
                             if (sharpeningAmount > 0 && !isAnimated) {
@@ -234,7 +241,7 @@ fun ZoomableImage(
                 }
                 
                 return loaderBuilder
-                    .preferHighPrecisionDecode(url)
+                    .decodeOriginalImage(url)
                     .crossfade(!isAnimated)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.
@@ -395,7 +402,7 @@ fun ZoomableDualImage(
                                 
                                 if (zoomChange != 1f || panChange != androidx.compose.ui.geometry.Offset.Zero) {
                                     val oldScale = currentScale
-                                    val newScale = (oldScale * zoomChange).coerceIn(1f, 5f)
+                                    val newScale = (oldScale * zoomChange).coerceIn(1f, MAX_IMAGE_SCALE)
                                     onScaleChanged(newScale)
                                     
                                     val scaleChange = newScale / oldScale
@@ -439,7 +446,7 @@ fun ZoomableDualImage(
                 if (url.contains("://") || url.startsWith("waiting-file:")) {
                      return ImageRequest.Builder(context)
                         .data(android.net.Uri.parse(url))
-                        .preferHighPrecisionDecode(url)
+                        .decodeOriginalImage(url)
                         .crossfade(!isAnimated)
                         .apply {
                             if (sharpeningAmount > 0 && !isAnimated) {
@@ -480,7 +487,7 @@ fun ZoomableDualImage(
                 }
 
                 return loaderBuilder
-                    .preferHighPrecisionDecode(url)
+                    .decodeOriginalImage(url)
                     .crossfade(!isAnimated)
                     .apply {
                         // Transformations break animation playback, including animated AVIF.

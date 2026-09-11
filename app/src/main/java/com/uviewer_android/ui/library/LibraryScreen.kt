@@ -45,6 +45,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.ui.text.style.TextOverflow
 import com.uviewer_android.ui.common.FileItemRow
+import com.uviewer_android.ui.common.LibraryViewModeIcon
 import com.uviewer_android.ui.common.FileItemGridCard
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -190,10 +191,7 @@ fun LibraryScreen(
                         }
 
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
-                            Icon(
-                                if (uiState.isGridView) Icons.AutoMirrored.Filled.ViewList else Icons.Default.ViewModule,
-                                contentDescription = if (uiState.isGridView) "Switch to List View" else "Switch to Grid View"
-                            )
+                            LibraryViewModeIcon(uiState.viewMode)
                         }
 
                         IconButton(onClick = { viewModel.navigateToRoot() }) {
@@ -318,9 +316,9 @@ fun LibraryScreen(
                         }
                     }
                 } else {
-                    if (uiState.isGridView) {
+                    if (uiState.viewMode.isGrid) {
                         LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 120.dp),
+                            columns = GridCells.Fixed(uiState.viewMode.columns),
                             state = currentGridState,
                             contentPadding = PaddingValues(8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -405,6 +403,7 @@ fun LibraryScreen(
                                     val isFavorite = uiState.favoritePaths.contains(file.path)
                                     FileItemGridCard(
                                         file = file,
+                                        showDetails = uiState.viewMode.columns != 4,
                                         isFavorite = isFavorite,
                                         isPinnedTab = isPinnedTab,
                                         isRemoteTab = selectedTab == 1,

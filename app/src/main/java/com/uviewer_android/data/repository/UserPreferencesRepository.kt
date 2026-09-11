@@ -1,6 +1,7 @@
 package com.uviewer_android.data.repository
 
 import android.content.Context
+import com.uviewer_android.data.model.LibraryViewMode
 import androidx.core.content.edit
 import com.uviewer_android.data.llm.LlmPromptPreset
 import com.uviewer_android.data.llm.LlmProvider
@@ -459,10 +460,13 @@ class UserPreferencesRepository(context: Context) {
     }
     fun getLastServerId(): Int = sharedPreferences.getInt("last_server_id", -1)
 
-    fun setLibraryViewMode(isGrid: Boolean) {
-        sharedPreferences.edit().putBoolean("library_view_mode", isGrid).apply()
+    fun setLibraryViewMode(mode: LibraryViewMode) {
+        sharedPreferences.edit().putString("library_view_layout", mode.name).apply()
     }
-    fun getLibraryViewMode(): Boolean = getSafeBoolean("library_view_mode", false)
+    fun getLibraryViewMode(): LibraryViewMode = LibraryViewMode.fromStoredValue(
+        sharedPreferences.getString("library_view_layout", null),
+        getSafeBoolean("library_view_mode", false)
+    )
 
     fun getLibrarySortOption(): String {
         return sharedPreferences.getString("library_sort_option", "NAME") ?: "NAME"

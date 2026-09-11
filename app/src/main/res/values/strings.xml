@@ -202,4 +202,7 @@
     <string name="llm_selected_text">Selected text</string>
     <string name="llm_loading">Thinking...</string>
     <string name="llm_close">Close</string>
+    <string name="switch_to_grid_2">Switch to 2-column thumbnails</string>
+    <string name="switch_to_grid_4">Switch to 4-column thumbnails</string>
+    <string name="switch_to_list">Switch to list view</string>
 </resources>

@@ -14,8 +14,8 @@ class FavoritesViewModel(
     private val userPreferencesRepository: UserPreferencesRepository
 ) : ViewModel() {
 
-    private val _isGridView = MutableStateFlow(userPreferencesRepository.getLibraryViewMode())
-    val isGridView: StateFlow<Boolean> = _isGridView.asStateFlow()
+    private val _viewMode = MutableStateFlow(userPreferencesRepository.getLibraryViewMode())
+    val viewMode = _viewMode.asStateFlow()
 
     private val _pinnedFavoritesOverride = MutableStateFlow<List<FileEntry>?>(null)
 
@@ -49,8 +49,8 @@ class FavoritesViewModel(
     )
 
     fun toggleViewMode() {
-        val newMode = !_isGridView.value
-        _isGridView.value = newMode
+        val newMode = _viewMode.value.next()
+        _viewMode.value = newMode
         userPreferencesRepository.setLibraryViewMode(newMode)
     }
 

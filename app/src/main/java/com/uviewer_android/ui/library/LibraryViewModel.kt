@@ -6,6 +6,7 @@ import com.uviewer_android.data.FavoriteDao
 import com.uviewer_android.data.FavoriteItem
 import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
+import com.uviewer_android.data.model.LibraryViewMode
 import com.uviewer_android.data.model.SortOption
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
@@ -27,7 +28,7 @@ data class LibraryUiState(
     val serverId: Int? = null,
     val error: String? = null,
     val sortOption: SortOption = SortOption.NAME,
-    val isGridView: Boolean = false
+    val viewMode: LibraryViewMode = LibraryViewMode.LIST
 )
 
 private data class LibraryCombinedSources(
@@ -97,7 +98,7 @@ class LibraryViewModel(
             selectedTabIndex = lastTab,
             serverId = effectiveServerId,
             currentPath = effectivePath,
-            isGridView = userPreferencesRepository.getLibraryViewMode()
+            viewMode = userPreferencesRepository.getLibraryViewMode()
         )
 
         if (lastTab == 2) {
@@ -247,8 +248,8 @@ class LibraryViewModel(
     }
 
     fun toggleViewMode() {
-        val newMode = !_state.value.isGridView
-        _state.value = _state.value.copy(isGridView = newMode)
+        val newMode = _state.value.viewMode.next()
+        _state.value = _state.value.copy(viewMode = newMode)
         userPreferencesRepository.setLibraryViewMode(newMode)
     }
 

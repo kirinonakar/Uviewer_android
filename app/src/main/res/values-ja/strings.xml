@@ -200,4 +200,7 @@
     <string name="llm_selected_text">選択したテキスト</string>
     <string name="llm_loading">考え中...</string>
     <string name="llm_close">閉じる</string>
+    <string name="switch_to_grid_2">2列のサムネイル表示に切り替え</string>
+    <string name="switch_to_grid_4">4列のサムネイル表示に切り替え</string>
+    <string name="switch_to_list">リスト表示に切り替え</string>
 </resources>
