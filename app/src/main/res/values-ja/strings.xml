@@ -203,4 +203,9 @@
     <string name="switch_to_grid_2">2列のサムネイル表示に切り替え</string>
     <string name="switch_to_grid_4">4列のサムネイル表示に切り替え</string>
     <string name="switch_to_list">リスト表示に切り替え</string>
+    <string name="pdf_password_title">PDFのパスワード</string>
+    <string name="pdf_password_message">\'%1$s\' はパスワードで保護されています。パスワードを入力してください。</string>
+    <string name="pdf_password_incorrect">パスワードが正しくありません。もう一度入力してください。</string>
+    <string name="pdf_password_open">開く</string>
+    <string name="pdf_password_cancelled">パスワード入力がキャンセルされたため、PDFを開きませんでした。</string>
 </resources>

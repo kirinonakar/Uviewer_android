@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
@@ -32,11 +34,13 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -53,10 +57,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -99,6 +108,11 @@ fun PdfViewerScreen(
     var currentPage by rememberSaveable(filePath) { mutableIntStateOf(initialPage ?: 0) }
     var hasLoaded by rememberSaveable(filePath) { mutableStateOf(false) }
     var webViewReady by remember { mutableStateOf(false) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var passwordInput by remember { mutableStateOf("") }
+    var passwordIncorrect by remember { mutableStateOf(false) }
+    var passwordSubmitting by remember { mutableStateOf(false) }
+    val passwordFocusRequester = remember { FocusRequester() }
 
     val currentActivity = activity ?: (context as? MainActivity) ?: remember(context) {
         var c = context
@@ -274,6 +288,17 @@ fun PdfViewerScreen(
         isSearching = true
         val quoted = JSONObject.quote(query)
         webViewRef?.evaluateJavascript("window.UviewerPdf.find($quoted);", null)
+    }
+
+    fun submitPdfPassword() {
+        val path = uiState.localFilePath ?: return
+        val webView = webViewRef ?: return
+        passwordSubmitting = true
+        val pdfUrl = Uri.fromFile(File(path)).toString()
+        webView.evaluateJavascript(
+            "window.UviewerPdf && window.UviewerPdf.loadPdf(${JSONObject.quote(pdfUrl)}, ${uiState.initialPage}, ${JSONObject.quote(passwordInput)});",
+            null
+        )
     }
 
     LaunchedEffect(currentActivity, webViewReady) {
@@ -523,7 +548,20 @@ fun PdfViewerScreen(
                                         @JavascriptInterface
                                         fun onPdfLoaded(totalPages: Int) {
                                             post {
+                                                showPasswordDialog = false
+                                                passwordSubmitting = false
+                                                passwordIncorrect = false
+                                                passwordInput = ""
                                                 pageCount = totalPages
+                                            }
+                                        }
+
+                                        @JavascriptInterface
+                                        fun onPdfPasswordRequired(incorrect: Boolean) {
+                                            post {
+                                                passwordSubmitting = false
+                                                passwordIncorrect = incorrect
+                                                showPasswordDialog = true
                                             }
                                         }
 
@@ -582,5 +620,81 @@ fun PdfViewerScreen(
                 }
             }
         }
+    }
+
+    if (showPasswordDialog) {
+        LaunchedEffect(Unit) {
+            delay(100)
+            try {
+                passwordFocusRequester.requestFocus()
+            } catch (_: Exception) {
+            }
+        }
+
+        com.uviewer_android.ui.theme.UviewerAlertDialog(
+            onDismissRequest = {
+                showPasswordDialog = false
+                android.widget.Toast.makeText(context, R.string.pdf_password_cancelled, android.widget.Toast.LENGTH_SHORT).show()
+                onBack()
+            },
+            properties = androidx.compose.ui.window.DialogProperties(
+                dismissOnBackPress = true,
+                dismissOnClickOutside = false
+            ),
+            title = { Text(stringResource(R.string.pdf_password_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(stringResource(R.string.pdf_password_message, fileName))
+                    if (passwordIncorrect) {
+                        Text(
+                            text = stringResource(R.string.pdf_password_incorrect),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    OutlinedTextField(
+                        value = passwordInput,
+                        onValueChange = {
+                            passwordInput = it
+                            passwordIncorrect = false
+                        },
+                        label = { Text(stringResource(R.string.password)) },
+                        singleLine = true,
+                        isError = passwordIncorrect,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Password,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (passwordInput.isNotEmpty() && !passwordSubmitting) submitPdfPassword()
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(passwordFocusRequester)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { submitPdfPassword() },
+                    enabled = passwordInput.isNotEmpty() && !passwordSubmitting
+                ) {
+                    Text(stringResource(R.string.pdf_password_open))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPasswordDialog = false
+                        android.widget.Toast.makeText(context, R.string.pdf_password_cancelled, android.widget.Toast.LENGTH_SHORT).show()
+                        onBack()
+                    }
+                ) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
     }
 }

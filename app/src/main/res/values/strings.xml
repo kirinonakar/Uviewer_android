@@ -205,4 +205,9 @@
     <string name="switch_to_grid_2">Switch to 2-column thumbnails</string>
     <string name="switch_to_grid_4">Switch to 4-column thumbnails</string>
     <string name="switch_to_list">Switch to list view</string>
+    <string name="pdf_password_title">PDF Password</string>
+    <string name="pdf_password_message">\'%1$s\' is password-protected. Enter the password to open it.</string>
+    <string name="pdf_password_incorrect">The password is incorrect. Please try again.</string>
+    <string name="pdf_password_open">Open</string>
+    <string name="pdf_password_cancelled">The PDF was not opened because password entry was cancelled.</string>
 </resources>

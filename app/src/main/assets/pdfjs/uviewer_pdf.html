@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -671,7 +671,7 @@
             pageInfo.rendering = false;
         }
 
-        async function loadPdf(fileUrl, initialPage) {
+        async function loadPdf(fileUrl, initialPage, password) {
             ++detailSerial;
             cancelDetailDelay();
             clearDetailSettlement();
@@ -679,7 +679,21 @@
             if (detailTask) detailTask.cancel();
             pages.forEach(removeDetailCanvas);
             viewer.innerHTML = '<div class="loading">Loading...</div>';
-            pdfDoc = await pdfjsLib.getDocument(fileUrl).promise;
+            const loadingTask = password
+                ? pdfjsLib.getDocument({ url: fileUrl, password: password })
+                : pdfjsLib.getDocument(fileUrl);
+            try {
+                pdfDoc = await loadingTask.promise;
+            } catch (error) {
+                if (error && error.name === 'PasswordException') {
+                    viewer.innerHTML = '';
+                    if (window.Android && Android.onPdfPasswordRequired) {
+                        Android.onPdfPasswordRequired(error.code === 2);
+                    }
+                    return;
+                }
+                throw error;
+            }
             pages = [];
             pageTexts.clear();
             matches = [];
