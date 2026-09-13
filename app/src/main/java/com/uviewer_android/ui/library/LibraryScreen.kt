@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.BackHandler
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
@@ -110,10 +111,14 @@ fun LibraryScreen(
     }
 
     // Handle initial navigation (e.g. from Favorites)
+    var initialNavigationHandled by rememberSaveable(initialPath, initialServerId) {
+        mutableStateOf(false)
+    }
     LaunchedEffect(initialPath, initialServerId) {
-        if (!initialPath.isNullOrEmpty()) {
+        if (!initialNavigationHandled && !initialPath.isNullOrEmpty()) {
             viewModel.openFolder(initialPath, initialServerId)
         }
+        initialNavigationHandled = true
     }
 
     Scaffold(

@@ -70,6 +70,14 @@ fun MainScreen(
     var isFullScreen by remember { androidx.compose.runtime.mutableStateOf(false) }
     val viewerBottomBarBackgroundColor by libraryViewModel.viewerBottomBarBackgroundColor.collectAsState()
 
+    fun returnToLibrary(): Boolean {
+        val openedFromLibrary = navController.currentBackStackEntry
+            ?.savedStateHandle?.get<Boolean>("openedFromLibrary") == true
+        val previousIsLibrary = navController.previousBackStackEntry
+            ?.destination?.route?.startsWith("library") == true
+        return openedFromLibrary && previousIsLibrary && navController.popBackStack()
+    }
+
     androidx.compose.runtime.LaunchedEffect(initialIntentPath) {
         if (initialIntentPath != null) {
             val fileName = java.io.File(initialIntentPath).name.lowercase()
@@ -211,7 +219,7 @@ fun MainScreen(
                                 BottomNavigationButton(
                                     modifier = Modifier.weight(1f),
                                     selected = selected,
-                                    onClick = {
+                                    onClick = onNavigationClick@{
                                         if (screen is Screen.Resume) {
                                             val recent = libraryUiState.mostRecentFile
                                             if (recent != null) {
@@ -228,6 +236,8 @@ fun MainScreen(
                                             val currentEntry = navBackStackEntry
                                             val isViewer = currentEntry?.destination?.route?.startsWith("viewer") == true
                                             
+                                            if (isViewer && returnToLibrary()) return@onNavigationClick
+
                                             if (isViewer) {
                                                 val filePath = currentEntry.arguments?.getString("path")
                                                 val isWebDav = currentEntry.arguments?.getBoolean("isWebDav") ?: false
@@ -321,6 +331,8 @@ fun MainScreen(
                         val encodedPath = android.net.Uri.encode(entry.path, null)
                         val route = "viewer?path=$encodedPath&type=${entry.type}&isWebDav=${entry.isWebDav}&serverId=${entry.serverId ?: -1}&position=${entry.position}"
                         navController.navigate(route)
+                        navController.currentBackStackEntry?.savedStateHandle
+                            ?.set("openedFromLibrary", true)
                     }
                 ) 
             }
@@ -386,7 +398,9 @@ fun MainScreen(
                     serverId = serverId,
                     initialPosition = position,
                     libraryViewModel = libraryViewModel,
-                    onBack = { 
+                    onBack = onViewerBack@{
+                        if (returnToLibrary()) return@onViewerBack
+
                         // Detect WebDAV by serverId first (most reliable for pinned tab items)
                         val actualIsWebDav = (serverId != null && serverId != -1) || isWebDav || filePath.startsWith("http://") || filePath.startsWith("https://")
                         val parent = try {
@@ -424,11 +438,15 @@ fun MainScreen(
                         scope.launch {
                              val nextFile = libraryViewModel.getNextFile(filePath, isWebDav, serverId)
                              if (nextFile != null) {
+                                 val openedFromLibrary = navController.currentBackStackEntry
+                                     ?.savedStateHandle?.get<Boolean>("openedFromLibrary") == true
                                  val encodedPath = android.net.Uri.encode(nextFile.path, null)
                                  val route = "viewer?path=$encodedPath&type=${nextFile.type.name}&isWebDav=${nextFile.isWebDav}&serverId=${nextFile.serverId ?: -1}&position=-1"
                                  navController.navigate(route) {
                                      popUpTo("viewer?path={path}&type={type}&isWebDav={isWebDav}&serverId={serverId}&position={position}") { inclusive = true }
                                  }
+                                 navController.currentBackStackEntry?.savedStateHandle
+                                     ?.set("openedFromLibrary", openedFromLibrary)
                              }
                         }
                     },
@@ -436,11 +454,15 @@ fun MainScreen(
                         scope.launch {
                              val prevFile = libraryViewModel.getPrevFile(filePath, isWebDav, serverId)
                              if (prevFile != null) {
+                                 val openedFromLibrary = navController.currentBackStackEntry
+                                     ?.savedStateHandle?.get<Boolean>("openedFromLibrary") == true
                                  val encodedPath = android.net.Uri.encode(prevFile.path, null)
                                  val route = "viewer?path=$encodedPath&type=${prevFile.type.name}&isWebDav=${prevFile.isWebDav}&serverId=${prevFile.serverId ?: -1}&position=-1"
                                  navController.navigate(route) {
                                      popUpTo("viewer?path={path}&type={type}&isWebDav={isWebDav}&serverId={serverId}&position={position}") { inclusive = true }
                                  }
+                                 navController.currentBackStackEntry?.savedStateHandle
+                                     ?.set("openedFromLibrary", openedFromLibrary)
                              }
                         }
                     },
