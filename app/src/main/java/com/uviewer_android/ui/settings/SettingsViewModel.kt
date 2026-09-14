@@ -322,7 +322,14 @@ class SettingsViewModel(
     fun clearCache() {
         viewModelScope.launch {
             val context = getApplication<Application>()
-            context.cacheDir.deleteRecursively()
+            val application = getApplication<com.uviewer_android.UviewerApplication>()
+            application.libraryThumbnailCache.clear()
+            application.thumbnailImageLoader.memoryCache?.clear()
+            context.cacheDir.listFiles()?.forEach { file ->
+                if (file.name != com.uviewer_android.data.utils.LibraryThumbnailCache.DIRECTORY) {
+                    file.deleteRecursively()
+                }
+            }
             context.externalCacheDir?.deleteRecursively()
             context.getExternalFilesDir("cache")?.deleteRecursively()
             updateCacheSize()

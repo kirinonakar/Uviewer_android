@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -21,6 +22,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.uviewer_android.UviewerApplication
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.R
 
@@ -202,8 +205,21 @@ fun FileItemGridCard(
             ) {
                 val isZip = file.type == FileEntry.FileType.ZIP || file.type == FileEntry.FileType.IMAGE_ZIP
                 if ((file.type == FileEntry.FileType.IMAGE || isZip) && !file.isWebDav) {
+                    val context = LocalContext.current
+                    val thumbnailLoader = (context.applicationContext as UviewerApplication).thumbnailImageLoader
+                    val thumbnailRequest = remember(context, file.path, file.lastModified, file.size) {
+                        val thumbnail = com.uviewer_android.data.utils.LibraryThumbnail.from(file)
+                        ImageRequest.Builder(context)
+                            .data(thumbnail)
+                            .memoryCacheKey(thumbnail.key)
+                            // A stable size lets both grid layouts reuse the same decoded preview.
+                            .size(512)
+                            .scale(coil.size.Scale.FIT)
+                            .build()
+                    }
                     AsyncImage(
-                        model = java.io.File(file.path),
+                        model = thumbnailRequest,
+                        imageLoader = thumbnailLoader,
                         contentDescription = null,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()

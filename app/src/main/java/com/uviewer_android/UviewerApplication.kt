@@ -15,6 +15,23 @@ class UviewerApplication : Application(), ImageLoaderFactory {
 
     lateinit var container: AppContainer
 
+    val libraryThumbnailCache by lazy {
+        com.uviewer_android.data.utils.LibraryThumbnailCache(this, newImageLoader())
+    }
+
+    // Keep small library previews alive independently of full-resolution viewer images.
+    val thumbnailImageLoader: ImageLoader by lazy {
+        newImageLoader().newBuilder()
+            .components { add(com.uviewer_android.data.utils.LibraryThumbnailCache.Factory(libraryThumbnailCache)) }
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizeBytes(minOf(128L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4).toInt())
+                    .build()
+            }
+            .crossfade(false)
+            .build()
+    }
+
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)

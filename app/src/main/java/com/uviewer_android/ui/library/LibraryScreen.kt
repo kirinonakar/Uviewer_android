@@ -63,6 +63,16 @@ fun LibraryScreen(
 
     var backPressedTime by remember { mutableLongStateOf(0L) }
     val context = LocalContext.current
+    LaunchedEffect(uiState.isLoading, uiState.viewMode.isGrid, selectedTab, uiState.fileList, uiState.pinnedFiles) {
+        if (!uiState.isLoading) {
+            val files = if (!uiState.viewMode.isGrid) emptyList() else
+                if (selectedTab == 2) uiState.pinnedFiles else uiState.fileList
+            viewModel.preloadThumbnails(
+                files,
+                (context.applicationContext as com.uviewer_android.UviewerApplication).libraryThumbnailCache
+            )
+        }
+    }
     val rootPath = android.os.Environment.getExternalStorageDirectory().absolutePath
 
     val localListState = androidx.compose.foundation.lazy.rememberLazyListState()

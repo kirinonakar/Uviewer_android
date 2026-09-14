@@ -22,7 +22,8 @@ class CacheManager(
         
         fun collectTopItems(dir: File) {
             dir.listFiles()?.forEach { 
-                cacheItems.add(it)
+                // This directory has its own bounded LRU and must not be deleted while open.
+                if (it != File(context.cacheDir, LibraryThumbnailCache.DIRECTORY)) cacheItems.add(it)
             }
         }
         

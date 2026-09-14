@@ -13,6 +13,7 @@ import com.uviewer_android.data.repository.WebDavRepository
 import com.uviewer_android.data.repository.CredentialsManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
@@ -48,6 +49,30 @@ class LibraryViewModel(
     private val userPreferencesRepository: com.uviewer_android.data.repository.UserPreferencesRepository,
     private val credentialsManager: CredentialsManager
 ) : ViewModel() {
+
+    private var thumbnailPreloadJob: kotlinx.coroutines.Job? = null
+    private var thumbnailPreloadItems = emptyList<com.uviewer_android.data.utils.LibraryThumbnail>()
+
+    fun preloadThumbnails(files: List<FileEntry>, cache: com.uviewer_android.data.utils.LibraryThumbnailCache) {
+        val thumbnails = files.filter(com.uviewer_android.data.utils.LibraryThumbnail::supports)
+            .map(com.uviewer_android.data.utils.LibraryThumbnail::from)
+        if (thumbnails == thumbnailPreloadItems && thumbnailPreloadJob?.isActive == true) return
+        thumbnailPreloadJob?.cancel()
+        thumbnailPreloadItems = thumbnails
+        // ViewModel scope keeps folder preparation running while an image viewer is open.
+        thumbnailPreloadJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            for (thumbnail in thumbnails) {
+                kotlinx.coroutines.currentCoroutineContext().ensureActive()
+                try {
+                    cache.preload(thumbnail)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (exception: Exception) {
+                    android.util.Log.w("ThumbnailCache", "Unable to preload ${thumbnail.path}", exception)
+                }
+            }
+        }
+    }
 
 
     private val _state = MutableStateFlow(LibraryUiState())
