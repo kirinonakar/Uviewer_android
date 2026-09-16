@@ -136,11 +136,23 @@ fun FileItemRow(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                } else if (!file.isDirectory) {
-                    Text(
-                        com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
-                        style = MaterialTheme.typography.labelSmall
-                    )
+                } else {
+                    val location = file.location
+                    if (!location.isNullOrEmpty()) {
+                        Text(
+                            location,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    if (!file.isDirectory) {
+                        Text(
+                            com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         },
@@ -337,14 +349,28 @@ fun FileItemGridCard(
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
-                    } else if (!file.isDirectory) {
-                        Text(
-                            com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                    } else {
+                        val location = file.location
+                        if (!location.isNullOrEmpty()) {
+                            Text(
+                                location,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        if (!file.isDirectory) {
+                            Text(
+                                com.uviewer_android.data.repository.FileRepository.formatFileSize(file.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }

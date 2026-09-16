@@ -32,7 +32,7 @@
     <string name="no_matching_files">조건에 맞는 파일이 없습니다</string>
     <string name="add_server_hint">+를 눌러 WebDAV 서버를 추가하세요</string>
     <string name="filter_by_filename">파일명 필터</string>
-    <string name="filter_filename_hint">파일명 입력</string>
+    <string name="filter_filename_hint">파일명 입력 (하위 폴더 포함)</string>
     <string name="clear_filter">파일명 필터 지우기</string>
 
     <!-- Favorites -->

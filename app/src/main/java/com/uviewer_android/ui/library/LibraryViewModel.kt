@@ -21,6 +21,8 @@ data class LibraryUiState(
     val currentPath: String = android.os.Environment.getExternalStorageDirectory().absolutePath,
     val fileList: List<FileEntry> = emptyList(),
     val fileNameFilter: String = "",
+    val searchResults: List<FileEntry> = emptyList(),
+    val isSearching: Boolean = false,
     val favoritePaths: Set<String> = emptySet(),
     val pinnedFiles: List<FileEntry> = emptyList(), // For Pin Tab
     val mostRecentFile: com.uviewer_android.data.RecentFile? = null,
@@ -52,6 +54,7 @@ class LibraryViewModel(
 
     private var thumbnailPreloadJob: kotlinx.coroutines.Job? = null
     private var thumbnailPreloadItems = emptyList<com.uviewer_android.data.utils.LibraryThumbnail>()
+    private var fileNameSearchJob: kotlinx.coroutines.Job? = null
 
     fun preloadThumbnails(files: List<FileEntry>, cache: com.uviewer_android.data.utils.LibraryThumbnailCache) {
         val thumbnails = files.filter(com.uviewer_android.data.utils.LibraryThumbnail::supports)
@@ -236,6 +239,16 @@ class LibraryViewModel(
                     progress = favorite?.progress ?: 0f
                 )
             },
+            searchResults = state.searchResults.map { file ->
+                val favorite = favorites.find { it.path == file.path }
+                file.copy(
+                    isPinned = favorite?.isPinned == true,
+                    pinOrder = favorite?.pinOrder ?: 0,
+                    position = favorite?.position ?: -1,
+                    positionTitle = favorite?.positionTitle,
+                    progress = favorite?.progress ?: 0f
+                )
+            },
             favoritePaths = favorites.map { it.path }.toSet(),
             pinnedFiles = if (pinnedOverride != null) {
                 pinnedOverride.mapNotNull { file ->
@@ -280,10 +293,90 @@ class LibraryViewModel(
 
     fun setFileNameFilter(query: String) {
         _state.value = _state.value.copy(fileNameFilter = query)
+        startFileNameSearch(query)
     }
 
     fun clearFileNameFilter() {
         setFileNameFilter("")
+    }
+
+    /**
+     * (Re)starts the filename search for [query].
+     *
+     * The filter walks the current folder and every folder beneath it, listing folders on several
+     * threads, and publishes each match as soon as it is discovered so the list grows live.
+     */
+    private fun startFileNameSearch(query: String) {
+        fileNameSearchJob?.cancel()
+        fileNameSearchJob = null
+
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) {
+            _state.value = _state.value.copy(searchResults = emptyList(), isSearching = false)
+            return
+        }
+
+        val tabIndex = _state.value.selectedTabIndex
+        val searchPath = _state.value.currentPath
+        val serverId = _state.value.serverId
+        // The pinned tab and the WebDAV server list have no folder tree to walk.
+        val canSearch = when (tabIndex) {
+            2 -> false
+            1 -> serverId != null && searchPath != "WebDAV"
+            else -> true
+        }
+        if (!canSearch) {
+            _state.value = _state.value.copy(searchResults = emptyList(), isSearching = false)
+            return
+        }
+
+        fileNameSearchJob = viewModelScope.launch {
+            _state.value = _state.value.copy(isSearching = true, searchResults = emptyList())
+
+            val pending = ArrayList<FileEntry>(SEARCH_BATCH_SIZE)
+            var lastPublish = System.currentTimeMillis()
+            val onResult: suspend (FileEntry) -> Unit = { entry ->
+                pending.add(entry)
+                val now = System.currentTimeMillis()
+                if (pending.size >= SEARCH_BATCH_SIZE || now - lastPublish >= SEARCH_PUBLISH_INTERVAL_MS) {
+                    lastPublish = now
+                    publishSearchResults(pending)
+                }
+            }
+
+            try {
+                if (tabIndex == 1 && serverId != null) {
+                    webDavRepository.searchFilesRecursively(
+                        serverId,
+                        searchPath,
+                        normalizedQuery,
+                        onResult = onResult
+                    )
+                } else {
+                    fileRepository.searchFilesRecursively(searchPath, normalizedQuery, onResult = onResult)
+                }
+                publishSearchResults(pending)
+                _state.value = _state.value.copy(isSearching = false)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                android.util.Log.w("LibrarySearch", "Filename search failed", e)
+                _state.value = _state.value.copy(isSearching = false)
+            }
+        }
+    }
+
+    /**
+     * Appends collected matches to [LibraryUiState.searchResults] on the main thread, so the UI state
+     * is still updated from one thread while folders keep being listed on the IO threads.
+     */
+    private suspend fun publishSearchResults(pending: MutableList<FileEntry>) {
+        if (pending.isEmpty()) return
+        val batch = ArrayList(pending)
+        pending.clear()
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main.immediate) {
+            _state.value = _state.value.copy(searchResults = _state.value.searchResults + batch)
+        }
     }
     
     fun selectTab(index: Int) {
@@ -293,7 +386,13 @@ class LibraryViewModel(
         _pinnedFilesOverride.value = null // Clear override when switching tabs
         
         if (index == 2) {
-            _state.value = _state.value.copy(selectedTabIndex = index)
+            fileNameSearchJob?.cancel()
+            fileNameSearchJob = null
+            _state.value = _state.value.copy(
+                selectedTabIndex = index,
+                searchResults = emptyList(),
+                isSearching = false
+            )
             return
         }
 
@@ -321,11 +420,15 @@ class LibraryViewModel(
     }
 
     private fun showServerList() {
+        fileNameSearchJob?.cancel()
+        fileNameSearchJob = null
         _state.value = _state.value.copy(
             currentPath = "WebDAV",
             fileList = emptyList(), 
             serverId = null,
-            isLoading = false
+            isLoading = false,
+            searchResults = emptyList(),
+            isSearching = false
         )
         // Persistence: save that we are at the server list
         userPreferencesRepository.setLastServerId(-1)
@@ -363,6 +466,11 @@ class LibraryViewModel(
                 }
                 userPreferencesRepository.setLastLibraryPath(path)
                 userPreferencesRepository.setLastLibraryTab(_state.value.selectedTabIndex)
+
+                // The filter walks sub-folders, so restart it from the folder that just loaded.
+                if (_state.value.fileNameFilter.isNotBlank()) {
+                    startFileNameSearch(_state.value.fileNameFilter)
+                }
             } catch (e: Exception) {
                 _state.value = _state.value.copy(
                     isLoading = false,
@@ -571,5 +679,13 @@ class LibraryViewModel(
         val siblings = getSiblings(currentPath, isWebDav, serverId).filter { !it.isDirectory }
         val index = siblings.indexOfFirst { it.path == currentPath }
         return if (index > 0) siblings[index - 1] else null
+    }
+
+    private companion object {
+        /** Matches pushed to the UI in one batch while a recursive filename search runs. */
+        const val SEARCH_BATCH_SIZE = 64
+
+        /** Longest time results are collected before they are pushed to the UI. */
+        const val SEARCH_PUBLISH_INTERVAL_MS = 120L
     }
 }

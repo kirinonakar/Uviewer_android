@@ -4,9 +4,13 @@ import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.network.WebDavClient
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.File
+
+private const val MAX_SEARCH_DEPTH = 64
 
 class WebDavRepository(
     private val webDavServerDao: WebDavServerDao,
@@ -103,6 +107,67 @@ class WebDavRepository(
                 isWebDav = true
             )
         }
+    }
+
+    /**
+     * Searches [rootPath] and every sub-folder beneath it on server [serverId] for entries whose
+     * name contains [query], reporting each match through [onResult] in the order it is found.
+     *
+     * Sub-folders are listed breadth-first, reading up to [maxConcurrency] folders at once, so the
+     * tree is walked with several threads while matches stream out as soon as they are discovered.
+     */
+    suspend fun searchFilesRecursively(
+        serverId: Int,
+        rootPath: String,
+        query: String,
+        maxConcurrency: Int = 6,
+        onResult: suspend (FileEntry) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return@withContext
+
+        val parallelReads = maxConcurrency.coerceAtLeast(1)
+        var folders = listOf(rootPath)
+        var depth = 0
+
+        while (folders.isNotEmpty() && depth <= MAX_SEARCH_DEPTH) {
+            val nextFolders = ArrayList<String>()
+            for (batch in folders.chunked(parallelReads)) {
+                coroutineScope {
+                    val listings = batch.map { folderPath ->
+                        async {
+                            try {
+                                listFiles(serverId, folderPath)
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                        }
+                    }
+                    for (listing in listings) {
+                        for (entry in listing.await()) {
+                            if (entry.name.contains(normalizedQuery, ignoreCase = true)) {
+                                onResult(entry.copy(location = relativeLocation(rootPath, entry.path)))
+                            }
+                            if (entry.isDirectory) nextFolders.add(entry.path)
+                        }
+                    }
+                }
+            }
+            folders = nextFolders
+            depth++
+        }
+    }
+
+    /** Folder of [path] relative to [rootPath]; null when [path] sits directly in [rootPath]. */
+    private fun relativeLocation(rootPath: String, path: String): String? {
+        val parent = path.substringBeforeLast('/', "")
+        val normalizedRoot = rootPath.trimEnd('/')
+        val relative = if (normalizedRoot.isEmpty()) {
+            parent.trimStart('/')
+        } else {
+            parent.removePrefix(normalizedRoot).trimStart('/')
+        }
+        return relative.ifEmpty { null }
     }
 
     private suspend fun getClient(serverId: Int): WebDavClient? {

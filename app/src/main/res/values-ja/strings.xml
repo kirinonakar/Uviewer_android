@@ -32,7 +32,7 @@
     <string name="no_matching_files">条件に一致するファイルがありません</string>
     <string name="add_server_hint">+ を押して WebDAV サーバーを追加してください</string>
     <string name="filter_by_filename">ファイル名でフィルター</string>
-    <string name="filter_filename_hint">ファイル名を入力</string>
+    <string name="filter_filename_hint">ファイル名を入力（サブフォルダを含む）</string>
     <string name="clear_filter">ファイル名フィルターをクリア</string>
 
     <!-- Favorites -->

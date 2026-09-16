@@ -298,6 +298,13 @@ fun LibraryScreen(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() })
                 )
+                if (uiState.isSearching) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    )
+                }
             }
 
             if (uiState.isLoading) {
@@ -305,28 +312,46 @@ fun LibraryScreen(
                     CircularProgressIndicator()
                 }
             } else {
+                val isServerList = selectedTab == 1 && (uiState.serverId == null || uiState.currentPath == "WebDAV")
+                val isNameFilterActive = uiState.fileNameFilter.isNotBlank()
                 val sourceList = if (selectedTab == 2) uiState.pinnedFiles else uiState.fileList
-                val listToShow = filterFilesByName(sourceList, uiState.fileNameFilter)
+                val listToShow = when {
+                    selectedTab == 2 -> filterFilesByName(sourceList, uiState.fileNameFilter)
+                    // The filename filter walks the current folder and every folder beneath it.
+                    isNameFilterActive && !isServerList -> uiState.searchResults
+                    else -> filterFilesByName(sourceList, uiState.fileNameFilter)
+                }
+                val isSearchingSubfolders = isNameFilterActive && !isServerList && selectedTab != 2 && uiState.isSearching
                 
                 if (listToShow.isEmpty()) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                when {
-                                    uiState.fileNameFilter.isNotBlank() -> stringResource(R.string.no_matching_files)
-                                    selectedTab == 1 && uiState.serverId == null -> stringResource(R.string.no_servers_added)
-                                    selectedTab == 2 -> stringResource(R.string.no_pinned_files)
-                                    else -> stringResource(R.string.no_files_found)
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (uiState.fileNameFilter.isBlank() && selectedTab == 1 && uiState.serverId == null) {
+                            if (isSearchingSubfolders) {
+                                CircularProgressIndicator()
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    stringResource(R.string.add_server_hint), 
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    stringResource(R.string.searching),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            } else {
+                                Text(
+                                    when {
+                                        uiState.fileNameFilter.isNotBlank() -> stringResource(R.string.no_matching_files)
+                                        selectedTab == 1 && uiState.serverId == null -> stringResource(R.string.no_servers_added)
+                                        selectedTab == 2 -> stringResource(R.string.no_pinned_files)
+                                        else -> stringResource(R.string.no_files_found)
+                                    },
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (uiState.fileNameFilter.isBlank() && selectedTab == 1 && uiState.serverId == null) {
+                                    Text(
+                                        stringResource(R.string.add_server_hint), 
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
                             }
                         }
                     }

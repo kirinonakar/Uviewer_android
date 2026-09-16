@@ -3,8 +3,12 @@ package com.uviewer_android.data.repository
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.data.utils.EncodingDetector
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.File
+
+private const val MAX_SEARCH_DEPTH = 64
 
 class FileRepository {
 
@@ -19,7 +23,70 @@ class FileRepository {
         }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
     }
 
-    private fun mapToFileEntry(file: File): FileEntry {
+    /**
+     * Searches [rootPath] and every sub-folder beneath it for entries whose name contains [query],
+     * reporting each match through [onResult] in the order it is found.
+     *
+     * Folders are listed breadth-first, reading up to [maxConcurrency] folders at once, so the tree
+     * is walked with several threads while matches stream out as soon as they are discovered.
+     */
+    suspend fun searchFilesRecursively(
+        rootPath: String,
+        query: String,
+        maxConcurrency: Int = 8,
+        onResult: suspend (FileEntry) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isEmpty()) return@withContext
+
+        val root = File(rootPath)
+        if (!root.exists() || !root.isDirectory) return@withContext
+
+        val parallelReads = maxConcurrency.coerceAtLeast(1)
+        var folders = listOf(root)
+        var depth = 0
+
+        while (folders.isNotEmpty() && depth <= MAX_SEARCH_DEPTH) {
+            val nextFolders = ArrayList<File>()
+            for (batch in folders.chunked(parallelReads)) {
+                coroutineScope {
+                    val listings = batch.map { folder ->
+                        async {
+                            try {
+                                folder.listFiles()?.filter { !it.isHidden } ?: emptyList()
+                            } catch (e: Exception) {
+                                emptyList()
+                            }
+                        }
+                    }
+                    for (listing in listings) {
+                        for (child in listing.await()) {
+                            if (child.name.contains(normalizedQuery, ignoreCase = true)) {
+                                onResult(mapToFileEntry(child, relativeLocation(rootPath, child)))
+                            }
+                            if (child.isDirectory) nextFolders.add(child)
+                        }
+                    }
+                }
+            }
+            folders = nextFolders
+            depth++
+        }
+    }
+
+    /** Folder of [file] relative to [rootPath]; null when [file] sits directly in [rootPath]. */
+    private fun relativeLocation(rootPath: String, file: File): String? {
+        val parent = file.parent ?: return null
+        val normalizedRoot = rootPath.trimEnd('/')
+        val relative = if (normalizedRoot.isEmpty()) {
+            parent.trimStart('/')
+        } else {
+            parent.removePrefix(normalizedRoot).trimStart('/')
+        }
+        return relative.ifEmpty { null }
+    }
+
+    private fun mapToFileEntry(file: File, location: String? = null): FileEntry {
         val extension = file.extension.lowercase()
         val type = when {
             file.isDirectory -> FileEntry.FileType.FOLDER
@@ -42,7 +109,8 @@ class FileRepository {
             isDirectory = file.isDirectory,
             type = type,
             lastModified = file.lastModified(),
-            size = file.length()
+            size = file.length(),
+            location = location
         )
     }
 
