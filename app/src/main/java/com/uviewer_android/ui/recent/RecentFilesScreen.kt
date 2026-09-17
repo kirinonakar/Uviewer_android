@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.RecentFile
@@ -182,6 +183,18 @@ fun RecentFileItemRow(
                         progress = { file.progress },
                         modifier = Modifier.fillMaxWidth().height(2.dp).padding(vertical = 2.dp),
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+                val parentPath = if (file.path.startsWith("server:")) "" else {
+                    try { java.io.File(file.path).parent ?: "" } catch (e: Exception) { "" }
+                }
+                if (parentPath.isNotEmpty()) {
+                    Text(
+                        parentPath,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Text(
