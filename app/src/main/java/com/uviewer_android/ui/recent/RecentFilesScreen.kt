@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.uviewer_android.data.RecentFile
 import com.uviewer_android.ui.AppViewModelProvider
+import com.uviewer_android.ui.common.displayFileName
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -144,7 +145,7 @@ fun RecentFileItemRow(
                     )
                 }
                 Text(
-                    text = file.title,
+                    text = displayFileName(file.title, file.positionTitle),
                     style = textStyle,
                     onTextLayout = { textLayoutResult ->
                         if (textLayoutResult.lineCount >= 3) {

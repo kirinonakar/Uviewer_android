@@ -54,6 +54,7 @@ fun FileItemRow(
 ) {
     val typography = MaterialTheme.typography
     var textStyle by remember { mutableStateOf(typography.bodyLarge) }
+    val displayName = if (isPinnedTab || showPath) displayFileName(file.name, file.positionTitle) else file.name
     ListItem(
         modifier = Modifier.clickable(onClick = onClick),
         leadingContent = {
@@ -84,7 +85,7 @@ fun FileItemRow(
                     )
                 }
                 Text(
-                    file.name, 
+                    displayName, 
                     maxLines = Int.MAX_VALUE, 
                     style = textStyle,
                     onTextLayout = { if (it.lineCount >= 3) textStyle = typography.bodyMedium }
@@ -202,10 +203,11 @@ fun FileItemGridCard(
 ) {
     val typography = MaterialTheme.typography
     var textStyle by remember { mutableStateOf(typography.labelMedium) }
+    val displayName = if (isPinnedTab || showPath) displayFileName(file.name, file.positionTitle) else file.name
     ElevatedCard(
         modifier = Modifier
             .fillMaxWidth()
-            .semantics { if (!showDetails) contentDescription = file.name }
+            .semantics { if (!showDetails) contentDescription = displayName }
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(8.dp)
     ) {
@@ -296,7 +298,7 @@ fun FileItemGridCard(
                             )
                         }
                         Text(
-                            file.name,
+                            displayName,
                             style = textStyle,
                             maxLines = Int.MAX_VALUE,
                             textAlign = TextAlign.Center,
