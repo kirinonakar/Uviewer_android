@@ -47,6 +47,7 @@ fun FileItemRow(
     isFavorite: Boolean,
     isPinnedTab: Boolean = false,
     isRemoteTab: Boolean = false,
+    showPath: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -123,7 +124,7 @@ fun FileItemRow(
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
-                if (isPinnedTab) {
+                if (isPinnedTab || showPath) {
                     val parentPath = if (file.path.startsWith("server:")) "" else {
                         try { java.io.File(file.path).parent ?: "" } catch (e: Exception) { "" }
                     }
@@ -194,6 +195,7 @@ fun FileItemGridCard(
     showDetails: Boolean = true,
     isPinnedTab: Boolean = false,
     isRemoteTab: Boolean = false,
+    showPath: Boolean = false,
     onToggleFavorite: () -> Unit,
     onTogglePin: () -> Unit,
     onClick: () -> Unit
@@ -334,7 +336,7 @@ fun FileItemGridCard(
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     }
-                    if (isPinnedTab) {
+                    if (isPinnedTab || showPath) {
                         val parentPath = if (file.path.startsWith("server:")) "" else {
                             try { java.io.File(file.path).parent ?: "" } catch (e: Exception) { "" }
                         }

@@ -217,6 +217,7 @@ fun FavoritesScreen(
                                 showDetails = viewMode.columns != 4,
                                 isFavorite = true,
                                 isPinnedTab = isPinnedTab,
+                                showPath = selectedTabIndex == 1,
                                 onClick = { onNavigateToViewer(item) },
                                 onToggleFavorite = { viewModel.deleteFavorite(item) },
                                 onTogglePin = { viewModel.togglePin(item) }
@@ -296,6 +297,7 @@ fun FavoritesScreen(
                                 file = item,
                                 isFavorite = true,
                                 isPinnedTab = isPinnedTab,
+                                showPath = selectedTabIndex == 1,
                                 onClick = { onNavigateToViewer(item) },
                                 onToggleFavorite = { viewModel.deleteFavorite(item) },
                                 onTogglePin = { viewModel.togglePin(item) }

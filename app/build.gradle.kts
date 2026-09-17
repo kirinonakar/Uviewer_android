@@ -16,8 +16,8 @@ android {
         applicationId = "com.uviewer_android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 73
-        versionName = "1.7.3"
+        versionCode = 74
+        versionName = "1.7.4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
