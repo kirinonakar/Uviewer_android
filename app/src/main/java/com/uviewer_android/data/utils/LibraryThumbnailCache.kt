@@ -5,16 +5,19 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import androidx.core.graphics.drawable.toBitmap
-import coil.ImageLoader
-import coil.decode.DataSource
-import coil.disk.DiskCache
-import coil.fetch.DrawableResult
-import coil.fetch.Fetcher
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import coil.request.Options
-import coil.request.SuccessResult
-import coil.size.Scale
+import coil3.ImageLoader
+import coil3.decode.DataSource
+import coil3.disk.DiskCache
+import coil3.asDrawable
+import coil3.asImage
+import coil3.fetch.ImageFetchResult
+import coil3.request.allowHardware
+import coil3.fetch.Fetcher
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.Options
+import coil3.request.SuccessResult
+import coil3.size.Scale
 import com.uviewer_android.data.model.FileEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -22,6 +25,7 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.io.IOException
 
@@ -37,12 +41,12 @@ data class LibraryThumbnail(val path: String, val modified: Long, val size: Long
 }
 
 /** Stores generated previews, not original images, so memory eviction never requires source decoding. */
-@OptIn(coil.annotation.ExperimentalCoilApi::class)
+@OptIn(coil3.annotation.ExperimentalCoilApi::class)
 class LibraryThumbnailCache(
     private val context: Context,
     private val sourceLoader: ImageLoader,
     private val diskCache: DiskCache = DiskCache.Builder()
-        .directory(File(context.cacheDir, DIRECTORY))
+        .directory(File(context.cacheDir, DIRECTORY).toOkioPath())
         .maxSizeBytes(512L * 1024 * 1024)
         .build()
 ) {
@@ -73,7 +77,7 @@ class LibraryThumbnailCache(
                             .build()
                     )
                     if (result !is SuccessResult) return@withPermit null
-                    val drawable = result.drawable
+                    val drawable = result.image.asDrawable(context.resources)
                     val width = drawable.intrinsicWidth.coerceAtLeast(1)
                     val height = drawable.intrinsicHeight.coerceAtLeast(1)
                     val scale = minOf(1f, 512f / maxOf(width, height))
@@ -107,7 +111,7 @@ class LibraryThumbnailCache(
         override fun create(data: LibraryThumbnail, options: Options, imageLoader: ImageLoader): Fetcher =
             Fetcher {
                 cache.load(data, preloadOnly = false)?.let { bitmap ->
-                    DrawableResult(BitmapDrawable(options.context.resources, bitmap), true, DataSource.DISK)
+                    ImageFetchResult(BitmapDrawable(options.context.resources, bitmap).asImage(), true, DataSource.DISK)
                 }
             }
     }

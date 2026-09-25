@@ -1,12 +1,13 @@
 package com.uviewer_android.data.utils
 
 import android.graphics.drawable.BitmapDrawable
-import coil.ImageLoader
-import coil.decode.DataSource
-import coil.fetch.DrawableResult
-import coil.fetch.FetchResult
-import coil.fetch.Fetcher
-import coil.request.Options
+import coil3.ImageLoader
+import coil3.decode.DataSource
+import coil3.asImage
+import coil3.fetch.ImageFetchResult
+import coil3.fetch.FetchResult
+import coil3.fetch.Fetcher
+import coil3.request.Options
 import java.io.File
 
 class ZipThumbnailFetcher(
@@ -16,18 +17,20 @@ class ZipThumbnailFetcher(
 
     override suspend fun fetch(): FetchResult? {
         val bitmap = ThumbnailUtils.getFirstImageFromZip(file, 512) ?: return null
-        return DrawableResult(
-            drawable = BitmapDrawable(options.context.resources, bitmap),
+        return ImageFetchResult(
+            image = BitmapDrawable(options.context.resources, bitmap).asImage(),
             isSampled = true,
             dataSource = DataSource.DISK
         )
     }
 
-    class Factory : Fetcher.Factory<File> {
-        override fun create(data: File, options: Options, imageLoader: ImageLoader): Fetcher? {
-            val extension = data.extension.lowercase()
+    class Factory : Fetcher.Factory<coil3.Uri> {
+        override fun create(data: coil3.Uri, options: Options, imageLoader: ImageLoader): Fetcher? {
+            if (data.scheme != "file") return null
+            val path = data.path ?: return null
+            val extension = path.substringAfterLast('.', "").lowercase()
             if (extension == "zip" || extension == "cbz") {
-                return ZipThumbnailFetcher(data, options)
+                return ZipThumbnailFetcher(File(path), options)
             }
             return null
         }

@@ -3,9 +3,9 @@ package com.uviewer_android.ui.viewer
 data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 
-data class SharpenTransformation(private val intensity: Int) : coil.transform.Transformation {
+data class SharpenTransformation(private val intensity: Int) : coil3.transform.Transformation() {
     override val cacheKey: String = "sharpen_$intensity"
-    override suspend fun transform(input: android.graphics.Bitmap, size: coil.size.Size): android.graphics.Bitmap {
+    override suspend fun transform(input: android.graphics.Bitmap, size: coil3.size.Size): android.graphics.Bitmap {
         if (intensity <= 0) return input
 
         // getPixels()/setPixels() operate on 8-bit ARGB values. Applying this transformation to

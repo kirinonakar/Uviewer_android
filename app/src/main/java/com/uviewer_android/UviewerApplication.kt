@@ -4,28 +4,30 @@ import android.app.Application
 import com.uviewer_android.data.AppDatabase
 import com.uviewer_android.data.repository.CredentialsManager
 
-import coil.ImageLoader
-import coil.ImageLoaderFactory
-import coil.decode.GifDecoder
-import coil.decode.ImageDecoderDecoder
+import coil3.ImageLoader
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import coil3.gif.AnimatedImageDecoder
+import coil3.gif.GifDecoder
+import coil3.request.crossfade
 import com.uviewer_android.data.utils.AnimatedAvifDecoder
 import android.os.Build
 
-class UviewerApplication : Application(), ImageLoaderFactory {
+class UviewerApplication : Application(), SingletonImageLoader.Factory {
 
     lateinit var container: AppContainer
 
     val libraryThumbnailCache by lazy {
-        com.uviewer_android.data.utils.LibraryThumbnailCache(this, newImageLoader())
+        com.uviewer_android.data.utils.LibraryThumbnailCache(this, newImageLoader(this))
     }
 
     // Keep small library previews alive independently of full-resolution viewer images.
     val thumbnailImageLoader: ImageLoader by lazy {
-        newImageLoader().newBuilder()
+        newImageLoader(this).newBuilder()
             .components { add(com.uviewer_android.data.utils.LibraryThumbnailCache.Factory(libraryThumbnailCache)) }
             .memoryCache {
-                coil.memory.MemoryCache.Builder(this)
-                    .maxSizeBytes(minOf(128L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4).toInt())
+                coil3.memory.MemoryCache.Builder()
+                    .maxSizeBytes(minOf(128L * 1024 * 1024, Runtime.getRuntime().maxMemory() / 4))
                     .build()
             }
             .crossfade(false)
@@ -58,14 +60,14 @@ class UviewerApplication : Application(), ImageLoaderFactory {
         }
     }
 
-    override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        return ImageLoader.Builder(context)
             .components {
                 add(AnimatedAvifDecoder.Factory())
                 if (Build.VERSION.SDK_INT >= 28) {
-                    add(coil.decode.ImageDecoderDecoder.Factory())
+                    add(AnimatedImageDecoder.Factory())
                 } else {
-                    add(coil.decode.GifDecoder.Factory())
+                    add(GifDecoder.Factory())
                 }
                 add(com.uviewer_android.data.utils.ZipThumbnailFetcher.Factory())
                 add(com.uviewer_android.data.utils.RemoteZipImageFetcherFactory(container.webDavRepository))

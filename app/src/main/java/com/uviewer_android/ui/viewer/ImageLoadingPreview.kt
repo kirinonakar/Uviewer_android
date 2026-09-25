@@ -13,11 +13,14 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
-import coil.decode.BitmapFactoryDecoder
-import coil.request.ImageRequest
-import coil.request.CachePolicy
-import coil.size.Precision
+import coil3.compose.SubcomposeAsyncImage
+import coil3.decode.BitmapFactoryDecoder
+import coil3.request.ImageRequest
+import coil3.request.CachePolicy
+import coil3.request.bitmapConfig
+import coil3.request.crossfade
+import coil3.request.transformations
+import coil3.size.Precision
 
 /** A small static preview exists only while the original request is loading. */
 @Composable
@@ -29,7 +32,8 @@ internal fun ImageLoadingPreview(
     alignment: Alignment = Alignment.Center
 ) {
     // Archive fetchers do not implement Coil's network policy; avoid downloading entries twice.
-    val scheme = (originalRequest.data as? android.net.Uri)?.scheme
+    val scheme = (originalRequest.data as? coil3.Uri)?.scheme
+        ?: (originalRequest.data as? android.net.Uri)?.scheme
     if (!enabled || scheme == "webdav-zip" || scheme == "webdav-7z") {
         ImageLoadingIndicator()
         return

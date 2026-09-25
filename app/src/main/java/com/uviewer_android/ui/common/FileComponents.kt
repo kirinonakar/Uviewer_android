@@ -21,8 +21,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.uviewer_android.UviewerApplication
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.R
@@ -230,7 +230,7 @@ fun FileItemGridCard(
                             .memoryCacheKey(thumbnail.key)
                             // A stable size lets both grid layouts reuse the same decoded preview.
                             .size(512)
-                            .scale(coil.size.Scale.FIT)
+                            .scale(coil3.size.Scale.FIT)
                             .build()
                     }
                     AsyncImage(

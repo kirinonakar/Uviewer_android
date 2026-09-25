@@ -1,11 +1,12 @@
 package com.uviewer_android.data.utils
 
-import coil.ImageLoader
-import coil.decode.DecodeResult
-import coil.decode.Decoder
-import coil.decode.ImageSource
-import coil.fetch.SourceResult
-import coil.request.Options
+import coil3.ImageLoader
+import coil3.decode.DecodeResult
+import coil3.decode.Decoder
+import coil3.decode.ImageSource
+import coil3.asImage
+import coil3.fetch.SourceFetchResult
+import coil3.request.Options
 import com.github.penfeizhou.animation.avif.AVIFDrawable
 import com.github.penfeizhou.animation.loader.ByteBufferLoader
 import kotlinx.coroutines.runInterruptible
@@ -33,7 +34,7 @@ class AnimatedAvifDecoder(
         }
 
         DecodeResult(
-            drawable = CoilManagedAvifDrawable(AvifByteBufferLoader(encodedBuffer)),
+            image = CoilManagedAvifDrawable(AvifByteBufferLoader(encodedBuffer)).asImage(),
             isSampled = false,
         )
     }
@@ -69,7 +70,7 @@ class AnimatedAvifDecoder(
 
     class Factory : Decoder.Factory {
         override fun create(
-            result: SourceResult,
+            result: SourceFetchResult,
             options: Options,
             imageLoader: ImageLoader,
         ): Decoder? {

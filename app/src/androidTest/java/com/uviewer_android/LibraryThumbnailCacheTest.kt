@@ -4,15 +4,16 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import coil.ImageLoader
-import coil.decode.DataSource
-import coil.disk.DiskCache
-import coil.fetch.DrawableResult
-import coil.fetch.Fetcher
-import coil.request.CachePolicy
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import coil.size.Scale
+import coil3.ImageLoader
+import coil3.decode.DataSource
+import coil3.disk.DiskCache
+import coil3.asImage
+import coil3.fetch.ImageFetchResult
+import coil3.fetch.Fetcher
+import coil3.request.CachePolicy
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.size.Scale
 import com.uviewer_android.data.utils.LibraryThumbnail
 import com.uviewer_android.data.utils.LibraryThumbnailCache
 import kotlinx.coroutines.async
@@ -23,11 +24,12 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import okio.Path.Companion.toOkioPath
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
-@OptIn(coil.annotation.ExperimentalCoilApi::class)
+@OptIn(coil3.annotation.ExperimentalCoilApi::class)
 @RunWith(AndroidJUnit4::class)
 class LibraryThumbnailCacheTest {
     @Test
@@ -89,18 +91,18 @@ class LibraryThumbnailCacheTest {
     ) {
         val renderCount = AtomicInteger()
         val source = ImageLoader.Builder(context).components {
-            add(Fetcher.Factory<File> { _, _, _ ->
+            add(Fetcher.Factory<coil3.Uri> { _, _, _ ->
                 Fetcher {
                     renderCount.incrementAndGet()
-                    DrawableResult(
-                        BitmapDrawable(context.resources, Bitmap.createBitmap(512, 256, Bitmap.Config.ARGB_8888)),
+                    ImageFetchResult(
+                        BitmapDrawable(context.resources, Bitmap.createBitmap(512, 256, Bitmap.Config.ARGB_8888)).asImage(),
                         true, DataSource.DISK
                     )
                 }
             })
         }.build()
         val disk = DiskCache.Builder()
-            .directory(File(context.cacheDir, "thumbnail-test-${UUID.randomUUID()}"))
+            .directory(File(context.cacheDir, "thumbnail-test-${UUID.randomUUID()}").toOkioPath())
             .maxSizeBytes(16L * 1024 * 1024).build()
         try {
             block(LibraryThumbnailCache(context, source, disk), disk, source, renderCount)

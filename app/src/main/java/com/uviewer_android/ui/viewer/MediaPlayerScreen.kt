@@ -492,7 +492,7 @@ fun MediaPlayerScreen(
                         .fillMaxSize()
                 ) {
                     if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
-                         coil.compose.AsyncImage(
+                         coil3.compose.AsyncImage(
                              model = artworkData,
                              contentDescription = "Album Art",
                              modifier = Modifier.fillMaxSize(),
@@ -526,7 +526,7 @@ fun MediaPlayerScreen(
                     )
                     
                     if (fileType == FileEntry.FileType.AUDIO && artworkData != null) {
-                         coil.compose.AsyncImage(
+                         coil3.compose.AsyncImage(
                              model = artworkData,
                              contentDescription = "Album Art",
                              modifier = Modifier.fillMaxSize(),

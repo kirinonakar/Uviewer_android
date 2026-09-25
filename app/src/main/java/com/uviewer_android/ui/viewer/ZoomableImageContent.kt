@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -38,11 +39,19 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImagePainter
-import coil.compose.SubcomposeAsyncImage
-import coil.request.ImageRequest
-import coil.size.Precision
-import coil.size.Size
+import coil3.BitmapImage
+import coil3.DrawableImage
+import coil3.compose.AsyncImagePainter
+import coil3.compose.SubcomposeAsyncImage
+import coil3.network.NetworkHeaders
+import coil3.network.httpHeaders
+import coil3.request.ImageRequest
+import coil3.request.allowHardware
+import coil3.request.bitmapConfig
+import coil3.request.crossfade
+import coil3.request.transformations
+import coil3.size.Precision
+import coil3.size.Size
 import okhttp3.HttpUrl.Companion.toHttpUrl
 
 private const val MAX_IMAGE_SCALE = 20f
@@ -67,12 +76,15 @@ private fun String.isAnimationCapableImageSource(): Boolean {
 }
 
 private fun AsyncImagePainter.State.containsHdrContent(): Boolean {
-    val bitmap = (this as? AsyncImagePainter.State.Success)
+    val image = (this as? AsyncImagePainter.State.Success)
         ?.result
-        ?.drawable
-        ?.let { it as? BitmapDrawable }
-        ?.bitmap
+        ?.image
         ?: return false
+    val bitmap = when (image) {
+        is BitmapImage -> image.bitmap
+        is DrawableImage -> (image.drawable as? BitmapDrawable)?.bitmap
+        else -> null
+    } ?: return false
 
     return bitmap.containsHdrContent()
 }
@@ -232,7 +244,7 @@ fun ZoomableImage(
                         .data(fullUrl)
                         .apply {
                             if (authHeader != null) {
-                                addHeader("Authorization", authHeader)
+                                httpHeaders(NetworkHeaders.Builder().set("Authorization", authHeader).build())
                                 Log.d("ImageViewer", "ZoomableImage: Added Authorization header.")
                             }
                         }
@@ -261,7 +273,7 @@ fun ZoomableImage(
                 buildRequest(imageUrl)
             }
 
-            coil.compose.SubcomposeAsyncImage(
+            coil3.compose.SubcomposeAsyncImage(
                 model = imageRequest,
                 contentDescription = null,
                 filterQuality = if (sharpeningAmount > 0) FilterQuality.High else FilterQuality.Medium,
@@ -271,12 +283,12 @@ fun ZoomableImage(
                 },
                 modifier = Modifier.fillMaxSize()
             ) {
-                val state = painter.state
+                val state = painter.state.collectAsState().value
                 when (state) {
-                    is coil.compose.AsyncImagePainter.State.Loading -> {
+                    is coil3.compose.AsyncImagePainter.State.Loading -> {
                         ImageLoadingPreview(imageRequest, loadPreview, isSplit, isRight)
                     }
-                    is coil.compose.AsyncImagePainter.State.Error -> {
+                    is coil3.compose.AsyncImagePainter.State.Error -> {
                         val errorMsg = state.result.throwable.message ?: "Unknown error"
                         Log.e("ImageViewer", "Failed to load image: $imageUrl", state.result.throwable)
                         Box(Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
@@ -287,7 +299,7 @@ fun ZoomableImage(
                             }
                         }
                     }
-                    is coil.compose.AsyncImagePainter.State.Success -> {
+                    is coil3.compose.AsyncImagePainter.State.Success -> {
                         ViewerImageContent(state.painter, isSplit, isRight)
                     }
                     else -> {}
@@ -436,7 +448,7 @@ fun ZoomableDualImage(
                         .data(fullUrl)
                         .apply {
                             if (authHeader != null) {
-                                addHeader("Authorization", authHeader)
+                                httpHeaders(NetworkHeaders.Builder().set("Authorization", authHeader).build())
                                 Log.d("ImageViewer", "ZoomableDualImage: Added Authorization header.")
                             }
                         }
@@ -470,7 +482,7 @@ fun ZoomableDualImage(
             }
 
             if (firstImageUrl != null && firstImageRequest != null) {
-                coil.compose.SubcomposeAsyncImage(
+                coil3.compose.SubcomposeAsyncImage(
                     model = firstImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
@@ -504,7 +516,7 @@ fun ZoomableDualImage(
             }
             
             if (secondImageUrl != null && secondImageRequest != null) {
-                coil.compose.SubcomposeAsyncImage(
+                coil3.compose.SubcomposeAsyncImage(
                     model = secondImageRequest,
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
