@@ -10,7 +10,7 @@ kotlin {
 
 android {
     namespace = "com.uviewer_android"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.uviewer_android"
