@@ -112,6 +112,7 @@ fun ZoomableImage(
     isSplit: Boolean = false,
     isRight: Boolean = false,
     loadPreview: Boolean = true,
+    remoteRevision: String? = null,
     onImageLoaded: (String) -> Unit = {},
     onHdrStatusChanged: (Boolean) -> Unit = {}
 ) {
@@ -243,6 +244,11 @@ fun ZoomableImage(
                     ImageRequest.Builder(context)
                         .data(fullUrl)
                         .apply {
+                            if (remoteRevision != null) {
+                                val key = "webdav:$fullUrl:$remoteRevision"
+                                memoryCacheKey("$key:sharpen=$sharpeningAmount")
+                                diskCacheKey(key)
+                            }
                             if (authHeader != null) {
                                 httpHeaders(NetworkHeaders.Builder().set("Authorization", authHeader).build())
                                 Log.d("ImageViewer", "ZoomableImage: Added Authorization header.")
@@ -269,7 +275,7 @@ fun ZoomableImage(
             
 
 
-            val imageRequest = remember(imageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
+            val imageRequest = remember(imageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount, remoteRevision) {
                 buildRequest(imageUrl)
             }
 
@@ -320,6 +326,8 @@ fun ZoomableDualImage(
     sharpeningAmount: Int,
     onScaleChanged: (Float) -> Unit,
     loadPreview: Boolean = true,
+    firstRevision: String? = null,
+    secondRevision: String? = null,
     onImageLoaded: (String) -> Unit = {},
     onHdrStatusChanged: (String, Boolean) -> Unit = { _, _ -> }
 ) {
@@ -410,7 +418,7 @@ fun ZoomableDualImage(
             val context = LocalContext.current
             
             // Helper to build ImageRequest
-            fun buildRequest(url: String): ImageRequest {
+            fun buildRequest(url: String, revision: String?): ImageRequest {
                 Log.d("ImageViewer", "ZoomableDualImage: buildRequest: url=$url, isWebDav=$isWebDav")
                 val isAnimated = url.isAnimationCapableImageSource()
 
@@ -447,6 +455,11 @@ fun ZoomableDualImage(
                     ImageRequest.Builder(context)
                         .data(fullUrl)
                         .apply {
+                            if (revision != null) {
+                                val key = "webdav:$fullUrl:$revision"
+                                memoryCacheKey("$key:sharpen=$sharpeningAmount")
+                                diskCacheKey(key)
+                            }
                             if (authHeader != null) {
                                 httpHeaders(NetworkHeaders.Builder().set("Authorization", authHeader).build())
                                 Log.d("ImageViewer", "ZoomableDualImage: Added Authorization header.")
@@ -473,12 +486,12 @@ fun ZoomableDualImage(
 
 
 
-            val firstImageRequest = remember(firstImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
-                firstImageUrl?.let { buildRequest(it) }
+            val firstImageRequest = remember(firstImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount, firstRevision) {
+                firstImageUrl?.let { buildRequest(it, firstRevision) }
             }
 
-            val secondImageRequest = remember(secondImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount) {
-                secondImageUrl?.let { buildRequest(it) }
+            val secondImageRequest = remember(secondImageUrl, isWebDav, authHeader, serverUrl, sharpeningAmount, secondRevision) {
+                secondImageUrl?.let { buildRequest(it, secondRevision) }
             }
 
             if (firstImageUrl != null && firstImageRequest != null) {

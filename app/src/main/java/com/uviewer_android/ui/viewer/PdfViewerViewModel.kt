@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.uviewer_android.data.repository.WebDavRepository
+import com.uviewer_android.data.utils.WebDavFileCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,16 +63,7 @@ class PdfViewerViewModel(
             try {
                 val localFile = if (isWebDav && serverId != null) {
                     val cacheDir = getApplication<Application>().getExternalFilesDir("cache") ?: getApplication<Application>().cacheDir
-                    val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-                    
-                    if (tempFile.exists()) {
-                        cacheManager.touch(tempFile)
-                    } else {
-                        val fileSize = webDavRepository.getFileSize(serverId, filePath)
-                        cacheManager.ensureCapacity(fileSize)
-                        webDavRepository.downloadFile(serverId, filePath, tempFile)
-                    }
-                    tempFile
+                    WebDavFileCache.resolve(webDavRepository, cacheManager, serverId, filePath, cacheDir)
                 } else {
                     File(filePath)
                 }

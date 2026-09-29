@@ -22,7 +22,7 @@ class RemoteZipImageFetcherFactory(private val webDavRepository: WebDavRepositor
         val zipPath = androidUri.path ?: return null
         val entryName = androidUri.getQueryParameter("entry") ?: return null
         
-        val managerKey = "$serverId:$zipPath"
+        val managerKey = "$serverId:$zipPath:${androidUri.getQueryParameter("revision") ?: ""}"
         
         return object : Fetcher {
             override suspend fun fetch(): FetchResult? {

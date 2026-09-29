@@ -30,7 +30,8 @@ class WebDavClient(
         val isDirectory: Boolean,
         val size: Long,
         val lastModified: Long,
-        val contentType: String?
+        val contentType: String?,
+        val etag: String? = null
     )
 
     fun buildUrl(path: String): String {
@@ -107,6 +108,21 @@ class WebDavClient(
         }
     }
 
+    suspend fun getFileInfo(password: String, path: String): WebDavFile? =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(buildUrl(path))
+                .header("Depth", "0")
+                .header("Authorization", getAuthHeader(password))
+                .method("PROPFIND", null)
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Failed to inspect file: ${response.code}")
+                val body = response.body.string()
+                parseWebDavXml(body).firstOrNull() ?: throw IOException("Missing WebDAV file metadata")
+            }
+        }
+
     private fun parseWebDavXml(xml: String): List<WebDavFile> {
         val files = mutableListOf<WebDavFile>()
         try {
@@ -129,6 +145,7 @@ class WebDavClient(
             var currentSize = 0L
             var currentLastModified = 0L
             var currentContentType: String? = null
+            var currentEtag: String? = null
             
             var inResponse = false
 
@@ -144,6 +161,7 @@ class WebDavClient(
                                 currentSize = 0L
                                 currentLastModified = 0L
                                 currentContentType = null
+                                currentEtag = null
                                 inResponse = true
                             }
                             "href" -> if (inResponse) currentHref = parser.nextText()
@@ -157,6 +175,7 @@ class WebDavClient(
                             }
                             "collection" -> if (inResponse) currentIsDirectory = true
                             "getcontenttype" -> if (inResponse) currentContentType = parser.nextText()
+                            "getetag" -> if (inResponse) currentEtag = parser.nextText()
                         }
                     }
                     org.xmlpull.v1.XmlPullParser.END_TAG -> {
@@ -167,7 +186,7 @@ class WebDavClient(
                                  if (decoded.endsWith("/")) decoded = decoded.dropLast(1)
                                  currentName = decoded.substringAfterLast('/')
                              }
-                             files.add(WebDavFile(currentHref, currentName, currentIsDirectory, currentSize, currentLastModified, currentContentType))
+                             files.add(WebDavFile(currentHref, currentName, currentIsDirectory, currentSize, currentLastModified, currentContentType, currentEtag))
                              inResponse = false
                         }
                     }
@@ -243,20 +262,21 @@ class WebDavClient(
                 .get()
                 .build()
 
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
-            
-            val totalBytes = response.body?.contentLength() ?: -1L
-            response.body?.byteStream()?.use { input ->
-                java.io.FileOutputStream(destinationFile).use { output ->
-                    val buffer = ByteArray(8192)
-                    var bytesRead: Int
-                    var totalRead = 0L
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalRead += bytesRead
-                        if (totalBytes > 0) {
-                            progress?.invoke(totalRead.toFloat() / totalBytes)
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) throw IOException("Failed to download file ($url): ${response.code}")
+                val body = response.body
+                val totalBytes = body.contentLength()
+                body.byteStream().use { input ->
+                    java.io.FileOutputStream(destinationFile).use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        var totalRead = 0L
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalRead += bytesRead
+                            if (totalBytes > 0) {
+                                progress?.invoke(totalRead.toFloat() / totalBytes)
+                            }
                         }
                     }
                 }

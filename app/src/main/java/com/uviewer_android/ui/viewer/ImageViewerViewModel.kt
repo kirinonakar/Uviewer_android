@@ -9,6 +9,7 @@ import com.uviewer_android.data.model.SortOption
 import com.uviewer_android.data.parser.EpubParser
 import com.uviewer_android.data.repository.FileRepository
 import com.uviewer_android.data.repository.WebDavRepository
+import com.uviewer_android.data.utils.WebDavFileCache
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -228,7 +229,9 @@ enum class ViewMode {
                         val isStreamable = filePath.lowercase().let { it.endsWith(".zip") || it.endsWith(".cbz") }
                         if (isWebDav && serverId != null && isStreamable) {
                             // Streaming for WebDAV Zip
-                            val zipSize = webDavRepository.getFileSize(serverId, filePath)
+                            val zipInfo = webDavRepository.getFileInfo(serverId, filePath)
+                            val zipSize = zipInfo?.size ?: 0L
+                            val zipRevision = WebDavFileCache.key(serverId, filePath, WebDavFileCache.revision(zipInfo))
                             val manager = com.uviewer_android.data.utils.RemoteZipManager(webDavRepository, serverId, filePath, zipSize)
                             val entries = manager.getEntries()
                             val imageExtensions = FileEntry.IMAGE_EXTENSIONS
@@ -243,6 +246,7 @@ enum class ViewMode {
                                     uriBuilder.appendPath(it)
                                 }
                                 uriBuilder.appendQueryParameter("entry", entry.name)
+                                uriBuilder.appendQueryParameter("revision", zipRevision)
                                 val uri = uriBuilder.build()
                                     
                                 FileEntry(
@@ -269,8 +273,8 @@ enum class ViewMode {
                             val cacheDir = context.getExternalFilesDir("cache") ?: context.cacheDir
                             val archiveExt = filePath.substringAfterLast('.').lowercase()
                             
-                            // Stable cache key for this server and file path
-                            val cacheKey = "${serverId}_${filePath}".hashCode().toString(36)
+                            val archiveInfo = webDavRepository.getFileInfo(serverId, filePath)
+                            val cacheKey = WebDavFileCache.key(serverId, filePath, WebDavFileCache.revision(archiveInfo))
                             val unzipDir = File(cacheDir, "unzipped_$cacheKey")
                             val isDoneFile = File(unzipDir, ".extracted_done")
                             val tempFile = File(cacheDir, "temp_download_$cacheKey.$archiveExt")
@@ -286,7 +290,7 @@ enum class ViewMode {
                                     }.sortedBy { it.name.lowercase() }.toList()
                             } else {
                                 // For all non-streamable archives (RAR, 7Z), download first
-                                val fileSize = webDavRepository.getFileSize(serverId, filePath)
+                                val fileSize = archiveInfo?.size ?: 0L
                                 cacheManager.ensureCapacity(fileSize + (fileSize * 2))
 
                                 if (archiveExt == "7z" || archiveExt == "cb7") {

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.appcompat.app.AppCompatDelegate
 import com.uviewer_android.data.repository.UserPreferencesRepository
 import com.uviewer_android.data.repository.WebDavRepository
+import com.uviewer_android.data.utils.WebDavFileCache
 import java.io.File
 import java.net.URLDecoder
 import java.net.URLEncoder
@@ -75,20 +76,12 @@ internal suspend fun resolveDocumentLocalImages(
             }
             val cleanSrc = decodedSrc.removePrefix("file://").removePrefix("/")
             val webDavPath = if (parentPath.isEmpty()) cleanSrc else "$parentPath/$cleanSrc"
-            val fileName = URLEncoder.encode(webDavPath, "UTF-8").takeLast(100)
-            val cachedFile = File(cacheBase, fileName)
-
-            if (cachedFile.exists()) {
+            try {
+                val cachedFile = WebDavFileCache.resolve(webDavRepository, null, serverId, webDavPath, cacheBase)
                 val encoded = encodeFileName("file://${cachedFile.absolutePath}")
                 result = result.replace(match.value, match.value.replace(originalSrc, encoded))
-            } else {
-                try {
-                    webDavRepository.downloadFile(serverId, webDavPath, cachedFile)
-                    val encoded = encodeFileName("file://${cachedFile.absolutePath}")
-                    result = result.replace(match.value, match.value.replace(originalSrc, encoded))
-                } catch (e: Exception) {
-                    // Missing inline images should not block document rendering.
-                }
+            } catch (e: Exception) {
+                // Missing inline images should not block document rendering.
             }
         } else if (parentDir != null) {
             val decodedSrc = try {

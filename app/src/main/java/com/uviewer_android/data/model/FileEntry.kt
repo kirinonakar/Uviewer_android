@@ -15,7 +15,8 @@ data class FileEntry(
     val progress: Float = 0f,
     val pinOrder: Int = 0,
     /** Folder path relative to the search root; set for sub-folder filename search results. */
-    val location: String? = null
+    val location: String? = null,
+    val remoteRevision: String? = null
 ) {
     enum class FileType {
         FOLDER, IMAGE, TEXT, EPUB, AUDIO, VIDEO, UNKNOWN, ZIP, HTML, PDF, WEBP, CSV, IMAGE_ZIP, RAR, SEVEN_ZIP

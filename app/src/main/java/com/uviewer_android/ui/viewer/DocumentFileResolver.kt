@@ -4,6 +4,7 @@ import android.app.Application
 import com.uviewer_android.data.parser.EpubParser
 import com.uviewer_android.data.repository.WebDavRepository
 import com.uviewer_android.data.utils.CacheManager
+import com.uviewer_android.data.utils.WebDavFileCache
 import java.io.File
 
 internal object DocumentFileResolver {
@@ -18,16 +19,7 @@ internal object DocumentFileResolver {
         if (!isWebDav || serverId == null) return File(filePath)
 
         val cacheDir = application.getExternalFilesDir("cache") ?: application.cacheDir
-        val tempFile = File(cacheDir, "temp_" + File(filePath).name)
-        if (tempFile.exists()) {
-            cacheManager.touch(tempFile)
-            return tempFile
-        }
-
-        val fileSize = webDavRepository.getFileSize(serverId, filePath)
-        cacheManager.ensureCapacity(fileSize)
-        webDavRepository.downloadFile(serverId, filePath, tempFile)
-        return tempFile
+        return WebDavFileCache.resolve(webDavRepository, cacheManager, serverId, filePath, cacheDir)
     }
 
     suspend fun prepareEpubUnzipDir(

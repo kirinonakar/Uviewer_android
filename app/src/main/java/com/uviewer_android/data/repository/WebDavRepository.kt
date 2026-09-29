@@ -3,6 +3,7 @@ package com.uviewer_android.data.repository
 import com.uviewer_android.data.WebDavServerDao
 import com.uviewer_android.data.model.FileEntry
 import com.uviewer_android.network.WebDavClient
+import com.uviewer_android.data.utils.WebDavFileCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -104,7 +105,8 @@ class WebDavRepository(
                 lastModified = file.lastModified,
                 size = file.size,
                 serverId = serverId,
-                isWebDav = true
+                isWebDav = true,
+                remoteRevision = WebDavFileCache.revision(file) ?: java.util.UUID.randomUUID().toString()
             )
         }
     }
@@ -209,6 +211,17 @@ class WebDavRepository(
         val client = getClient(serverId) ?: return 0L
         val password = credentialsManager.getPassword(serverId) ?: return 0L
         return client.getFileSize(password, path)
+    }
+
+    suspend fun getFileInfo(serverId: Int, path: String): WebDavClient.WebDavFile? {
+        val client = getClient(serverId) ?: throw java.io.IOException("WebDAV server not found")
+        val password = credentialsManager.getPassword(serverId) ?: throw java.io.IOException("WebDAV credentials not found")
+        return try {
+            client.getFileInfo(password, path)
+        } catch (e: java.io.IOException) {
+            // Servers without PROPFIND metadata still get a fresh download on each open.
+            null
+        }
     }
 
     suspend fun readFileContent(serverId: Int, path: String): ByteArray {
