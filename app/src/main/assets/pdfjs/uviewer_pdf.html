@@ -679,9 +679,7 @@
             if (detailTask) detailTask.cancel();
             pages.forEach(removeDetailCanvas);
             viewer.innerHTML = '<div class="loading">Loading...</div>';
-            const loadingTask = password
-                ? pdfjsLib.getDocument({ url: fileUrl, password: password })
-                : pdfjsLib.getDocument(fileUrl);
+            const loadingTask = pdfjsLib.getDocument({ url: fileUrl, password: password, isEvalSupported: false });
             try {
                 pdfDoc = await loadingTask.promise;
             } catch (error) {

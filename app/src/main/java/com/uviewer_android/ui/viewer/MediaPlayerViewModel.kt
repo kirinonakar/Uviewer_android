@@ -73,13 +73,9 @@ class MediaPlayerViewModel(
                     .filter { it.type == FileEntry.FileType.AUDIO || it.type == FileEntry.FileType.VIDEO }
                 val sortOptionStr = userPreferencesRepository.getLibrarySortOption()
                 val sort = try { SortOption.valueOf(sortOptionStr) } catch(e: Exception) { SortOption.NAME }
-                val playlist = when (sort) {
-                    SortOption.NAME -> mediaFiles.sortedBy { it.name.lowercase() }
-                    SortOption.DATE_ASC -> mediaFiles.sortedWith(compareBy<FileEntry>({ it.lastModified }, { it.name.lowercase() }))
-                    SortOption.DATE_DESC -> mediaFiles.sortedWith(compareBy<FileEntry>({ -it.lastModified }, { it.name.lowercase() }))
-                    SortOption.SIZE_ASC -> mediaFiles.sortedWith(compareBy<FileEntry>({ it.size }, { it.name.lowercase() }))
-                    SortOption.SIZE_DESC -> mediaFiles.sortedWith(compareBy<FileEntry>({ -it.size }, { it.name.lowercase() }))
-                }
+                val playlist = mediaFiles.sortedWith(
+                    com.uviewer_android.data.utils.FileEntrySort.comparator(sort, directoriesFirst = false)
+                )
                 
                 val playlistUrls = playlist.map { file ->
                     if (isWebDav && serverId != null) {

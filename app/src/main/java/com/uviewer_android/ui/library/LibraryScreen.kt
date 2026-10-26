@@ -63,6 +63,7 @@ fun LibraryScreen(
 
     var backPressedTime by remember { mutableLongStateOf(0L) }
     val context = LocalContext.current
+    val backAgainToExit = stringResource(R.string.back_again_to_exit)
     LaunchedEffect(uiState.isLoading, uiState.viewMode.isGrid, selectedTab, uiState.fileList, uiState.pinnedFiles) {
         if (!uiState.isLoading) {
             val files = if (!uiState.viewMode.isGrid) emptyList() else
@@ -115,7 +116,7 @@ fun LibraryScreen(
                 (context as? android.app.Activity)?.finish()
             } else {
                 backPressedTime = currentTime
-                Toast.makeText(context, context.getString(R.string.back_again_to_exit), Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, backAgainToExit, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -553,6 +554,31 @@ fun LibraryScreen(
                         }
                     }
                 }
+            }
+
+            uiState.credentialsServerId?.let { serverId ->
+                var username by remember(serverId) { mutableStateOf("") }
+                var password by remember(serverId) { mutableStateOf("") }
+                com.uviewer_android.ui.theme.UviewerAlertDialog(
+                    onDismissRequest = viewModel::dismissCredentialsPrompt,
+                    title = { Text(stringResource(R.string.webdav_reauthenticate)) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(stringResource(R.string.webdav_reauthenticate_message))
+                            OutlinedTextField(value = username, onValueChange = { username = it },
+                                label = { Text(stringResource(R.string.username)) }, singleLine = true)
+                            OutlinedTextField(value = password, onValueChange = { password = it },
+                                label = { Text(stringResource(R.string.password)) }, singleLine = true,
+                                visualTransformation = PasswordVisualTransformation())
+                        }
+                    },
+                    confirmButton = { TextButton(onClick = { viewModel.reauthenticateServer(username, password) }) {
+                        Text(stringResource(R.string.confirm))
+                    } },
+                    dismissButton = { TextButton(onClick = viewModel::dismissCredentialsPrompt) {
+                        Text(stringResource(R.string.cancel))
+                    } }
+                )
             }
 
             if (showAddServerDialog) {

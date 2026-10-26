@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,7 +34,16 @@ class DocumentViewerViewModel(
     private val llmClient: LlmClient
 ) : AndroidViewModel(application) {
 
-    private val _uiState = MutableStateFlow(DocumentViewerUiState())
+    private val _uiState = MutableStateFlow(DocumentViewerUiState(
+        fontSize = userPreferencesRepository.fontSize.value,
+        fontFamily = userPreferencesRepository.fontFamily.value,
+        docBackgroundColor = userPreferencesRepository.docBackgroundColor.value,
+        customDocBackgroundColor = userPreferencesRepository.customDocBackgroundColor.value,
+        customDocTextColor = userPreferencesRepository.customDocTextColor.value,
+        sideMargin = userPreferencesRepository.sideMargin.value,
+        isVertical = userPreferencesRepository.isVerticalReading.value,
+        language = resolveLanguageTag(userPreferencesRepository.appLanguage.value)
+    ))
     val uiState: StateFlow<DocumentViewerUiState> = _uiState.asStateFlow()
 
     private val _llmState = MutableStateFlow<LlmUiState>(LlmUiState.Idle)
@@ -48,6 +58,7 @@ class DocumentViewerViewModel(
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
+    private var textTocJob: Job? = null
     companion object {
         const val LINES_PER_CHUNK = 2000
     }
@@ -67,6 +78,7 @@ class DocumentViewerViewModel(
     private var epubBook: com.uviewer_android.data.model.EpubBook? = null
     private var searchJob: Job? = null
     private var llmJob: Job? = null
+    private var textPreloadJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -91,7 +103,8 @@ class DocumentViewerViewModel(
                 val vertical = args[6] as Boolean
                 val lang = args[7] as String
                 
-                _uiState.value = _uiState.value.copy(
+                val previous = _uiState.value
+                val updated = previous.copy(
                     fontSize = size,
                     fontFamily = family,
                     docBackgroundColor = color,
@@ -101,6 +114,9 @@ class DocumentViewerViewModel(
                     isVertical = vertical,
                     language = resolveLanguageTag(lang)
                 )
+                if (updated == previous) return@combine
+                _uiState.value = updated
+                if (previous.content.isEmpty()) return@combine
                 if (currentFileType == FileEntry.FileType.TEXT && largeTextReader != null) {
                     loadTextChunk(_uiState.value.currentChunkIndex)
                 } else if (currentFileType == FileEntry.FileType.EPUB && _uiState.value.epubChapters.isNotEmpty()) {
@@ -163,6 +179,8 @@ class DocumentViewerViewModel(
             return
         }
 
+        textPreloadJob?.cancel()
+        textTocJob?.cancel()
         currentFilePath = filePath
         currentFileType = type
         isWebDavContext = isWebDav
@@ -208,19 +226,23 @@ class DocumentViewerViewModel(
                         cacheManager = cacheManager,
                         webDavRepository = webDavRepository
                     )
-                    val unzipDir = DocumentFileResolver.prepareEpubUnzipDir(
-                        application = application,
-                        epubFile = epubFile,
-                        cacheManager = cacheManager
-                    )
-                    val book = EpubParser.parse(unzipDir)
+                    val (unzipDir, book) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        val directory = DocumentFileResolver.prepareEpubUnzipDir(
+                            application = application,
+                            epubFile = epubFile,
+                            cacheManager = cacheManager
+                        )
+                        directory to EpubParser.parse(directory)
+                    }
                     epubUnzipDir = unzipDir
                     epubBook = book
 
                     _uiState.value = _uiState.value.copy(
                         epubChapters = book.spine,
+                        resourceRoots = listOf(unzipDir.absolutePath),
+                        baseUrl = unzipDir.toURI().toASCIIString(),
                         currentChapterIndex = 0,
-                        isLoading = false,
+                        isLoading = true,
                         currentLine = 1
                     )
 
@@ -269,25 +291,32 @@ class DocumentViewerViewModel(
                         webDavRepository = webDavRepository
                     )
 
-                    val reader = com.uviewer_android.data.utils.LargeTextReader(file)
+                    _uiState.value = _uiState.value.copy(
+                        resourceRoots = listOfNotNull(file.parentFile?.absolutePath) +
+                            if (isWebDav && serverId != null) listOf(File(getApplication<Application>().getExternalFilesDir("cache") ?: getApplication<Application>().cacheDir, "webdav_img_cache/$serverId").absolutePath) else emptyList()
+                    )
+                    val reader = com.uviewer_android.data.utils.LargeTextReader(
+                        file, File(getApplication<Application>().cacheDir, "text_indexes"),
+                        if (isWebDav) com.uviewer_android.data.utils.WebDavFileCache.contentTimestamp(file) else null
+                    )
                     largeTextReader = reader
                     reader.indexFile(_uiState.value.manualEncoding) { progress ->
-                        _uiState.value = _uiState.value.copy(loadProgress = progress)
+                        _uiState.update { it.copy(loadProgress = progress) }
                     }
 
                     val totalLines = reader.getTotalLines()
                     
                     // Background pass to extract titles for TOC - Scan entire file in chunks
-                    viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    textTocJob = viewModelScope.launch(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.LAZY) {
                         DocumentTextTocScanner.scan(
                             reader = reader,
                             totalLines = totalLines,
                             currentLine = { _uiState.value.currentLine },
                             onUpdate = { chapters, currentIndex ->
-                                _uiState.value = _uiState.value.copy(
+                                _uiState.update { state -> state.copy(
                                     epubChapters = chapters,
                                     currentChapterIndex = currentIndex
-                                )
+                                ) }
                             }
                         )
                     }
@@ -442,7 +471,27 @@ class DocumentViewerViewModel(
                 appendTrigger = System.currentTimeMillis(),
                 isImageOnlyChapter = false
             )
+            textPreloadJob?.cancel()
+            val nextStart = (chunkIndex + 1) * LINES_PER_CHUNK + 1
+            if (nextStart <= totalLines) {
+                textPreloadJob = viewModelScope.launch(Dispatchers.IO, start =
+                    if (updateType == 0) kotlinx.coroutines.CoroutineStart.LAZY else kotlinx.coroutines.CoroutineStart.DEFAULT) {
+                    try {
+                        reader.prefetchLines(nextStart, LINES_PER_CHUNK)
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                        throw cancelled
+                    } catch (_: java.io.IOException) {
+                        // Optional read-ahead never blocks the current page.
+                    }
+                }
+            }
         }
+    }
+
+    internal fun onFirstDocumentFrame() {
+        // Prioritize the visible chunk before whole-book TOC scanning and optional read-ahead.
+        textTocJob?.start()
+        textPreloadJob?.start()
     }
 
     /**

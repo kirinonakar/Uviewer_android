@@ -36,6 +36,10 @@ class AppContainer(private val context: Context) {
         )
     }
 
+    val settingsBackupRepository by lazy {
+        com.uviewer_android.data.backup.SettingsBackupRepository(context, database, userPreferencesRepository)
+    }
+
     val cacheManager by lazy {
         com.uviewer_android.data.utils.CacheManager(context, userPreferencesRepository)
     }

@@ -45,6 +45,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel(factory = AppViewModelProvider.Factory)
 ) {
+    val backupActions = rememberSettingsBackupActions(viewModel)
     val servers by viewModel.servers.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val fontSize by viewModel.fontSize.collectAsState()
@@ -503,6 +504,9 @@ fun SettingsScreen(
                         }
                     }
                 }
+            }
+            item {
+                SettingsBackupSection(backupActions, cardColor, isDark)
             }
         }
 

@@ -78,7 +78,8 @@ object AppViewModelProvider {
                 webDavServerDao = app.container.database.webDavServerDao(),
                 credentialsManager = app.container.credentialsManager,
                 userPreferencesRepository = app.container.userPreferencesRepository,
-                llmClient = app.container.llmClient
+                llmClient = app.container.llmClient,
+                settingsBackupRepository = app.container.settingsBackupRepository
             )
         }
         initializer {

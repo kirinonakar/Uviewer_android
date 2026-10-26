@@ -14,8 +14,68 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-class UserPreferencesRepository(context: Context) {
+class UserPreferencesRepository(private val context: Context) {
     private val sharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
+
+    private val _restoreGeneration = MutableStateFlow(0)
+    val restoreGeneration: StateFlow<Int> = _restoreGeneration.asStateFlow()
+
+    fun backupPreferences(): Map<String, Any> {
+        val values = com.uviewer_android.data.backup.BackupPreferences.defaults.toMutableMap()
+        sharedPreferences.all.forEach { (key, value) ->
+            if (key in values && value != null) values[key] = value
+        }
+        // Export the effective layout even when the user still has the legacy boolean setting.
+        values["library_view_layout"] = getLibraryViewMode().name
+        return com.uviewer_android.data.backup.BackupPreferences.validate(JSONObject(values))
+    }
+
+    /** Called on IO; publish the new state only after the database transaction has committed. */
+    fun writeBackupPreferences(values: Map<String, Any>) {
+        val validated = com.uviewer_android.data.backup.BackupPreferences.validate(JSONObject(values))
+        val editor = sharedPreferences.edit()
+        validated.forEach { (key, value) ->
+            when (value) {
+                is String -> editor.putString(key, value)
+                is Int -> editor.putInt(key, value)
+                is Long -> editor.putLong(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+            }
+        }
+        check(editor.commit()) { "Could not save settings" }
+    }
+
+    fun refreshAfterRestore() {
+        // Reuse the normal loading/default/migration rules for every StateFlow.
+        val restored = UserPreferencesRepository(context)
+        _fontSize.value = restored.fontSize.value
+        _fontFamily.value = restored.fontFamily.value
+        _docBackgroundColor.value = restored.docBackgroundColor.value
+        _docTextColor.value = restored.docTextColor.value
+        _customDocBackgroundColor.value = restored.customDocBackgroundColor.value
+        _customDocTextColor.value = restored.customDocTextColor.value
+        _invertImageControl.value = restored.invertImageControl.value
+        _dualPageOrder.value = restored.dualPageOrder.value
+        _persistZoom.value = restored.persistZoom.value
+        _sharpeningAmount.value = restored.sharpeningAmount.value
+        _imageViewMode.value = restored.imageViewMode.value
+        _sideMargin.value = restored.sideMargin.value
+        _subtitleEnabled.value = restored.subtitleEnabled.value
+        _isVerticalReading.value = restored.isVerticalReading.value
+        _volumeKeyPaging.value = restored.volumeKeyPaging.value
+        _maxCacheSize.value = restored.maxCacheSize.value
+        _llmPromptPresets.value = restored.llmPromptPresets.value
+        _llmSystemPrompt.value = restored.llmSystemPrompt.value
+        _selectedLlmPromptPresetId.value = restored.selectedLlmPromptPresetId.value
+        LlmProvider.entries.forEach {
+            llmModelNames.getValue(it).value = restored.getLlmModelName(it)
+            llmThinkingLevels.getValue(it).value = restored.getLlmThinkingLevel(it)
+        }
+        _llmProvider.value = restored.llmProvider.value
+        _restoreGeneration.value += 1
+        _themeMode.value = restored.themeMode.value
+        _appLanguage.value = restored.appLanguage.value
+    }
 
     private val _themeMode = MutableStateFlow(
         sharedPreferences.getString("theme_mode", "system") ?: "system"

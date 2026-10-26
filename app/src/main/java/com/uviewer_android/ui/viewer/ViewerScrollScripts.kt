@@ -21,6 +21,10 @@ internal object ViewerScrollScripts {
                 ${ViewerScrollMaskScript.install()}
                 ${ViewerScrollPagingScript.install()}
                 ${ViewerScrollEventsScript.install()}
+                // The bootstrap waits for layout/fonts before this one-time positioning.
+                window.initializeViewerScrollPosition();
+                window.captureViewerScrollState();
+                window.updateMask(true);
             })();
         """.trimIndent()
     }

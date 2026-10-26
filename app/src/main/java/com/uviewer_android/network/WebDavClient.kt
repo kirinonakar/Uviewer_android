@@ -123,80 +123,32 @@ class WebDavClient(
             }
         }
 
-    private fun parseWebDavXml(xml: String): List<WebDavFile> {
-        val files = mutableListOf<WebDavFile>()
-        try {
-            val factory = org.xmlpull.v1.XmlPullParserFactory.newInstance()
-            factory.isNamespaceAware = true 
-            // Protect against XXE (XML External Entity) attacks
-            try {
-                factory.setFeature(org.xmlpull.v1.XmlPullParser.FEATURE_PROCESS_DOCDECL, false)
-            } catch (e: Exception) {
-                // Feature not supported by current parser
-            }
-            
-            val parser = factory.newPullParser()
-            parser.setInput(java.io.StringReader(xml))
-
-            var eventType = parser.eventType
-            var currentHref = ""
-            var currentName = ""
-            var currentIsDirectory = false
-            var currentSize = 0L
-            var currentLastModified = 0L
-            var currentContentType: String? = null
-            var currentEtag: String? = null
-            
-            var inResponse = false
-
-            while (eventType != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
-                when (eventType) {
-                    org.xmlpull.v1.XmlPullParser.START_TAG -> {
-                        val name = parser.name
-                        when (name) {
-                            "response" -> {
-                                currentHref = ""
-                                currentName = ""
-                                currentIsDirectory = false
-                                currentSize = 0L
-                                currentLastModified = 0L
-                                currentContentType = null
-                                currentEtag = null
-                                inResponse = true
-                            }
-                            "href" -> if (inResponse) currentHref = parser.nextText()
-                            "displayname" -> if (inResponse) currentName = parser.nextText()
-                            "getcontentlength" -> if (inResponse) currentSize = parser.nextText().toLongOrNull() ?: 0L
-                            "getlastmodified" -> {
-                                if (inResponse) {
-                                    val dateStr = parser.nextText()
-                                    currentLastModified = parseWebDavDate(dateStr)
-                                }
-                            }
-                            "collection" -> if (inResponse) currentIsDirectory = true
-                            "getcontenttype" -> if (inResponse) currentContentType = parser.nextText()
-                            "getetag" -> if (inResponse) currentEtag = parser.nextText()
-                        }
-                    }
-                    org.xmlpull.v1.XmlPullParser.END_TAG -> {
-                        val name = parser.name
-                        if (name == "response") {
-                             if (currentName.isEmpty() && currentHref.isNotEmpty()) {
-                                 var decoded = java.net.URLDecoder.decode(currentHref, "UTF-8")
-                                 if (decoded.endsWith("/")) decoded = decoded.dropLast(1)
-                                 currentName = decoded.substringAfterLast('/')
-                             }
-                             files.add(WebDavFile(currentHref, currentName, currentIsDirectory, currentSize, currentLastModified, currentContentType, currentEtag))
-                             inResponse = false
-                        }
-                    }
-                }
-                eventType = parser.next()
-            }
-        } catch (e: Exception) {
-            // Log error safely if needed
+    internal fun parseWebDavXml(xml: String): List<WebDavFile> {
+        fun org.jsoup.nodes.Element.localName() = tagName().substringAfter(':').lowercase(java.util.Locale.ROOT)
+        fun org.jsoup.nodes.Element.child(name: String) = children().firstOrNull { it.localName() == name }
+        val document = org.jsoup.Jsoup.parse(xml, "", org.jsoup.parser.Parser.xmlParser())
+        return document.getAllElements().filter { it.localName() == "response" }.mapNotNull { response ->
+            val href = response.child("href")?.text()?.trim()?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            val properties = response.children().filter { it.localName() == "propstat" }.filter { propstat ->
+                val status = propstat.child("status")?.text()
+                status == null || Regex("HTTP/[^ ]+\\s+2[0-9]{2}(?:\\s|$)").containsMatchIn(status)
+            }.flatMap { it.child("prop")?.children()?.toList() ?: emptyList() }
+            fun values(name: String) = properties.filter { it.localName() == name }
+            fun text(name: String) = values(name).firstNotNullOfOrNull { it.text().trim().takeIf(String::isNotEmpty) }
+            val name = text("displayname") ?: runCatching {
+                java.net.URLDecoder.decode(href.replace("+", "%2B"), "UTF-8").trimEnd('/').substringAfterLast('/')
+            }.getOrDefault(href.trimEnd('/').substringAfterLast('/'))
+            WebDavFile(
+                href = href,
+                name = name,
+                isDirectory = values("resourcetype").any { type -> type.children().any { it.localName() == "collection" } },
+                size = values("getcontentlength").firstNotNullOfOrNull { it.text().trim().toLongOrNull()?.takeIf { size -> size >= 0 } } ?: 0L,
+                // A missing/failed property must not overwrite a valid timestamp from another propstat.
+                lastModified = values("getlastmodified").firstNotNullOfOrNull { parseWebDavDate(it.text()).takeIf { time -> time > 0L } } ?: 0L,
+                contentType = text("getcontenttype"),
+                etag = text("getetag")
+            )
         }
-        return files
     }
 
     suspend fun checkConnection(password: String): Boolean {
@@ -286,17 +238,29 @@ class WebDavClient(
 
     internal fun parseWebDavDate(dateStr: String?): Long {
         if (dateStr.isNullOrBlank()) return 0L
+        val value = dateStr.trim()
         try {
-            return java.time.ZonedDateTime.parse(dateStr, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+            return java.time.ZonedDateTime.parse(value, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
                 .toInstant()
                 .toEpochMilli()
         } catch (e: Exception) {
             // Ignore
         }
         try {
-            return java.time.Instant.parse(dateStr).toEpochMilli()
+            return java.time.Instant.parse(value).toEpochMilli()
         } catch (e: Exception) {
             // Ignore
+        }
+        // Some WebDAV servers use older HTTP date representations.
+        for (pattern in listOf("EEEE, dd-MMM-yy HH:mm:ss zzz", "EEE MMM d HH:mm:ss yyyy")) {
+            val format = java.text.SimpleDateFormat(pattern, java.util.Locale.US).apply {
+                isLenient = false
+                timeZone = java.util.TimeZone.getTimeZone("GMT")
+                set2DigitYearStart(java.util.Date(0))
+            }
+            val position = java.text.ParsePosition(0)
+            val parsed = format.parse(value, position)
+            if (parsed != null && position.index == value.length) return parsed.time
         }
         return 0L
     }

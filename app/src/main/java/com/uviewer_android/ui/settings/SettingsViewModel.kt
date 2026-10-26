@@ -22,13 +22,20 @@ import kotlinx.coroutines.launch
 import java.io.File
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import android.net.Uri
+import com.uviewer_android.R
+import com.uviewer_android.data.backup.SettingsBackup
+import com.uviewer_android.data.backup.SettingsBackupRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.combine
 
 class SettingsViewModel(
     application: Application,
     private val webDavServerDao: WebDavServerDao,
     private val credentialsManager: CredentialsManager,
     private val userPreferencesRepository: UserPreferencesRepository,
-    private val llmClient: LlmClient
+    private val llmClient: LlmClient,
+    private val settingsBackupRepository: SettingsBackupRepository
 ) : AndroidViewModel(application) {
 
     private val _cacheSize = MutableStateFlow("0 B")
@@ -70,12 +77,59 @@ class SettingsViewModel(
     init {
         updateCacheSize()
         viewModelScope.launch {
-            userPreferencesRepository.llmProvider.collect { provider ->
+            combine(userPreferencesRepository.llmProvider, userPreferencesRepository.restoreGeneration) { provider, _ -> provider }.collect { provider ->
                 _llmModelName.value = userPreferencesRepository.getLlmModelName(provider)
                 _llmThinkingLevel.value = userPreferencesRepository.getLlmThinkingLevel(provider)
                 _llmApiKeyConfigured.value = credentialsManager.hasLlmApiKey(provider)
                 clearLlmModels()
             }
+        }
+    }
+
+    private val _backupBusy = MutableStateFlow(false)
+    val backupBusy = _backupBusy.asStateFlow()
+    private val _pendingBackup = MutableStateFlow<SettingsBackup?>(null)
+    val pendingBackup = _pendingBackup.asStateFlow()
+    private val _backupMessage = MutableStateFlow<Int?>(null)
+    val backupMessage = _backupMessage.asStateFlow()
+
+    fun dismissBackupMessage() { _backupMessage.value = null }
+    fun dismissPendingBackup() { _pendingBackup.value = null }
+    fun reportBackupPickerError() { _backupMessage.value = R.string.backup_picker_failed }
+
+    private fun backupOperation(errorMessage: Int, operation: suspend () -> Unit) {
+        if (_backupBusy.value) return
+        _backupBusy.value = true
+        viewModelScope.launch {
+            try {
+                operation()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _backupMessage.value = errorMessage
+            } finally {
+                _backupBusy.value = false
+            }
+        }
+    }
+
+    fun exportBackup(uri: Uri) = backupOperation(R.string.backup_export_failed) {
+        settingsBackupRepository.export(uri, getCurrentlySetSystemLanguage())
+        _backupMessage.value = R.string.backup_export_success
+    }
+
+    fun readBackup(uri: Uri) = backupOperation(R.string.backup_read_failed) {
+        _pendingBackup.value = null
+        _pendingBackup.value = settingsBackupRepository.read(uri)
+    }
+
+    fun restoreBackup() {
+        val backup = _pendingBackup.value ?: return
+        backupOperation(R.string.backup_restore_failed) {
+            _pendingBackup.value = null
+            settingsBackupRepository.restore(backup)
+            _backupMessage.value = R.string.backup_restore_success
+            setSystemLanguage(backup.systemLanguage)
         }
     }
 

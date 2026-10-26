@@ -20,6 +20,8 @@ class WebDavRepository(
 
     private val clientCache = mutableMapOf<Int, WebDavClient>()
 
+    fun invalidateClient(serverId: Int) { clientCache.remove(serverId) }
+
     suspend fun listFiles(serverId: Int, path: String): List<FileEntry> = withContext(Dispatchers.IO) {
         val client = getClient(serverId) ?: return@withContext emptyList()
         val password = credentialsManager.getPassword(serverId) // Removed early return if null
@@ -106,7 +108,7 @@ class WebDavRepository(
                 size = file.size,
                 serverId = serverId,
                 isWebDav = true,
-                remoteRevision = WebDavFileCache.revision(file) ?: java.util.UUID.randomUUID().toString()
+                remoteRevision = WebDavFileCache.contentToken(file)
             )
         }
     }
@@ -219,7 +221,7 @@ class WebDavRepository(
         return try {
             client.getFileInfo(password, path)
         } catch (e: java.io.IOException) {
-            // Servers without PROPFIND metadata still get a fresh download on each open.
+            // Servers without PROPFIND metadata use the bounded fallback cache TTL.
             null
         }
     }

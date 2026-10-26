@@ -1,10 +1,8 @@
 package com.uviewer_android.ui.viewer
 
-import android.net.Uri
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -291,10 +289,10 @@ fun PdfViewerScreen(
     }
 
     fun submitPdfPassword() {
-        val path = uiState.localFilePath ?: return
+        if (uiState.localFilePath == null) return
         val webView = webViewRef ?: return
         passwordSubmitting = true
-        val pdfUrl = Uri.fromFile(File(path)).toString()
+        val pdfUrl = ViewerResourceLoader.PDF_URL
         webView.evaluateJavascript(
             "window.UviewerPdf && window.UviewerPdf.loadPdf(${JSONObject.quote(pdfUrl)}, ${uiState.initialPage}, ${JSONObject.quote(passwordInput)});",
             null
@@ -508,11 +506,8 @@ fun PdfViewerScreen(
                                 }
                             }.apply {
                                 webViewRef = this
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.allowFileAccess = true
-                                settings.allowContentAccess = true
-                                settings.allowViewerFileUrlAccess()
+                                val resources = ViewerResourceLoader(context, File(uiState.localFilePath!!))
+                                settings.configureViewerSecurity()
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
                                 settings.useWideViewPort = true
@@ -590,7 +585,7 @@ fun PdfViewerScreen(
                                     },
                                     "Android"
                                 )
-                                webViewClient = object : WebViewClient() {
+                                webViewClient = object : ViewerWebViewClient(resources) {
                                     override fun onScaleChanged(view: WebView?, oldScale: Float, newScale: Float) {
                                         super.onScaleChanged(view, oldScale, newScale)
                                         if (!newScale.isFinite() || newScale <= 0f) return
@@ -605,12 +600,12 @@ fun PdfViewerScreen(
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
                                         webViewReady = true
-                                        val pdfUrl = Uri.fromFile(File(uiState.localFilePath!!)).toString()
+                                        val pdfUrl = ViewerResourceLoader.PDF_URL
                                         val js = "window.UviewerPdf.loadPdf(${JSONObject.quote(pdfUrl)}, ${uiState.initialPage});"
                                         view?.evaluateJavascript(js, null)
                                     }
                                 }
-                                loadUrl("file:///android_asset/pdfjs/uviewer_pdf.html")
+                                loadUrl(ViewerResourceLoader.PDF_VIEWER_URL)
                             }
                         },
                         update = { webView ->

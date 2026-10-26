@@ -1,7 +1,6 @@
 package com.uviewer_android.ui.viewer
 
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -13,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,19 +22,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.uviewer_android.data.model.FileEntry
-import com.uviewer_android.data.repository.UserPreferencesRepository
 import com.uviewer_android.R
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private const val LLM_SELECTION_ACTION_ID = 0x554C4D
 
 @Composable
-fun DocumentViewerWebView(
+internal fun DocumentViewerWebView(
     modifier: Modifier = Modifier,
     filePath: String,
     type: FileEntry.FileType,
     uiState: DocumentViewerUiState,
     targetDocColor: Color,
     viewModel: DocumentViewerViewModel,
+    pageNavigation: DocumentPageNavigation,
+    onPageRequested: (Boolean) -> Unit,
     webViewRefState: MutableState<WebView?>,
     currentLineState: MutableIntState,
     pageLoadingState: MutableState<Boolean>,
@@ -45,14 +49,36 @@ fun DocumentViewerWebView(
     isScrollRestoring: () -> Boolean,
     onLlmSelected: (String) -> Unit
 ) {
+    val viewerContext = androidx.compose.ui.platform.LocalContext.current
+    val resources = remember(viewerContext.applicationContext) { ViewerResourceLoader(viewerContext.applicationContext) }
     var webViewRef by webViewRefState
     var currentLine by currentLineState
     var isPageLoading by pageLoadingState
     var isNavigating by navigatingState
+    var isFirstFrameReady by remember(filePath) { mutableStateOf(false) }
     var bottomMaskHeight by remember { mutableFloatStateOf(0f) }
     var topMaskHeight by remember { mutableFloatStateOf(0f) }
     var leftMaskWidth by remember { mutableFloatStateOf(0f) }
     var rightMaskWidth by remember { mutableFloatStateOf(0f) }
+    var loadedRequest by remember(resources, webViewRef, filePath) { mutableStateOf<DocumentWebPageRequest?>(null) }
+    val pageRequest = DocumentWebPageRequest.from(uiState)
+    LaunchedEffect(resources, webViewRef, pageRequest, uiState.contentUpdateType, uiState.isLoading) {
+        val webView = webViewRef ?: return@LaunchedEffect
+        if (uiState.isLoading || pageRequest.content.isEmpty() || uiState.contentUpdateType != 0) return@LaunchedEffect
+        if (pageRequest == loadedRequest) return@LaunchedEffect
+        pageNavigation.beginPreparation()
+        isFirstFrameReady = false
+        isPageLoading = true
+        isNavigating = true
+        // HTML styling and sanitizing are CPU work; only publish the current request after it completes.
+        val prepared = withContext(Dispatchers.Default) {
+            resources.buildDocument(pageRequest.styledHtml(), pageRequest.baseUrl, pageRequest.resourceRoots)
+        }
+        val url = resources.activateDocument(prepared, pageRequest.resourceRoots)
+        loadedRequest = pageRequest
+        pageNavigation.beginLoad(url)
+        webView.loadUrl(url)
+    }
     Box(modifier = modifier) {
                             AndroidView(
                          modifier = Modifier.fillMaxSize(),
@@ -182,6 +208,26 @@ fun DocumentViewerWebView(
                                     android.view.ViewGroup.LayoutParams.MATCH_PARENT
                                 )
                                 addJavascriptInterface(object {
+                                    @android.webkit.JavascriptInterface
+                                    fun onViewerReady(url: String) {
+                                        post {
+                                            if (!pageNavigation.finishInitialization(url) { forward ->
+                                                evaluateJavascript(if (forward) "window.pageDown();" else "window.pageUp();", null)
+                                            }) return@post
+                                            isPageLoading = false
+                                            isNavigating = false
+                                            // Publish the first frame only after layout and the saved position agree.
+                                            postVisualStateCallback(0L, object : WebView.VisualStateCallback() {
+                                                override fun onComplete(requestId: Long) {
+                                                    if (!pageNavigation.isCurrent(url)) return
+                                                    isFirstFrameReady = true
+                                                    viewModel.onFirstDocumentFrame()
+                                                    applyDocumentSearchHighlight()
+                                                }
+                                            })
+                                        }
+                                    }
+
                                     @android.webkit.JavascriptInterface
                                     fun onLineChangedStr(lineStr: String) {
                                         post {
@@ -313,49 +359,36 @@ fun DocumentViewerWebView(
                                     }
                                 }, "Android")
 
-                                settings.allowFileAccess = true
-                                settings.allowContentAccess = true
-                                settings.allowViewerFileUrlAccess()
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                    settings.safeBrowsingEnabled = false
-                                }
+                                settings.configureViewerSecurity()
                                 settings.useWideViewPort = true
                                 settings.loadWithOverviewMode = true
                                 settings.layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
                                 isHorizontalScrollBarEnabled = uiState.isVertical
                                 isVerticalScrollBarEnabled = !uiState.isVertical
                                 
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        super.onPageFinished(view, url)
+                                webViewClient = object : ViewerWebViewClient(resources) {
+                                    private fun initializePage(view: WebView?, url: String?) {
+                                        if (view == null || !pageNavigation.beginInitialization(url)) return
                                         val latestState = viewModel.uiState.value
-                                        val targetLine = latestState.currentLine
-                                        val totalLines = latestState.totalLines
-                                        val enableAutoLoading = type == FileEntry.FileType.TEXT || type == FileEntry.FileType.EPUB
-                                        val isVertical = latestState.isVertical
-
-                                         val linePrefix = ""
-                                         val jsScrollLogic = ViewerScripts.getScrollLogic(
-                                             isVertical = isVertical,
-                                             enableAutoLoading = enableAutoLoading,
-                                             targetLine = targetLine,
-                                             totalLines = totalLines,
-                                             linePrefix = linePrefix,
-                                             isImageOnly = latestState.isImageOnlyChapter
-                                         )
-                                        
-                                        view?.evaluateJavascript(jsScrollLogic) {
-                                            applyDocumentSearchHighlight()
-                                            webViewRef?.postDelayed({
-                                                isPageLoading = false
-                                                isNavigating = false
-                                            }, if (latestState.isImageOnlyChapter) 300L else 600L) // [수정됨] 이미지 챕터는 300ms, 일반은 600ms로 단축하여 반응성 개선
-                                        }
-
+                                        val jsScrollLogic = ViewerScripts.getScrollLogic(
+                                            isVertical = latestState.isVertical,
+                                            enableAutoLoading = type == FileEntry.FileType.TEXT || type == FileEntry.FileType.EPUB,
+                                            targetLine = latestState.currentLine,
+                                            totalLines = latestState.totalLines,
+                                            linePrefix = "",
+                                            isImageOnly = latestState.isImageOnlyChapter
+                                        )
+                                        view.evaluateJavascript(DocumentViewerBootstrap.script(url!!, jsScrollLogic), null)
                                     }
+
+                                    override fun onPageCommitVisible(view: WebView?, url: String?) {
+                                        initializePage(view, url)
+                                    }
+
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        initializePage(view, url)
+                                    }
+
                                 }
                                 webViewRef = this
 
@@ -376,18 +409,18 @@ fun DocumentViewerWebView(
                                         if (viewModel.uiState.value.isVertical) {
                                             // 세로쓰기: 오른쪽 터치 = 이전(pageUp), 왼쪽 터치 = 다음(pageDown)
                                             if (x < width / 3) {
-                                                webViewRef?.evaluateJavascript("window.pageDown();", null) // 앞으로
+                                                onPageRequested(true) // 앞으로
                                             } else if (x > width * 2 / 3) {
-                                                webViewRef?.evaluateJavascript("window.pageUp();", null)   // 뒤로
+                                                onPageRequested(false)   // 뒤로
                                             } else {
                                                 toggleFullScreenPreservingFirstLine()
                                             }
                                         } else {
                                             // 가로쓰기: 왼쪽 터치 = 이전(pageUp), 오른쪽 터치 = 다음(pageDown)
                                             if (x < width / 3) {
-                                                webViewRef?.evaluateJavascript("window.pageUp();", null)
+                                                onPageRequested(false)
                                             } else if (x > width * 2 / 3) {
-                                                webViewRef?.evaluateJavascript("window.pageDown();", null)
+                                                onPageRequested(true)
                                             } else {
                                                 toggleFullScreenPreservingFirstLine()
                                             }
@@ -414,104 +447,7 @@ fun DocumentViewerWebView(
                             val wv = webView as android.webkit.WebView
                             wv.isHorizontalScrollBarEnabled = uiState.isVertical
                             wv.isVerticalScrollBarEnabled = !uiState.isVertical
-                            val currentHash = uiState.content.hashCode()
-                            val previousHash = (wv.tag as? Int) ?: 0
-                             
-                             val (bgColor, textColor) = when (uiState.docBackgroundColor) {
-            UserPreferencesRepository.DOC_BG_SEPIA -> "#e6dacb" to "#322D29"
-            UserPreferencesRepository.DOC_BG_DARK -> "#121212" to "#cccccc"
-            UserPreferencesRepository.DOC_BG_COMFORT -> "#E9E2E4" to "#343426"
-            UserPreferencesRepository.DOC_BG_CUSTOM -> uiState.customDocBackgroundColor to uiState.customDocTextColor
-            else -> "#ffffff" to "#000000"
-        }
 
-val style = ViewerScripts.getStyleSheet(
-    isVertical = uiState.isVertical,
-    bgColor = bgColor,
-    textColor = textColor,
-    fontFamily = uiState.fontFamily,
-    fontSize = uiState.fontSize,
-    sideMargin = uiState.sideMargin
-)
-                                   // Inject style intelligently and prevent Quirks Mode
-                                   // [추가/수정] 뷰포트 메타 태그가 있으면 교체하고, 없으면 새로 삽입하여 세로쓰기 레이아웃이 잘리지 않게 함
-                                   val viewportTag = if (uiState.isVertical) {
-                                       "<meta name=\"viewport\" content=\"height=device-height, initial-scale=1.0, user-scalable=yes, minimum-scale=1.0, maximum-scale=5.0\">"
-                                   } else {
-                                       "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=yes\">"
-                                   }
-                                   
-                                   var finalContent = uiState.content
-                                   if (finalContent.contains("<meta name=\"viewport\"", ignoreCase = true)) {
-                                       finalContent = finalContent.replace("<meta name=\"viewport\"[^>]*>".toRegex(RegexOption.IGNORE_CASE), viewportTag)
-                                   } else if (finalContent.contains("<head>", ignoreCase = true)) {
-                                       finalContent = finalContent.replace("<head>", "<head>$viewportTag", ignoreCase = true)
-                                   }
-
-                                   val contentWithStyle = if (finalContent.contains("</head>", ignoreCase = true)) {
-                                       finalContent.replace("</head>", "$style</head>", ignoreCase = true)
-                                   } else if (finalContent.contains("<body", ignoreCase = true)) {
-                                       val match = "<body[^>]*>".toRegex(RegexOption.IGNORE_CASE).find(finalContent)
-                                       if (match != null) {
-                                           finalContent.substring(0, match.range.last + 1) + style + finalContent.substring(match.range.last + 1)
-                                       } else {
-                                           "$style$finalContent"
-                                       }
-                                   } else {
-                                       // 태그가 없는 순수 텍스트라면, 표준 HTML 뼈대를 만들어 감싸줌 (높이 확보의 핵심)
-                                       """
-                                       <!DOCTYPE html>
-                                       <html>
-                                       <head>
-                                           <meta charset="utf-8">
-                                           $viewportTag
-                                           <link rel="stylesheet" href="file:///android_asset/katex/katex.min.css">
-                                           <script src="file:///android_asset/katex/katex.min.js"></script>
-                                           <script src="file:///android_asset/katex/contrib/auto-render.min.js"></script>
-                                           <script>
-                                               function renderMath() {
-                                                   if (typeof renderMathInElement === 'function') {
-                                                       renderMathInElement(document.body, {
-                                                           delimiters: [
-                                                               {left: "$$", right: "$$", display: true},
-                                                               {left: "$", right: "$", inline: true},
-                                                               {left: "\\(", right: "\\)", inline: true},
-                                                               {left: "\\[", right: "\\]", display: true}
-                                                           ],
-                                                           throwOnError : false
-                                                       });
-                                                   }
-                                               }
-                                               window.renderMath = renderMath;
-                                               window.addEventListener('DOMContentLoaded', renderMath);
-                                               setTimeout(renderMath, 100);
-                                               setTimeout(renderMath, 500);
-                                           </script>
-                                           $style
-                                       </head>
-                                       <body>
-                                           $finalContent
-                                       </body>
-                                       </html>
-                                       """.trimIndent()
-                                   }
-      
-                                   if (uiState.contentUpdateType == 0) { // 전체 리로드(점프, 최초 진입)일 때만 실행
-                                       if (contentWithStyle.hashCode() != previousHash) {
-                                           wv.tag = contentWithStyle.hashCode()
-                                           isPageLoading = true
-                                           // If navigation was triggered, ensure isNavigating lock is on
-                                           isNavigating = true 
-                                           
-                                           if (uiState.url != null) {
-                                               wv.loadUrl(uiState.url)
-                                           } else {
-                                               // Use provided baseUrl or fallback to parent directory of filePath
-                                               val baseUrl = uiState.baseUrl ?: (if (filePath.startsWith("/")) "file:///${java.io.File(filePath).parent?.replace(java.io.File.separator, "/")}/" else null)
-                                               wv.loadDataWithBaseURL(baseUrl, contentWithStyle, "text/html", "UTF-8", null)
-                                           }
-                                       }
-                                   }
                              }
                           )
                           if (bottomMaskHeight > 0f && !uiState.isVertical) {
@@ -550,6 +486,11 @@ val style = ViewerScripts.getStyleSheet(
                                                                        .background(targetDocColor)
                                                                )
                                                           }
+                          DocumentLoadingOverlay(
+                              uiState = uiState,
+                              visible = uiState.isLoading || !isFirstFrameReady,
+                              modifier = Modifier.background(targetDocColor)
+                          )
                                           }
 }
 

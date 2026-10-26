@@ -59,6 +59,15 @@ enum class ViewMode {
     private var currentPath: String? = null
     private var currentIsWebDav: Boolean = false
     private var currentServerId: Int? = null
+    private val imagePathComparator = Comparator<FileEntry> { left, right ->
+        fun sortPath(entry: FileEntry): String {
+            val uri = android.net.Uri.parse(entry.path)
+            return if (uri.scheme == "webdav-zip") uri.getQueryParameter("entry") ?: entry.name
+                else uri.path ?: entry.path
+        }
+        com.uviewer_android.data.utils.NaturalPathComparator.compare(sortPath(left), sortPath(right))
+    }
+
     private var currentIsZip: Boolean = false
 
     fun setPersistZoom(persist: Boolean) {
@@ -231,7 +240,7 @@ enum class ViewMode {
                             // Streaming for WebDAV Zip
                             val zipInfo = webDavRepository.getFileInfo(serverId, filePath)
                             val zipSize = zipInfo?.size ?: 0L
-                            val zipRevision = WebDavFileCache.key(serverId, filePath, WebDavFileCache.revision(zipInfo))
+                            val zipRevision = WebDavFileCache.key(serverId, filePath, WebDavFileCache.contentToken(zipInfo))
                             val manager = com.uviewer_android.data.utils.RemoteZipManager(webDavRepository, serverId, filePath, zipSize)
                             val entries = manager.getEntries()
                             val imageExtensions = FileEntry.IMAGE_EXTENSIONS
@@ -259,7 +268,7 @@ enum class ViewMode {
                                     serverId = serverId,
                                     isWebDav = true
                                 )
-                            }.sortedBy { it.name.lowercase() }
+                            }.sortedWith(imagePathComparator)
                             
                             Log.d("ImageViewer", "Remote ZIP parsing complete. Found ${zipImages.size} images.")
                             if (zipImages.isEmpty()) {
@@ -274,7 +283,7 @@ enum class ViewMode {
                             val archiveExt = filePath.substringAfterLast('.').lowercase()
                             
                             val archiveInfo = webDavRepository.getFileInfo(serverId, filePath)
-                            val cacheKey = WebDavFileCache.key(serverId, filePath, WebDavFileCache.revision(archiveInfo))
+                            val cacheKey = WebDavFileCache.key(serverId, filePath, WebDavFileCache.contentToken(archiveInfo))
                             val unzipDir = File(cacheDir, "unzipped_$cacheKey")
                             val isDoneFile = File(unzipDir, ".extracted_done")
                             val tempFile = File(cacheDir, "temp_download_$cacheKey.$archiveExt")
@@ -287,7 +296,7 @@ enum class ViewMode {
                                     .filter { it.isFile && it.extension.lowercase() in imageExtensions }
                                     .map { file ->
                                         FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
-                                    }.sortedBy { it.name.lowercase() }.toList()
+                                    }.sortedWith(imagePathComparator).toList()
                             } else {
                                 // For all non-streamable archives (RAR, 7Z), download first
                                 val fileSize = archiveInfo?.size ?: 0L
@@ -319,7 +328,7 @@ enum class ViewMode {
                                             serverId = serverId,
                                             isWebDav = true
                                         )
-                                    }.sortedBy { it.name.lowercase() }
+                                    }.sortedWith(imagePathComparator)
 
                                     // Step 2: Background download & extract if not done
                                     viewModelScope.launch {
@@ -341,7 +350,7 @@ enum class ViewMode {
                                                 .filter { it.isFile && it.extension.lowercase() in imageExtensions }
                                                 .map { file ->
                                                     FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
-                                                }.sortedBy { it.name.lowercase() }.toList()
+                                                }.sortedWith(imagePathComparator).toList()
 
                                             if (localImages.isNotEmpty()) {
                                                 _uiState.value = _uiState.value.copy(images = localImages)
@@ -368,7 +377,7 @@ enum class ViewMode {
                                         .filter { it.isFile && it.extension.lowercase() in imageExtensions }
                                         .map { file ->
                                             FileEntry(file.name, file.absolutePath, false, FileEntry.FileType.IMAGE, file.lastModified(), file.length())
-                                        }.sortedBy { it.name.lowercase() }.toList()
+                                        }.sortedWith(imagePathComparator).toList()
                                 }
                             }
                         } else {
@@ -399,7 +408,7 @@ enum class ViewMode {
                                         size = file.length()
                                     )
                                 }
-                                .sortedBy { it.name.lowercase() }
+                                .sortedWith(imagePathComparator)
                                 .toList()
                         }
                     } else {
@@ -418,13 +427,9 @@ enum class ViewMode {
                         val imageFiles = files.filter { it.type == FileEntry.FileType.IMAGE || it.type == FileEntry.FileType.WEBP || it.type == FileEntry.FileType.IMAGE_ZIP }
                         val sortOptionStr = userPreferencesRepository.getLibrarySortOption()
                         val sort = try { SortOption.valueOf(sortOptionStr) } catch(e: Exception) { SortOption.NAME }
-                        when (sort) {
-                            SortOption.NAME -> imageFiles.sortedBy { it.name.lowercase() }
-                            SortOption.DATE_ASC -> imageFiles.sortedWith(compareBy<FileEntry>({ it.lastModified }, { it.name.lowercase() }))
-                            SortOption.DATE_DESC -> imageFiles.sortedWith(compareBy<FileEntry>({ -it.lastModified }, { it.name.lowercase() }))
-                            SortOption.SIZE_ASC -> imageFiles.sortedWith(compareBy<FileEntry>({ it.size }, { it.name.lowercase() }))
-                            SortOption.SIZE_DESC -> imageFiles.sortedWith(compareBy<FileEntry>({ -it.size }, { it.name.lowercase() }))
-                        }
+                        imageFiles.sortedWith(com.uviewer_android.data.utils.FileEntrySort.comparator(
+                            sort, directoriesFirst = false, nameComparator = imagePathComparator
+                        ))
                     }
 
                     if (images.isEmpty()) {

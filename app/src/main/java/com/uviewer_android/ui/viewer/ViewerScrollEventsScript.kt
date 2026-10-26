@@ -18,6 +18,7 @@ internal object ViewerScrollEventsScript {
                       }
                       window.isSystemScrolling = false;
                   };
+                  window.addEventListener('pointerdown', window.cancelViewerScrollRestore, { passive: true });
 
                   window.captureViewerScrollState = function() {
                       var viewportWidth = window.innerWidth || 0;

@@ -84,11 +84,15 @@ fun DocumentEncodingDialog(
 }
 
 @Composable
-fun DocumentLoadingOverlay(uiState: DocumentViewerUiState) {
-    if (!uiState.isLoading) return
+fun DocumentLoadingOverlay(
+    uiState: DocumentViewerUiState,
+    visible: Boolean = uiState.isLoading,
+    modifier: Modifier = Modifier
+) {
+    if (!visible) return
 
     androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Surface(
@@ -101,7 +105,7 @@ fun DocumentLoadingOverlay(uiState: DocumentViewerUiState) {
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 CircularProgressIndicator()
-                if (uiState.loadProgress < 1f) {
+                if (uiState.isLoading && uiState.loadProgress < 1f) {
                     Spacer(Modifier.height(12.dp))
                     Text(
                         "Indexing: ${(uiState.loadProgress * 100).toInt()}%",

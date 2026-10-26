@@ -6,6 +6,8 @@ internal object ViewerScrollCoreScript {
                  // 1. 시스템(JS) 스크롤과 유저 스크롤을 구분하기 위한 락(Lock) 변수
                  window.isSystemScrolling = true;
                  window.sysScrollTimer = null;
+                 window._viewerRestoreToken = (window._viewerRestoreToken || 0) + 1;
+                 var initialRestoreToken = window._viewerRestoreToken;
                  
                  // 브라우저의 강제 스크롤 복원 기능 비활성화
                  if ('scrollRestoration' in history) {
@@ -25,8 +27,9 @@ internal object ViewerScrollCoreScript {
                 
                  // 1. Restore scroll position
                  function doInitialScroll() {
+                     if (initialRestoreToken !== window._viewerRestoreToken) return;
                      if ($targetLine === $totalLines && $totalLines > 1) {
-                          if (typeof jumpToBottom === 'function') { jumpToBottom(); }
+                          if (typeof window.getVisualLines === 'function' && typeof jumpToBottom === 'function') { jumpToBottom(); }
                           else {
                                if (isVertical) window.scrollTo(-1000000, 0); 
                                else window.scrollTo(0, 1000000);
@@ -46,14 +49,10 @@ internal object ViewerScrollCoreScript {
                      }
                  }
                  
-                 doInitialScroll();
-                 setTimeout(doInitialScroll, 50);
-                 setTimeout(doInitialScroll, 200);
-
-                 if (window.sysScrollTimer) clearTimeout(window.sysScrollTimer);
-                 window.sysScrollTimer = setTimeout(function() {
+                 window.initializeViewerScrollPosition = function() {
+                     doInitialScroll();
                      window.isSystemScrolling = false;
-                 }, 500);
+                 };
         """.trimIndent()
     }
 }

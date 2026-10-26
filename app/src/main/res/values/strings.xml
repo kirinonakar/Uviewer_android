@@ -15,7 +15,7 @@
     <string name="delete">Delete</string>
     <string name="back">Back</string>
     <string name="back_again_to_exit">Press again to exit</string>
-    <string name="sort_name">Name</string>
+    <string name="sort_name">Name (Natural)</string>
     <string name="sort_date_desc">Date (Newest)</string>
     <string name="sort_date_asc">Date (Oldest)</string>
     
@@ -210,4 +210,19 @@
     <string name="pdf_password_incorrect">The password is incorrect. Please try again.</string>
     <string name="pdf_password_open">Open</string>
     <string name="pdf_password_cancelled">The PDF was not opened because password entry was cancelled.</string>
+    <string name="webdav_reauthenticate">Sign in to WebDAV again</string>
+    <string name="webdav_reauthenticate_message">Saved credentials are unavailable after restore. Enter the username and password for this server again.</string>
+    <string name="section_backup">Settings backup / restore</string>
+    <string name="backup_description">Back up favorites, pinned items and their order, bookmarks and reading positions, app settings, and WebDAV server addresses to a JSON file. Media files, history, passwords, and API keys are excluded.</string>
+    <string name="backup_export">Back up to file</string>
+    <string name="backup_import">Restore from file</string>
+    <string name="backup_restore_title">Restore backup?</string>
+    <string name="backup_restore_confirmation">Replace current favorites, pinned items, bookmarks, and settings with this backup?\n\nFavorites: %1$d (pinned: %2$d)\nBookmarks: %3$d\n\nExisting WebDAV servers and credentials are kept. New servers are added; sign in again when needed. Local files must be available at their original paths.</string>
+    <string name="backup_working">Processing backup…</string>
+    <string name="backup_export_success">Backup saved.</string>
+    <string name="backup_restore_success">Backup restored.</string>
+    <string name="backup_export_failed">Could not save the backup. Check the save location and available space, then try again.</string>
+    <string name="backup_read_failed">Could not read the backup. Select a valid Uviewer backup JSON file (up to 16 MB, supported version).</string>
+    <string name="backup_restore_failed">Could not restore the backup. Please try again.</string>
+    <string name="backup_picker_failed">Could not open the file picker.</string>
 </resources>

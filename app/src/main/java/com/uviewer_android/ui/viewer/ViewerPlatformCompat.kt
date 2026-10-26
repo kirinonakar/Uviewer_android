@@ -10,7 +10,19 @@ internal fun Window.setTransparentSystemBarColors() {
 }
 
 @Suppress("DEPRECATION")
-internal fun WebSettings.allowViewerFileUrlAccess() {
-    allowFileAccessFromFileURLs = true
-    allowUniversalAccessFromFileURLs = true
+internal fun WebSettings.restrictViewerFileUrlAccess() {
+    allowFileAccessFromFileURLs = false
+    allowUniversalAccessFromFileURLs = false
+}
+
+internal fun WebSettings.configureViewerSecurity() {
+    restrictViewerFileUrlAccess()
+    allowFileAccess = false
+    allowContentAccess = false
+    javaScriptEnabled = true // Only bundled rendering scripts are admitted by the document policy.
+    javaScriptCanOpenWindowsAutomatically = false
+    setSupportMultipleWindows(false)
+    domStorageEnabled = false
+    mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+    safeBrowsingEnabled = true
 }

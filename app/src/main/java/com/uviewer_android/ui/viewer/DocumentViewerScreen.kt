@@ -87,6 +87,7 @@ fun DocumentViewerScreen(
     var showFontSettingsDialog by remember { mutableStateOf(false) }
     val webViewRefState = remember { mutableStateOf<WebView?>(null) }
     var webViewRef by webViewRefState
+    val pageNavigation = remember(filePath) { DocumentPageNavigation() }
     var showEncodingDialog by remember { mutableStateOf(false) }
     var showMoreMenu by remember { mutableStateOf(false) }
     var showSearch by rememberSaveable { mutableStateOf(false) }
@@ -99,6 +100,13 @@ fun DocumentViewerScreen(
     var savedViewerScrollState by rememberSaveable(filePath) { mutableStateOf<String?>(null) }
     val latestCurrentLine by rememberUpdatedState(currentLine)
     
+    fun requestDocumentPage(forward: Boolean) {
+        isScrollRestoring = false
+        pageNavigation.request(forward) { next ->
+            webViewRef?.evaluateJavascript(if (next) "window.pageDown();" else "window.pageUp();", null)
+        }
+    }
+
     val sliderInteractionSource = remember { MutableInteractionSource() }
     val isSliderDragged by sliderInteractionSource.collectIsDraggedAsState()
     val isSliderPressed by sliderInteractionSource.collectIsPressedAsState()
@@ -283,7 +291,7 @@ fun DocumentViewerScreen(
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
                     window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     val wv = webViewRef
-                    if (wv != null) {
+                    if (wv != null && savedViewerScrollState != null && pageNavigation.isReady) {
                         isScrollRestoring = true
                         restoreViewerScrollState(wv)
                         scope.launch {
@@ -377,9 +385,9 @@ fun DocumentViewerScreen(
     LaunchedEffect(currentActivity) {
         currentActivity?.keyEvents?.collect { keyCode ->
             if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) {
-                webViewRef?.evaluateJavascript("window.pageUp();", null)
+                requestDocumentPage(false)
             } else if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) {
-                webViewRef?.evaluateJavascript("window.pageDown();", null)
+                requestDocumentPage(true)
             }
         }
     }
@@ -396,7 +404,9 @@ fun DocumentViewerScreen(
         if (uiState.appendTrigger == 0L) return@LaunchedEffect
         // [수정됨] updateType 3번(Replace) 포함
         if (uiState.contentUpdateType in 1..3) {
-            val base64Html = android.util.Base64.encodeToString(uiState.content.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+            val resourcePolicy = ViewerResourcePolicy(uiState.resourceRoots)
+            val safeContent = ViewerDocumentSecurity.sanitize(uiState.content, resourcePolicy::rewriteUrl)
+            val base64Html = android.util.Base64.encodeToString(safeContent.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
             val jsFunction = when (uiState.contentUpdateType) {
                 1 -> "appendHtmlBase64"
                 2 -> "prependHtmlBase64"
@@ -685,6 +695,8 @@ fun DocumentViewerScreen(
                             uiState = uiState,
                             targetDocColor = targetDocColor,
                             viewModel = viewModel,
+                            pageNavigation = pageNavigation,
+                            onPageRequested = ::requestDocumentPage,
                             webViewRefState = webViewRefState,
                             currentLineState = currentLineState,
                             pageLoadingState = pageLoadingState,
@@ -700,8 +712,6 @@ fun DocumentViewerScreen(
     }
     }
     }
-
-    DocumentLoadingOverlay(uiState)
 
     if (llmState !is LlmUiState.Idle) {
         LlmResponseOverlay(

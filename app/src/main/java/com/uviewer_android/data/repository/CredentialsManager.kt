@@ -11,13 +11,28 @@ class CredentialsManager(context: Context) {
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
         .build()
 
-    private val sharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "uviewer_secure_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val sharedPreferences = openPreferences(context)
+
+    private fun openPreferences(context: Context): android.content.SharedPreferences {
+        fun create() = EncryptedSharedPreferences.create(
+            context, "uviewer_secure_prefs", masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+        return try {
+            create()
+        } catch (_: java.security.GeneralSecurityException) {
+            // Older backups may already contain keysets encrypted by another device's key.
+            check(context.deleteSharedPreferences("uviewer_secure_prefs"))
+            create()
+        } catch (_: java.io.IOException) {
+            check(context.deleteSharedPreferences("uviewer_secure_prefs"))
+            create()
+        }
+    }
+
+    fun hasWebDavCredentials(serverId: Int): Boolean =
+        getUsername(serverId) != null && getPassword(serverId) != null
 
     fun saveCredentials(serverId: Int, username: String, password: String) {
         sharedPreferences.edit()

@@ -30,6 +30,7 @@ data class LibraryUiState(
     val selectedTabIndex: Int = 0,
     val serverId: Int? = null,
     val error: String? = null,
+    val credentialsServerId: Int? = null,
     val sortOption: SortOption = SortOption.NAME,
     val viewMode: LibraryViewMode = LibraryViewMode.LIST
 )
@@ -52,6 +53,7 @@ class LibraryViewModel(
     private val credentialsManager: CredentialsManager
 ) : ViewModel() {
 
+    private var credentialsRetryPath: String = "/"
     private var thumbnailPreloadJob: kotlinx.coroutines.Job? = null
     private var thumbnailPreloadItems = emptyList<com.uviewer_android.data.utils.LibraryThumbnail>()
     private var fileNameSearchJob: kotlinx.coroutines.Job? = null
@@ -136,6 +138,13 @@ class LibraryViewModel(
         } else {
             loadFiles(effectivePath, effectiveServerId)
         }
+        viewModelScope.launch {
+            userPreferencesRepository.restoreGeneration.drop(1).collect {
+                _sortOption.value = SortOption.valueOf(userPreferencesRepository.getLibrarySortOption())
+                _state.value = _state.value.copy(viewMode = userPreferencesRepository.getLibraryViewMode())
+                _pinnedFilesOverride.value = null
+            }
+        }
     }
 
 
@@ -179,13 +188,8 @@ class LibraryViewModel(
             }
         }
         
-        val sortedList = when (sort) {
-            SortOption.NAME -> listToProcess.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-            SortOption.DATE_ASC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { it.lastModified }, { it.name.lowercase() }))
-            SortOption.DATE_DESC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { -it.lastModified }, { it.name.lowercase() }))
-            SortOption.SIZE_ASC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { it.size }, { it.name.lowercase() }))
-            SortOption.SIZE_DESC -> listToProcess.sortedWith(compareBy<FileEntry>({ !it.isDirectory }, { -it.size }, { it.name.lowercase() }))
-        }
+        val comparator = com.uviewer_android.data.utils.FileEntrySort.comparator(sort)
+        val sortedList = listToProcess.sortedWith(comparator)
         
         // Create FileEntry list from Favorites (including isPinned status)
         val favoriteEntries = favorites.mapNotNull { 
@@ -239,7 +243,7 @@ class LibraryViewModel(
                     progress = favorite?.progress ?: 0f
                 )
             },
-            searchResults = state.searchResults.map { file ->
+            searchResults = state.searchResults.sortedWith(comparator).map { file ->
                 val favorite = favorites.find { it.path == file.path }
                 file.copy(
                     isPinned = favorite?.isPinned == true,
@@ -443,6 +447,11 @@ class LibraryViewModel(
         }
 
         viewModelScope.launch {
+            if (_state.value.selectedTabIndex == 1 && serverId != null && !credentialsManager.hasWebDavCredentials(serverId)) {
+                credentialsRetryPath = path
+                _state.value = _state.value.copy(isLoading = false, credentialsServerId = serverId)
+                return@launch
+            }
             _state.value = _state.value.copy(isLoading = true, error = null)
             try {
                 val files = if (_state.value.selectedTabIndex == 1 && serverId != null) {
@@ -630,6 +639,18 @@ class LibraryViewModel(
         val tabIndex = if (serverId != null && serverId != -1) 1 else 0
         _state.value = _state.value.copy(selectedTabIndex = tabIndex, serverId = serverId)
         loadFiles(path, serverId)
+    }
+
+    fun dismissCredentialsPrompt() {
+        _state.value = _state.value.copy(credentialsServerId = null)
+    }
+
+    fun reauthenticateServer(username: String, password: String) {
+        val serverId = _state.value.credentialsServerId ?: return
+        credentialsManager.saveCredentials(serverId, username, password)
+        webDavRepository.invalidateClient(serverId)
+        _state.value = _state.value.copy(credentialsServerId = null)
+        openFolder(credentialsRetryPath, serverId)
     }
 
     fun addServer(name: String, url: String, username: String, pass: String) {

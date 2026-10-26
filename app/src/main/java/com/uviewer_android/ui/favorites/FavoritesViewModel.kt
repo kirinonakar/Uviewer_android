@@ -19,6 +19,15 @@ class FavoritesViewModel(
 
     private val _pinnedFavoritesOverride = MutableStateFlow<List<FileEntry>?>(null)
 
+    init {
+        viewModelScope.launch {
+            userPreferencesRepository.restoreGeneration.drop(1).collect {
+                _viewMode.value = userPreferencesRepository.getLibraryViewMode()
+                _pinnedFavoritesOverride.value = null
+            }
+        }
+    }
+
     val favorites: StateFlow<List<FileEntry>> = combine(
         favoriteDao.getAllFavorites(),
         _pinnedFavoritesOverride

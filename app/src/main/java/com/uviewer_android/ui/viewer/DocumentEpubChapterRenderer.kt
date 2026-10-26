@@ -39,12 +39,11 @@ internal object DocumentEpubChapterRenderer {
         )
         val content = processedResult.first
         val lineCount = processedResult.second
-        val separator = File.separator
 
         DocumentEpubChapterContent(
             content = content,
             lineCount = lineCount,
-            baseUrl = "file:///${chapterFile.parent?.replace(separator, "/")}/",
+            baseUrl = chapterFile.parentFile!!.toURI().toASCIIString(),
             isImageOnly = lineCount <= 3 && content.contains("image-page-wrapper")
         )
     }

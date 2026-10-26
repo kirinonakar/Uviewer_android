@@ -5,6 +5,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FavoriteDao {
+    @Query("DELETE FROM favorites")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM favorites ORDER BY timestamp DESC")
     fun getAllFavorites(): Flow<List<FavoriteItem>>
 
@@ -68,6 +71,9 @@ interface WebDavServerDao {
 
 @Dao
 interface BookmarkDao {
+    @Query("DELETE FROM bookmarks")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM bookmarks ORDER BY timestamp DESC")
     fun getAllBookmarks(): Flow<List<Bookmark>>
 

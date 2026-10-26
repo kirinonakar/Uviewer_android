@@ -20,7 +20,7 @@ class FileRepository {
             includeHidden || !it.isHidden
         }?.map { file ->
             mapToFileEntry(file)
-        }?.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() })) ?: emptyList()
+        }?.sortedWith(com.uviewer_android.data.utils.FileEntrySort.comparator(com.uviewer_android.data.model.SortOption.NAME)) ?: emptyList()
     }
 
     /**

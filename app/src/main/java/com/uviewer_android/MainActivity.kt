@@ -3,6 +3,7 @@ package com.uviewer_android
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.LocalActivityResultRegistryOwner
 import androidx.activity.enableEdgeToEdge
 import android.app.Activity
 import androidx.appcompat.app.AppCompatDelegate
@@ -146,7 +147,11 @@ class MainActivity : AppCompatActivity() {
                 insetsController.isAppearanceLightNavigationBars = !darkTheme
             }
 
-            CompositionLocalProvider(androidx.compose.ui.platform.LocalContext provides localizedContext) {
+            // A configuration context is not an Activity. Keep the file pickers tied to this host.
+            CompositionLocalProvider(
+                androidx.compose.ui.platform.LocalContext provides localizedContext,
+                LocalActivityResultRegistryOwner provides this@MainActivity
+            ) {
                 UviewerTheme(darkTheme = darkTheme) {
                     MainScreen(
                         activity = this@MainActivity, 

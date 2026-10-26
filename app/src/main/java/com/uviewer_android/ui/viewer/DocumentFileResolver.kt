@@ -28,7 +28,11 @@ internal object DocumentFileResolver {
         cacheManager: CacheManager
     ): File {
         val cacheDir = application.getExternalFilesDir("cache") ?: application.cacheDir
-        val unzipDir = File(cacheDir, "epub_${epubFile.name}_unzipped")
+        val downloadedAt = WebDavFileCache.contentTimestamp(epubFile)
+        val identity = "${epubFile.canonicalPath}\n${epubFile.length()}\n$downloadedAt"
+        val token = java.security.MessageDigest.getInstance("SHA-256").digest(identity.toByteArray())
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+        val unzipDir = File(cacheDir, "epub_${token}_unzipped")
         val successFile = File(unzipDir, ".unzip_success")
 
         if (unzipDir.exists() && successFile.exists()) {
@@ -44,9 +48,6 @@ internal object DocumentFileResolver {
     }
 
     fun baseUrlFor(file: File): String? {
-        val separator = File.separator
-        return file.parentFile?.let { parent ->
-            "file:///${parent.absolutePath.replace(separator, "/")}/"
-        }
+        return file.parentFile?.toURI()?.toASCIIString()
     }
 }

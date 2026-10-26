@@ -15,7 +15,7 @@
     <string name="delete">削除</string>
     <string name="back">戻る</string>
     <string name="back_again_to_exit">もう一度戻るを押すと終了します</string>
-    <string name="sort_name">名前順</string>
+    <string name="sort_name">名前順（自然順）</string>
     <string name="sort_date_desc">日付順 (新しい順)</string>
     <string name="sort_date_asc">日付順 (古い順)</string>
     
@@ -208,4 +208,19 @@
     <string name="pdf_password_incorrect">パスワードが正しくありません。もう一度入力してください。</string>
     <string name="pdf_password_open">開く</string>
     <string name="pdf_password_cancelled">パスワード入力がキャンセルされたため、PDFを開きませんでした。</string>
+    <string name="webdav_reauthenticate">WebDAVに再認証</string>
+    <string name="webdav_reauthenticate_message">復元後は保存された認証情報を使用できません。このサーバーのユーザー名とパスワードを再入力してください。</string>
+    <string name="section_backup">設定のバックアップ / 読み込み</string>
+    <string name="backup_description">お気に入り、ピン留め項目と順序、ブックマークと読書位置、アプリ設定、WebDAVサーバーのアドレスをJSONファイルにバックアップします。元のファイル、履歴、パスワード、APIキーは含まれません。</string>
+    <string name="backup_export">ファイルにバックアップ</string>
+    <string name="backup_import">ファイルから読み込み</string>
+    <string name="backup_restore_title">バックアップを読み込みますか？</string>
+    <string name="backup_restore_confirmation">現在のお気に入り、ピン留め項目、ブックマーク、設定をこのバックアップで上書きします。\n\nお気に入り：%1$d件（ピン留め：%2$d件）\nブックマーク：%3$d件\n\n既存のWebDAVサーバーと認証情報は保持し、新しいサーバーを追加します。必要に応じて再ログインしてください。ローカルファイルは元のパスに必要です。</string>
+    <string name="backup_working">バックアップを処理中…</string>
+    <string name="backup_export_success">バックアップを保存しました。</string>
+    <string name="backup_restore_success">バックアップを読み込みました。</string>
+    <string name="backup_export_failed">バックアップを保存できませんでした。保存先と空き容量を確認して再試行してください。</string>
+    <string name="backup_read_failed">バックアップを読み込めませんでした。対応するバージョンの有効なUviewerバックアップJSONファイル（最大16MB）を選択してください。</string>
+    <string name="backup_restore_failed">バックアップを復元できませんでした。再試行してください。</string>
+    <string name="backup_picker_failed">ファイル選択画面を開けませんでした。</string>
 </resources>

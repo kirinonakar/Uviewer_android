@@ -24,8 +24,10 @@ ksp = "2.3.12"
 sevenzipjbinding = "16.02-2.4"
 appcompat = "1.8.0"
 commonmark = "0.30.0"
+webkit = "1.18.0"
 
 [libraries]
+androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 sevenzipjbinding = { group = "com.sorrowblue.sevenzipjbinding", name = "7-Zip-JBinding-4Android", version.ref = "sevenzipjbinding" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

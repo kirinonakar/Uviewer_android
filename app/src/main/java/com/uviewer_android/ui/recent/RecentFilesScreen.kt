@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -30,7 +31,6 @@ import com.uviewer_android.ui.AppViewModelProvider
 import com.uviewer_android.ui.common.displayFileName
 import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,7 +121,8 @@ fun RecentFileItemRow(
     file: RecentFile,
     onClick: () -> Unit
 ) {
-    val dateFormat = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
+    val locale = LocalLocale.current.platformLocale
+    val dateFormat = remember(locale) { SimpleDateFormat("yyyy/MM/dd HH:mm", locale) }
     var useSmallFont by remember { mutableStateOf(false) }
     val textStyle = (if (useSmallFont) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium)
         .copy(fontWeight = FontWeight.Normal)

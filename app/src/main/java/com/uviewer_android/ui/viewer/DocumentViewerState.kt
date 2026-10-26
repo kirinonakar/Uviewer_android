@@ -6,6 +6,7 @@ data class DocumentViewerUiState(
     val content: String = "",
     val url: String? = null,
     val baseUrl: String? = null,
+    val resourceRoots: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val isVertical: Boolean = false,
