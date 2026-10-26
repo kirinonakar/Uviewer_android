@@ -17,7 +17,7 @@ internal object DocumentSearchEngine {
         }
 
         reader ?: return emptyList()
-        val totalLines = reader.getTotalLines()
+        val totalLines = reader.awaitTotalLines()
         val matches = mutableListOf<ViewerTextSearchMatch>()
         val scanSize = 1000
         var startLine = 1

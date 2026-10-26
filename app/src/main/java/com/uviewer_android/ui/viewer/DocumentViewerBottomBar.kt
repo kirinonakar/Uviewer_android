@@ -76,12 +76,12 @@ fun DocumentViewerBottomBar(
                     val ch = uiState.currentChapterIndex + 1
                     "Ch: $ch / $totalCh | Line: $currentLine"
                 } else {
-                    "Line: $currentLine / ${uiState.totalLines}"
+                    "Line: $currentLine / ${if (uiState.isIndexing) "…" else uiState.totalLines}"
                 },
                 style = MaterialTheme.typography.bodySmall
             )
             Text(
-                "$progressPercent%",
+                if (uiState.isIndexing) "…" else "$progressPercent%",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
         }
@@ -89,6 +89,7 @@ fun DocumentViewerBottomBar(
         val displayValue = if (tempSliderValue >= 0f) tempSliderValue else sliderValue
 
         Slider(
+            enabled = !uiState.isIndexing,
             value = displayValue,
             onValueChange = onSliderValueChange,
             onValueChangeFinished = onSliderValueChangeFinished,

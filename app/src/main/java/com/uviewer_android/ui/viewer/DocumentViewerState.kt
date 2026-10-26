@@ -8,6 +8,7 @@ data class DocumentViewerUiState(
     val baseUrl: String? = null,
     val resourceRoots: List<String> = emptyList(),
     val isLoading: Boolean = false,
+    val isIndexing: Boolean = false,
     val error: String? = null,
     val isVertical: Boolean = false,
     val fontSize: Int = 18,

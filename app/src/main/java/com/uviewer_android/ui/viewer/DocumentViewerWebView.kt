@@ -89,7 +89,21 @@ internal fun DocumentViewerWebView(
                                 private fun wrapSelectionActionModeCallback(
                                     original: android.view.ActionMode.Callback
                                 ): android.view.ActionMode.Callback {
-                                    return object : android.view.ActionMode.Callback {
+                                    return object : android.view.ActionMode.Callback2() {
+                                        override fun onGetContentRect(
+                                            mode: android.view.ActionMode,
+                                            view: android.view.View,
+                                            outRect: android.graphics.Rect
+                                        ) {
+                                            // Preserve WebView's selection bounds so the floating
+                                            // toolbar follows the text instead of the whole view.
+                                            if (original is android.view.ActionMode.Callback2) {
+                                                original.onGetContentRect(mode, view, outRect)
+                                            } else {
+                                                super.onGetContentRect(mode, view, outRect)
+                                            }
+                                        }
+
                                         override fun onCreateActionMode(
                                             mode: android.view.ActionMode?,
                                             menu: android.view.Menu?

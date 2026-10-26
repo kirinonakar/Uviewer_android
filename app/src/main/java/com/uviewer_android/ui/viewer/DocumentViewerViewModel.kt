@@ -58,6 +58,8 @@ class DocumentViewerViewModel(
 
     // Cache for raw content to re-process (e.g. toggle vertical)
     private var largeTextReader: com.uviewer_android.data.utils.LargeTextReader? = null
+    private var documentLoadJob: Job? = null
+    private var textChunkJob: Job? = null
     private var textTocJob: Job? = null
     companion object {
         const val LINES_PER_CHUNK = 2000
@@ -179,20 +181,33 @@ class DocumentViewerViewModel(
             return
         }
 
+        documentLoadJob?.cancel()
+        textChunkJob?.cancel()
+        searchJob?.cancel()
         textPreloadJob?.cancel()
         textTocJob?.cancel()
+        largeTextReader = null
+        epubFlatTextLines = null
+        epubBook = null
         currentFilePath = filePath
         currentFileType = type
         isWebDavContext = isWebDav
         serverIdContext = serverId
         
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null, fileName = File(filePath).name)
+        documentLoadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isLoading = true, isIndexing = false, loadProgress = 0f,
+                content = "", error = null, fileName = File(filePath).name,
+                epubChapters = emptyList(), totalLines = 0, hasMoreContent = false,
+                searchState = ViewerTextSearchState()
+            )
             
             // Add to Recent (and retrieve saved position)
             var savedLine = initialLine ?: try {
                 val existing = recentFileDao.getFile(filePath)
                 existing?.pageIndex ?: 1
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 1
             }
@@ -211,6 +226,8 @@ class DocumentViewerViewModel(
                         pageIndex = savedLine // Preserve saved line
                     )
                 )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -300,28 +317,66 @@ class DocumentViewerViewModel(
                         if (isWebDav) com.uviewer_android.data.utils.WebDavFileCache.contentTimestamp(file) else null
                     )
                     largeTextReader = reader
-                    reader.indexFile(_uiState.value.manualEncoding) { progress ->
-                        _uiState.update { it.copy(loadProgress = progress) }
-                    }
-
-                    val totalLines = reader.getTotalLines()
+                    _uiState.update { it.copy(isIndexing = true) }
+                    val isCsv = type == FileEntry.FileType.CSV ||
+                        (type == FileEntry.FileType.TEXT && filePath.endsWith(".csv", ignoreCase = true))
                     
                     // Background pass to extract titles for TOC - Scan entire file in chunks
                     textTocJob = viewModelScope.launch(Dispatchers.Default, start = kotlinx.coroutines.CoroutineStart.LAZY) {
-                        DocumentTextTocScanner.scan(
-                            reader = reader,
-                            totalLines = totalLines,
-                            currentLine = { _uiState.value.currentLine },
-                            onUpdate = { chapters, currentIndex ->
-                                _uiState.update { state -> state.copy(
-                                    epubChapters = chapters,
-                                    currentChapterIndex = currentIndex
-                                ) }
-                            }
-                        )
+                        try {
+                            DocumentTextTocScanner.scan(
+                                reader = reader,
+                                totalLines = reader.awaitTotalLines(),
+                                currentLine = { _uiState.value.currentLine },
+                                onUpdate = { chapters, currentIndex ->
+                                    _uiState.update { state -> state.copy(
+                                        epubChapters = chapters,
+                                        currentChapterIndex = currentIndex
+                                    ) }
+                                }
+                            )
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: java.io.IOException) {
+                            // Optional TOC extraction must not crash a failed document load.
+                        }
                     }
 
-                    if (type == FileEntry.FileType.CSV || (type == FileEntry.FileType.TEXT && filePath.lowercase().endsWith(".csv"))) {
+                    reader.indexFile(
+                        manualEncoding = _uiState.value.manualEncoding,
+                        initialLine = if (isCsv) null else savedLine,
+                        linesPerChunk = LINES_PER_CHUNK,
+                        onInitialChunkReady = {
+                            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                                // A cache hit/short file also takes this path, exactly once.
+                                // Clamp stale saved positions when the file has become shorter.
+                                val line = if (reader.isIndexComplete()) {
+                                    savedLine.coerceIn(1, reader.getTotalLines().coerceAtLeast(1))
+                                } else savedLine
+                                val chunkIdx = (line - 1) / LINES_PER_CHUNK
+                                _uiState.update { it.copy(
+                                    currentChunkIndex = chunkIdx,
+                                    totalLines = if (reader.isIndexComplete()) reader.getTotalLines() else 0,
+                                    currentLine = line,
+                                    baseUrl = DocumentFileResolver.baseUrlFor(file),
+                                    isIndexing = !reader.isIndexComplete()
+                                ) }
+                                loadedStartChunk = chunkIdx
+                                loadedEndChunk = chunkIdx
+                                loadTextChunk(chunkIdx, updateType = 0)
+                            }
+                        }
+                    ) { progress ->
+                        _uiState.update { it.copy(loadProgress = progress) }
+                    }
+                    val totalLines = reader.getTotalLines()
+                    _uiState.update { it.copy(
+                        totalLines = totalLines,
+                        isIndexing = false,
+                        hasMoreContent = (loadedEndChunk.toLong() + 1) * LINES_PER_CHUNK < totalLines
+                    ) }
+
+                    if (isCsv) {
                         // For CSV, just load the whole thing or large chunk for table view
                         val contentString = reader.readLines(1, totalLines.coerceAtMost(2000))
                         
@@ -333,31 +388,12 @@ class DocumentViewerViewModel(
                             currentChunkIndex = 0,
                             hasMoreContent = totalLines > 2000
                         )
-                    } else {
-                        // Text / Aozora / HTML
-                        
-                        val startLine = savedLine
-                        val chunkIdx = (startLine - 1) / LINES_PER_CHUNK
-
-                        // Set Base URL for WebDAV to support relative remote images
-                        // [Modification] Use local cache dir as base for WebDAV to allow file:// resources
-                        val baseUrl = DocumentFileResolver.baseUrlFor(file)
-                        // If it's WebDAV, we still might need the remote URL for some cases, but for images and basic security, file:// base is better.
-                        // val remoteBaseUrl = if (isWebDav && serverId != null) { ... } else null
-                        
-                        _uiState.value = _uiState.value.copy(
-                            currentChunkIndex = chunkIdx,
-                            totalLines = totalLines,
-                            currentLine = savedLine,
-                            baseUrl = baseUrl
-                        )
-                        loadedStartChunk = chunkIdx
-                        loadedEndChunk = chunkIdx
-                        loadTextChunk(chunkIdx, updateType = 0)
                     }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
+                _uiState.value = _uiState.value.copy(isLoading = false, isIndexing = false, error = e.message)
             }
         }
     }
@@ -431,59 +467,75 @@ class DocumentViewerViewModel(
     private fun loadTextChunk(chunkIndex: Int, updateType: Int = 0) {
         val reader = largeTextReader ?: return
         val startLine = chunkIndex * LINES_PER_CHUNK + 1
-        val totalLines = reader.getTotalLines()
-        if (startLine > totalLines) return
+        if (reader.isIndexComplete() && startLine > reader.getTotalLines().coerceAtLeast(1)) return
 
-        viewModelScope.launch {
-            if (updateType == 0 || updateType == 3) {
-                _uiState.value = _uiState.value.copy(isLoading = true)
-            }
-            if (updateType == 0) {
-                loadedStartChunk = chunkIndex
-                loadedEndChunk = chunkIndex
-            }
-            val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
-            val globalLineOffset = startLine - 1
+        textChunkJob?.cancel()
+        textChunkJob = viewModelScope.launch {
+            try {
+                if (updateType == 0 || updateType == 3) {
+                    _uiState.value = _uiState.value.copy(isLoading = true)
+                }
+                if (updateType == 0) {
+                    loadedStartChunk = chunkIndex
+                    loadedEndChunk = chunkIndex
+                }
+                val chunkText = reader.readLines(startLine, LINES_PER_CHUNK)
+                if (reader.isIndexComplete() && startLine > reader.getTotalLines().coerceAtLeast(1)) {
+                    // A forward request can reach EOF while the last index block is still pending.
+                    loadedEndChunk = (reader.getTotalLines() - 1).coerceAtLeast(0) / LINES_PER_CHUNK
+                    _uiState.update { it.copy(
+                        isLoading = false, hasMoreContent = false,
+                        jsUnlockTrigger = System.currentTimeMillis()
+                    ) }
+                    return@launch
+                }
+                val globalLineOffset = startLine - 1
             
-            val processed = DocumentChunkRenderer.renderTextChunk(
-                chunkText = chunkText,
-                chunkIndex = chunkIndex,
-                globalLineOffset = globalLineOffset,
-                filePath = currentFilePath,
-                fileType = currentFileType,
-                isWebDavContext = isWebDavContext,
-                serverIdContext = serverIdContext,
-                uiState = _uiState.value,
-                languageTag = resolveLanguageTag(userPreferencesRepository.appLanguage.value),
-                colors = getColors(),
-                application = getApplication(),
-                webDavRepository = webDavRepository
-            )
+                val processed = DocumentChunkRenderer.renderTextChunk(
+                    chunkText = chunkText,
+                    chunkIndex = chunkIndex,
+                    globalLineOffset = globalLineOffset,
+                    filePath = currentFilePath,
+                    fileType = currentFileType,
+                    isWebDavContext = isWebDavContext,
+                    serverIdContext = serverIdContext,
+                    uiState = _uiState.value,
+                    languageTag = resolveLanguageTag(userPreferencesRepository.appLanguage.value),
+                    colors = getColors(),
+                    application = getApplication(),
+                    webDavRepository = webDavRepository
+                )
 
-            val isRefreshing = updateType == 0 || updateType == 3
-            _uiState.value = _uiState.value.copy(
-                content = processed,
-                isLoading = false,
-                currentChunkIndex = if (isRefreshing) chunkIndex else _uiState.value.currentChunkIndex,
-                hasMoreContent = (startLine + LINES_PER_CHUNK) <= totalLines,
-                currentLine = if (isRefreshing) _uiState.value.currentLine else _uiState.value.currentLine, // Keep existing if not refreshing
-                contentUpdateType = updateType,
-                appendTrigger = System.currentTimeMillis(),
-                isImageOnlyChapter = false
-            )
-            textPreloadJob?.cancel()
-            val nextStart = (chunkIndex + 1) * LINES_PER_CHUNK + 1
-            if (nextStart <= totalLines) {
-                textPreloadJob = viewModelScope.launch(Dispatchers.IO, start =
-                    if (updateType == 0) kotlinx.coroutines.CoroutineStart.LAZY else kotlinx.coroutines.CoroutineStart.DEFAULT) {
-                    try {
-                        reader.prefetchLines(nextStart, LINES_PER_CHUNK)
-                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                        throw cancelled
-                    } catch (_: java.io.IOException) {
-                        // Optional read-ahead never blocks the current page.
+                val isRefreshing = updateType == 0 || updateType == 3
+                _uiState.value = _uiState.value.copy(
+                    content = processed,
+                    isLoading = false,
+                    currentChunkIndex = if (isRefreshing) chunkIndex else _uiState.value.currentChunkIndex,
+                    hasMoreContent = !reader.isIndexComplete() ||
+                        (loadedEndChunk.toLong() + 1) * LINES_PER_CHUNK < reader.getTotalLines(),
+                    currentLine = if (isRefreshing) _uiState.value.currentLine else _uiState.value.currentLine, // Keep existing if not refreshing
+                    contentUpdateType = updateType,
+                    appendTrigger = System.currentTimeMillis(),
+                    isImageOnlyChapter = false
+                )
+                textPreloadJob?.cancel()
+                val nextStart = (chunkIndex + 1) * LINES_PER_CHUNK + 1
+                if (!reader.isIndexComplete() || nextStart <= reader.getTotalLines()) {
+                    textPreloadJob = viewModelScope.launch(Dispatchers.IO, start =
+                        if (updateType == 0) kotlinx.coroutines.CoroutineStart.LAZY else kotlinx.coroutines.CoroutineStart.DEFAULT) {
+                        try {
+                            reader.prefetchLines(nextStart, LINES_PER_CHUNK)
+                        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                            throw cancelled
+                        } catch (_: java.io.IOException) {
+                            // Optional read-ahead never blocks the current page.
+                        }
                     }
                 }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
     }
@@ -639,8 +691,15 @@ class DocumentViewerViewModel(
 
         searchJob = viewModelScope.launch {
             delay(250)
-            val matches = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                findDocumentSearchMatches(query)
+            val matches = try {
+                kotlinx.coroutines.withContext(Dispatchers.Default) {
+                    findDocumentSearchMatches(query)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: java.io.IOException) {
+                _uiState.update { it.copy(searchState = it.searchState.copy(isSearching = false)) }
+                return@launch
             }
             val startIndex = matches.indexOfFirst { it.line >= currentLine }
                 .let { if (it >= 0) it else if (matches.isNotEmpty()) 0 else -1 }
