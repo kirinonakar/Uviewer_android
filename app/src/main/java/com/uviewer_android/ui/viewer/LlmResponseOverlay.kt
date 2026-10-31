@@ -2,7 +2,6 @@ package com.uviewer_android.ui.viewer
 
 import android.graphics.Color.TRANSPARENT
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -176,29 +175,27 @@ private fun MarkdownResponseView(
     AndroidView(
         modifier = modifier,
         factory = { context ->
-            WebView(context).apply {
-                settings.javaScriptEnabled = false
+            MarkdownResponseWebView(context).apply {
+                settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 isVerticalScrollBarEnabled = true
                 setBackgroundColor(TRANSPARENT)
-                webViewClient = WebViewClient()
+                webViewClient = ViewerWebViewClient(viewerResources)
             }
         },
         update = { webView ->
             if (webView.tag != renderedDocument) {
                 webView.tag = renderedDocument
-                webView.loadDataWithBaseURL(
-                    null,
-                    renderedDocument,
-                    "text/html",
-                    "UTF-8",
-                    null
-                )
+                webView.loadUrl(webView.viewerResources.prepareDocument(renderedDocument, null))
             }
         }
     )
+}
+
+private class MarkdownResponseWebView(context: android.content.Context) : WebView(context) {
+    val viewerResources = ViewerResourceLoader(context)
 }
 
 private fun buildMarkdownDocument(

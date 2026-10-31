@@ -1,0 +1,28 @@
+/* Specificity and !important isolate SVG layout from the document reader's resets. */
+figure.uviewer-diagram {
+    display: block !important;
+    writing-mode: horizontal-tb !important;
+    -webkit-writing-mode: horizontal-tb !important;
+    width: calc(100vw - 2em) !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 1em auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    text-align: left !important;
+    break-inside: avoid;
+    overflow: hidden;
+}
+figure.uviewer-diagram > svg {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: var(--uviewer-diagram-max-height, none) !important;
+    margin: 0 !important;
+}
+figure.uviewer-diagram > pre {
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+}

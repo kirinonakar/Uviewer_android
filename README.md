@@ -24,7 +24,8 @@
 - **Multiple Formats**: Support for `epub`, `aozora` (Aozora Bunko), `txt`, `md` (Markdown), and `pdf`.
 - **Smart Parsing**: Full support for Aozora Bunko format, including Ruby text, vertical writing, and emphasis dots (Bouten).
 - **Auto Encoding Detection**: Automatically detects text encodings like `UTF-8`, `EUC-KR`, `Johab` and `Shift-JIS` to prevent broken characters.
-- **Math Rendering**: Full support for **KaTeX** math expressions (inline and display mode) in Markdown.
+- **Math Rendering**: Full support for **KaTeX** math expressions (inline and display mode) in Markdown (.md).
+- **Diagrams**: Mermaid code blocks (`mermaid` or `pele`) render offline as responsive SVG diagrams using [Pele](https://github.com/obsidianmd/pele), in documents (.md) and LLM responses. Invalid diagrams retain their source and show an error.
 - **Custom Themes**: White, Sepia, Comfort, Dark, and fully customizable background colors and font settings.
 
 ### 🤖 LLM Text Actions

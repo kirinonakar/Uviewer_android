@@ -17,7 +17,9 @@ internal class ViewerResourceLoader(context: Context, private val pdfFile: File?
     private val loader = WebViewAssetLoader.Builder()
         .addPathHandler("/assets/") { path ->
             val allowed = if (pdfFile != null) path.startsWith("pdfjs/")
-                else path.startsWith("katex/") || path == "viewer/document.js"
+                else path.startsWith("katex/") || path in setOf(
+                    "pele/pele.global.js", "viewer/diagrams.js", "viewer/diagrams.css", "viewer/document.js"
+                )
             if (allowed) assets.handle(path) else denied()
         }
         .addPathHandler("/resources/") { path ->

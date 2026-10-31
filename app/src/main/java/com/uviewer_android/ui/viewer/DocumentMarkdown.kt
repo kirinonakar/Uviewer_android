@@ -64,32 +64,34 @@ private object ObsidianHighlightExtension :
 
 internal fun convertDocumentMarkdownToHtml(md: String): String {
     val mathBlocks = mutableListOf<String>()
-
-    var processedMd = md.replace(Regex("\\$\\$(.*?)\\$\\$", RegexOption.DOT_MATCHES_ALL)) {
-        val index = mathBlocks.size
-        mathBlocks.add(it.value)
-        "K_MATH_BLOCK_${index}_K"
-    }
-
-    processedMd = processedMd.replace(Regex("(?<!\\\\)\\$(?!\\s)([^\\s$](?:[^$]*?[^\\s$])?)(?<!\\\\)\\$")) {
-        val index = mathBlocks.size
-        mathBlocks.add(it.value)
-        "K_MATH_INLINE_${index}_K"
-    }
-
     val extensions = listOf(
         org.commonmark.ext.gfm.tables.TablesExtension.create(),
         ObsidianHighlightExtension
     )
-
-    val preprocessedMd = processedMd.replace(
-        Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"),
-        "$1 "
-    )
-
     val parser = org.commonmark.parser.Parser.builder()
         .extensions(extensions)
+        .includeSourceSpans(org.commonmark.parser.IncludeSourceSpans.BLOCKS_AND_INLINES)
         .build()
+
+    // Prose fixes must not change diagram syntax, ordinary code or literal dollar signs.
+    val preprocessedMd = transformOutsideCode(md, parser) { prose ->
+        var processedMd = prose.replace(Regex("\\$\\$(.*?)\\$\\$", RegexOption.DOT_MATCHES_ALL)) {
+            val index = mathBlocks.size
+            mathBlocks.add(it.value)
+            "K_MATH_BLOCK_${index}_K"
+        }
+
+        processedMd = processedMd.replace(Regex("(?<!\\\\)\\$(?!\\s)([^\\s$](?:[^$]*?[^\\s$])?)(?<!\\\\)\\$")) {
+            val index = mathBlocks.size
+            mathBlocks.add(it.value)
+            "K_MATH_INLINE_${index}_K"
+        }
+
+        processedMd.replace(
+            Regex("(?<![\\s*_\u201C\u2018\u300C\u300E\u3008\u300A\u3010\u3014\u3016\u3018\u301A(\\[{])(\\*\\*|\\*|__|\\_)(?=[가-힣])"),
+            "$1 "
+        )
+    }
 
     val document = parser.parse(preprocessedMd)
 
@@ -110,4 +112,33 @@ internal fun convertDocumentMarkdownToHtml(md: String): String {
     }
 
     return html.replace(Regex("(</(?:strong|em)>) (?=[가-힣])"), "$1")
+}
+
+private fun transformOutsideCode(
+    markdown: String,
+    parser: org.commonmark.parser.Parser,
+    transform: (String) -> String
+): String {
+    val ranges = mutableListOf<IntRange>()
+    parser.parse(markdown).accept(object : org.commonmark.node.AbstractVisitor() {
+        private fun protect(node: org.commonmark.node.Node) {
+            val spans = node.sourceSpans
+            if (spans.isNotEmpty()) {
+                ranges += spans.first().inputIndex until (spans.last().inputIndex + spans.last().length)
+            }
+        }
+        override fun visit(node: org.commonmark.node.FencedCodeBlock) = protect(node)
+        override fun visit(node: org.commonmark.node.IndentedCodeBlock) = protect(node)
+        override fun visit(node: org.commonmark.node.Code) = protect(node)
+    })
+    return buildString {
+        var cursor = 0
+        for (range in ranges.sortedBy { it.first }) {
+            if (range.first < cursor) continue
+            append(transform(markdown.substring(cursor, range.first)))
+            append(markdown.substring(range.first, range.last + 1))
+            cursor = range.last + 1
+        }
+        append(transform(markdown.substring(cursor)))
+    }
 }

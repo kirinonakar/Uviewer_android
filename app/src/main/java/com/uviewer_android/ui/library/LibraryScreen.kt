@@ -87,6 +87,18 @@ fun LibraryScreen(
     }
     
     val currentGridState = rememberLazyGridState()
+    var previousSortOption by remember { mutableStateOf(uiState.sortOption) }
+
+    LaunchedEffect(uiState.sortOption) {
+        if (previousSortOption != uiState.sortOption) {
+            // Keyed lazy layouts keep the old first visible file anchored after a reorder.
+            // Show the beginning of the new order instead, including in inactive view modes.
+            localListState.requestScrollToItem(0)
+            remoteListState.requestScrollToItem(0)
+            if (selectedTab != 2) currentGridState.requestScrollToItem(0)
+            previousSortOption = uiState.sortOption
+        }
+    }
 
     var showAddServerDialog by remember { mutableStateOf(false) }
     var showNameFilter by remember { mutableStateOf(false) }

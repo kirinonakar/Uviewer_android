@@ -72,13 +72,14 @@ internal object ViewerDocumentSecurity {
         val doc = sanitizeDocument(html, rewriteUrl)
         val nonce = UUID.randomUUID().toString()
         // No document inline scripts, handlers, frames, forms or network APIs. Only the
-        // three scripts inserted here receive a nonce; document attributes cannot supply one.
+        // bundled scripts inserted here receive a nonce; document attributes cannot supply one.
         val policy = "default-src 'none'; script-src 'nonce-$nonce'; " +
             "style-src 'unsafe-inline' https:; img-src https: data:; font-src https: data:; " +
             "connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
         doc.head().prependElement("meta").attr("http-equiv", "Content-Security-Policy").attr("content", policy)
         doc.head().appendElement("link").attr("rel", "stylesheet").attr("href", "$ORIGIN/assets/katex/katex.min.css")
-        for (path in listOf("katex/katex.min.js", "katex/contrib/auto-render.min.js", "viewer/document.js")) {
+        doc.head().appendElement("link").attr("rel", "stylesheet").attr("href", "$ORIGIN/assets/viewer/diagrams.css")
+        for (path in listOf("katex/katex.min.js", "katex/contrib/auto-render.min.js", "pele/pele.global.js", "viewer/diagrams.js", "viewer/document.js")) {
             doc.head().appendElement("script").attr("nonce", nonce).attr("src", "$ORIGIN/assets/$path")
         }
         return doc.outerHtml()

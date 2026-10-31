@@ -8,6 +8,7 @@ internal object DocumentViewerBootstrap {
             var expectedUrl = ${JSONObject.quote(url)};
             function prepare() {
                 if (window.location.href !== expectedUrl) return;
+                if (typeof window.renderDiagrams === 'function') window.renderDiagrams();
                 if (typeof window.renderMath === 'function') window.renderMath();
                 var fontsReady = document.fonts ? document.fonts.ready : Promise.resolve();
                 var imagesReady = Array.from(document.images).map(function(image) {

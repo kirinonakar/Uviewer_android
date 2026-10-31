@@ -25,6 +25,8 @@ internal object ViewerScrollChunkScript {
                           else if (endMarker) container.insertBefore(chunkWrapper, endMarker);
                           else container.appendChild(chunkWrapper);
 
+                          if (typeof renderDiagrams === 'function') { renderDiagrams(); }
+
                           setTimeout(function() {
                               window.enforceChunkLimit(true);
                               window.updateMask();
@@ -63,6 +65,8 @@ internal object ViewerScrollChunkScript {
                           } else {
                               container.insertBefore(chunkWrapper, container.firstChild);
                           }
+
+                          if (typeof renderDiagrams === 'function') { renderDiagrams(); }
 
                           var newScrollWidth = document.documentElement.scrollWidth;
                           var newScrollHeight = document.documentElement.scrollHeight;
