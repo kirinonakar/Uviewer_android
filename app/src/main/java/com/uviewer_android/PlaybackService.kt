@@ -5,7 +5,7 @@ import android.os.Bundle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.datasource.DataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -33,11 +33,8 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
+        val httpDataSourceFactory = OkHttpDataSource.Factory(com.uviewer_android.network.WebDavHttpClient)
             .setUserAgent("Uviewer/1.0")
-            .setConnectTimeoutMs(15000)
-            .setReadTimeoutMs(15000)
         
         val baseDataSourceFactory = androidx.media3.datasource.DefaultDataSource.Factory(this, httpDataSourceFactory)
         
@@ -87,6 +84,13 @@ class PlaybackService : MediaSessionService() {
             .setEnableDecoderFallback(true)
 
         val errorHandlingPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy(3) {
+            override fun getRetryDelayMsFor(loadErrorInfo: LoadErrorInfo): Long {
+                if (generateSequence<Throwable>(loadErrorInfo.exception) { it.cause }.any {
+                    it is com.uviewer_android.network.WebDavCertificateRejectedException
+                }) return androidx.media3.common.C.TIME_UNSET
+                return super.getRetryDelayMsFor(loadErrorInfo)
+            }
+
             override fun getFallbackSelectionFor(
                 fallbackOptions: FallbackOptions,
                 loadErrorInfo: LoadErrorInfo
@@ -152,6 +156,9 @@ class PlaybackService : MediaSessionService() {
                         extras?.getString("Authorization")?.let { authHeaders[uri] = it }
                         extras?.getInt("serverId", -1)?.let { if (it != -1) serverIds[uri] = it }
                         extras?.getBoolean("isWebDav", false)?.let { isWebDavFlags[uri] = it }
+                        if (extras?.getBoolean("isWebDav", false) == true) {
+                            com.uviewer_android.network.WebDavHttpClient.forServer(uri)
+                        }
                     }
                     return com.google.common.util.concurrent.Futures.immediateFuture(mediaItems)
                 }

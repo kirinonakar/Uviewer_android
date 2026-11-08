@@ -16,8 +16,8 @@ android {
         applicationId = "com.uviewer_android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 79
-        versionName = "1.7.9"
+        versionCode = 80
+        versionName = "1.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -80,6 +80,7 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.extractor)
+    implementation(libs.androidx.media3.datasource.okhttp)
     
     // Database
     implementation(libs.androidx.room.runtime)

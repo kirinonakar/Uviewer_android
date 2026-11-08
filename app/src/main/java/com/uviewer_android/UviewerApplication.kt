@@ -63,6 +63,9 @@ class UviewerApplication : Application(), SingletonImageLoader.Factory {
     override fun newImageLoader(context: PlatformContext): ImageLoader {
         return ImageLoader.Builder(context)
             .components {
+                add(coil3.network.okhttp.OkHttpNetworkFetcherFactory(
+                    callFactory = { com.uviewer_android.network.WebDavHttpClient }
+                ))
                 add(AnimatedAvifDecoder.Factory())
                 if (Build.VERSION.SDK_INT >= 28) {
                     add(AnimatedImageDecoder.Factory())

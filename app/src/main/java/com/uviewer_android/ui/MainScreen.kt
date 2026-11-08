@@ -64,6 +64,27 @@ fun MainScreen(
     onHandledResume: () -> Unit = {}
 ) {
     val navController = rememberNavController()
+    val certificateWarnings by com.uviewer_android.network.WebDavCertificateConsent.pendingServers.collectAsState()
+    certificateWarnings.firstOrNull()?.let { server ->
+        val cancel = { com.uviewer_android.network.WebDavCertificateConsent.resolve(server, false) }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = cancel,
+            title = { Text(stringResource(R.string.webdav_certificate_warning_title)) },
+            text = { Text(stringResource(R.string.webdav_certificate_warning_message, server)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    com.uviewer_android.network.WebDavCertificateConsent.resolve(server, true)
+                }) {
+                    Text(stringResource(R.string.webdav_certificate_connect))
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = cancel) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
     val libraryViewModel: com.uviewer_android.ui.library.LibraryViewModel = androidx.lifecycle.viewmodel.compose.viewModel(factory = com.uviewer_android.ui.AppViewModelProvider.Factory)
     val libraryUiState by libraryViewModel.uiState.collectAsState()
     val scope = rememberCoroutineScope()

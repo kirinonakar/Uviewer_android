@@ -1,11 +1,9 @@
 package com.uviewer_android.network
 
-import okhttp3.OkHttpClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import com.uviewer_android.data.WebDavServer
 import android.util.Base64
 
@@ -13,11 +11,7 @@ class WebDavClient(
     private val server: com.uviewer_android.data.WebDavServer,
     private val username: String
 ) {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
+    private val client = WebDavHttpClient.forServer(server.url)
 
     private fun getAuthHeader(password: String): String {
         val credentials = "$username:$password"
@@ -152,19 +146,21 @@ class WebDavClient(
     }
 
     suspend fun checkConnection(password: String): Boolean {
-        return try {
-            val url = buildUrl("/")
-            val request = Request.Builder()
-                .url(url)
-                .header("Authorization", getAuthHeader(password))
-                .header("Depth", "0")
-                .method("PROPFIND", null)
-                .build()
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val url = buildUrl("/")
+                val request = Request.Builder()
+                    .url(url)
+                    .header("Authorization", getAuthHeader(password))
+                    .header("Depth", "0")
+                    .method("PROPFIND", null)
+                    .build()
 
-            val response = client.newCall(request).execute()
-            response.use { it.isSuccessful }
-        } catch (e: IOException) {
-            false
+                val response = client.newCall(request).execute()
+                response.use { it.isSuccessful }
+            } catch (e: IOException) {
+                false
+            }
         }
     }
 

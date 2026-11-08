@@ -10,6 +10,9 @@
     <!-- General -->
     <string name="cancel">Cancel</string>
     <string name="confirm">OK</string>
+    <string name="webdav_certificate_warning_title">HTTPS certificate warning</string>
+    <string name="webdav_certificate_warning_message">The HTTPS certificate for %1$s could not be verified. Connect anyway? Approval lasts until the app closes.</string>
+    <string name="webdav_certificate_connect">Connect</string>
     <string name="add">Add</string>
     <string name="save">Save</string>
     <string name="delete">Delete</string>

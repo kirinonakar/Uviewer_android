@@ -1,4 +1,7 @@
 <resources>
+    <string name="webdav_certificate_warning_title">HTTPS 証明書の警告</string>
+    <string name="webdav_certificate_warning_message">%1$s の HTTPS 証明書を検証できませんでした。接続しますか？許可はアプリが終了するまで有効です。</string>
+    <string name="webdav_certificate_connect">接続</string>
     <string name="app_name">Uviewer</string>
 
     <!-- Navigation -->

@@ -201,7 +201,9 @@ class WebDavRepository(
     }
 
     suspend fun getServer(serverId: Int): com.uviewer_android.data.WebDavServer? {
-        return webDavServerDao.getById(serverId)
+        return webDavServerDao.getById(serverId)?.also {
+            com.uviewer_android.network.WebDavHttpClient.forServer(it.url)
+        }
     }
 
     suspend fun buildUrl(serverId: Int, path: String): String? {
@@ -221,6 +223,9 @@ class WebDavRepository(
         return try {
             client.getFileInfo(password, path)
         } catch (e: java.io.IOException) {
+            if (generateSequence<Throwable>(e) { it.cause }.any {
+                it is com.uviewer_android.network.WebDavCertificateRejectedException
+            }) throw e
             // Servers without PROPFIND metadata use the bounded fallback cache TTL.
             null
         }
